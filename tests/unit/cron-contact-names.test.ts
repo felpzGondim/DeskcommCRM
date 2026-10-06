@@ -16,6 +16,7 @@ let contatos: Record<string, unknown>[] = [];
 let sessao: Record<string, unknown> | null = null;
 let agenda: { agenda: string | null; perfil: string | null } | null = { agenda: "Cliente da obra", perfil: null };
 let lookupLanca = false;
+let aoConsultar: () => void = () => {};
 const auditou = vi.fn();
 
 function chain(tabela: string, op: string, payload?: unknown): Record<string, unknown> {
@@ -68,6 +69,7 @@ vi.mock("@/lib/channels", async (orig) => {
     getAdapter: () => ({
       provider: "waha",
       resolveAddressBookName: async () => {
+        aoConsultar();
         if (lookupLanca) throw new Error("rede caiu");
         return agenda;
       },
@@ -103,11 +105,14 @@ beforeEach(() => {
       wa_identity: "phone:+5562984480025",
       name: null,
       display_name: null,
+      organizations: { status: "active" },
     },
   ];
   sessao = { provider: "waha", waha_session_name: "sess", status: "WORKING", archived_at: null };
   agenda = { agenda: "Cliente da obra", perfil: null };
   lookupLanca = false;
+  aoConsultar = () => {};
+  vi.restoreAllMocks();
 });
 
 describe("auth", () => {
@@ -146,7 +151,25 @@ describe("o nome da agenda", () => {
   it("rodada que preencheu alguém deixa rastro", async () => {
     await chamar();
     expect(auditou).toHaveBeenCalledTimes(1);
-    expect(auditou.mock.calls[0]?.[0]).toMatchObject({ action: "contact.address_book_name_filled" });
+    expect(auditou.mock.calls[0]?.[0]).toMatchObject({
+      action: "contact.address_book_name_filled",
+      organizationId: "org",
+      metadata: { preenchidos: 1 },
+    });
+  });
+
+  it("audita uma linha por empresa, na trilha de cada uma", async () => {
+    const base = contatos[0]!;
+    contatos = [base, { ...base, id: "c2", organization_id: "org-b" }, { ...base, id: "c3" }];
+    await chamar();
+    const porOrg = auditou.mock.calls.map((c) => [
+      (c[0] as { organizationId: string }).organizationId,
+      (c[0] as { metadata: { preenchidos: number } }).metadata.preenchidos,
+    ]);
+    expect(porOrg.sort()).toEqual([
+      ["org", 2],
+      ["org-b", 1],
+    ]);
   });
 
   it("lookup que lança não derruba o lote e carimba", async () => {
@@ -169,6 +192,35 @@ describe("LGPD e escopo", () => {
     const f = filtrosDo("select");
     expect(f).toContain("is:name");
     expect(f).toContain("eq:kind");
+  });
+
+  it("deixa de fora o contato pessoal, na seleção e na gravação", async () => {
+    await chamar();
+    expect(filtrosDo("select")).toContain("eq:is_personal");
+    expect(filtrosDo("update")).toContain("eq:is_personal");
+  });
+
+  it("empresa parada fica fora da seleção, no banco e no cinto", async () => {
+    await chamar();
+    expect(filtrosDo("select")).toContain("eq:organizations.status");
+
+    ops.length = 0;
+    contatos = [{ ...contatos[0]!, organizations: { status: "suspended" } }];
+    const r = await chamar();
+    expect(await r.json()).toMatchObject({ data: { varridos: 0, preenchidos: 0 } });
+    expect(ops.some((o) => o.tabela === "contacts" && o.op === "update")).toBe(false);
+  });
+
+  it("passado o prazo, para e não carimba quem não visitou", async () => {
+    let agora = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => agora);
+    aoConsultar = () => {
+      agora += 46_000;
+    };
+    contatos = [contatos[0]!, { ...contatos[0]!, id: "c2" }];
+    const r = await chamar();
+    expect(await r.json()).toMatchObject({ data: { varridos: 1, interrompida: true } });
+    expect(ops.filter((o) => o.tabela === "contacts" && o.op === "update")).toHaveLength(1);
   });
 
   it("canal fora do ar carimba sem perguntar nome", async () => {

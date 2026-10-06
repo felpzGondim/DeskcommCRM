@@ -12,6 +12,15 @@
  * `name` (digitado na ficha ou vindo da planilha) fica de fora: esse nome
  * foi escolhido aqui e a agenda não o substitui.
  *
+ * Fica de fora: empresa parada (a rodada gasta chamada ao canal e escreve na
+ * ficha) e contato marcado como pessoal (o que é do dono do número não entra
+ * no CRM).
+ *
+ * Sessão sem o acervo ligado também é consultada: a chave `guardar_historico`
+ * pode faltar no `metadata` de uma sessão com o store ligado por fora
+ * (ver `OpcoesDeAcervo` no cliente do canal). Sem store, o canal recusa e o
+ * contato é só carimbado.
+ *
  * Auth: Bearer INTERNAL_SECRET (fail-closed), igual aos demais crons.
  */
 import { randomUUID } from "node:crypto";
@@ -30,12 +39,20 @@ import {
 } from "@/lib/channels";
 import { patchDoNome, REVISITA_NOME_MS } from "@/lib/contacts/nome-da-agenda";
 import { logger } from "@/lib/logger";
+import { STATUS_OPERANTE, ehOperante, statusDaOrgEmbutida } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-/** Contatos por invocação. Cada um pode ser mais de uma chamada ao canal. */
-const SCAN_LIMIT = 10;
+/**
+ * Contatos por invocação. Cada um pode custar até 3 chamadas ao canal (as duas
+ * grafias do nono dígito e o id opaco) de até 2,5 s: 5 × 3 × 2,5 = 37,5 s,
+ * dentro dos 60 s que o agendador dá à chamada.
+ */
+const SCAN_LIMIT = 5;
+
+/** Passado isto, a rodada para e devolve o que fez. Quem não foi visitado não é carimbado. */
+const PRAZO_DA_RODADA_MS = 45_000;
 
 interface ContactRow {
   id: string;
@@ -45,6 +62,8 @@ interface ContactRow {
   wa_identity: string | null;
   name: string | null;
   display_name: string | null;
+  /** Status da org embutido — quem decide é `ehOperante`, não uma lista de ids. */
+  organizations?: { status?: string | null } | Array<{ status?: string | null }> | null;
 }
 
 function lidDe(c: ContactRow): string | null {
@@ -62,13 +81,19 @@ async function handle(req: NextRequest): Promise<Response> {
 
   const admin = createAdminClient();
   const cutoff = new Date(Date.now() - REVISITA_NOME_MS).toISOString();
+  const prazo = Date.now() + PRAZO_DA_RODADA_MS;
 
   const { data: contatos, error: queryError } = await admin
     .from("contacts")
-    .select("id, organization_id, phone_number, wa_lid, wa_identity, name, display_name")
+    .select(
+      "id, organization_id, phone_number, wa_lid, wa_identity, name, display_name, organizations:organization_id!inner(status)",
+    )
+    // Empresa parada sai no banco, ANTES do limit — senão ela ocuparia o lote.
+    .eq("organizations.status", STATUS_OPERANTE)
     .is("name", null)
     .eq("kind", "person")
     .eq("is_anonymized", false)
+    .eq("is_personal", false)
     .is("is_merged_into", null)
     .or(`name_lookup_at.is.null,name_lookup_at.lt.${cutoff}`)
     .order("name_lookup_at", { ascending: true, nullsFirst: true })
@@ -79,12 +104,17 @@ async function handle(req: NextRequest): Promise<Response> {
     return fail("internal_error", queryError.message, 500, { requestId });
   }
 
-  const rows = (contatos ?? []) as ContactRow[];
+  // O filtro do banco decide; `ehOperante` é cinto.
+  const rows = ((contatos ?? []) as ContactRow[]).filter((c) => ehOperante(statusDaOrgEmbutida(c.organizations)));
+  const preenchidosPorOrg = new Map<string, number>();
+  let varridos = 0;
   let preenchidos = 0;
   let semNome = 0;
   let semCanal = 0;
 
   for (const c of rows) {
+    if (Date.now() > prazo) break;
+    varridos++;
     const carimbar = async (extra: { name?: string; display_name?: string }): Promise<boolean> => {
       const { data: afetadas } = await admin
         .from("contacts")
@@ -95,6 +125,7 @@ async function handle(req: NextRequest): Promise<Response> {
         .eq("id", c.id)
         .eq("organization_id", c.organization_id)
         .eq("is_anonymized", false)
+        .eq("is_personal", false)
         // A ficha pode ter ganhado nome entre a seleção e esta gravação
         // (edição na tela, planilha). Não substituir.
         .is("name", null)
@@ -146,21 +177,29 @@ async function handle(req: NextRequest): Promise<Response> {
 
     const extra = achado ? patchDoNome(c, achado) : {};
     const gravou = await carimbar(extra);
-    if ((extra.name || extra.display_name) && gravou) preenchidos++;
-    else semNome++;
+    if ((extra.name || extra.display_name) && gravou) {
+      preenchidos++;
+      preenchidosPorOrg.set(c.organization_id, (preenchidosPorOrg.get(c.organization_id) ?? 0) + 1);
+    } else semNome++;
   }
 
+  // Uma linha por empresa que teve ficha preenchida, na trilha DELA.
   if (preenchidos > 0) {
-    void audit({
-      action: "contact.address_book_name_filled",
-      organizationId: null,
-      bypassedRls: true,
-      requestId,
-      metadata: { preenchidos, varridos: rows.length },
-    });
+    for (const [organizationId, n] of preenchidosPorOrg) {
+      void audit({
+        action: "contact.address_book_name_filled",
+        organizationId,
+        bypassedRls: true,
+        requestId,
+        metadata: { preenchidos: n },
+      });
+    }
   }
 
-  return ok({ varridos: rows.length, preenchidos, sem_nome: semNome, sem_canal: semCanal }, { requestId });
+  return ok(
+    { varridos, preenchidos, sem_nome: semNome, sem_canal: semCanal, interrompida: varridos < rows.length },
+    { requestId },
+  );
 }
 
 export const GET = handle;

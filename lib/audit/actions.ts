@@ -58,7 +58,7 @@ export const AUDIT_ACTIONS = [
   "contact.created",
   "contact.updated",
   // A varredura que copia o nome salvo na agenda do celular para a ficha.
-  // Uma linha por rodada que preencheu alguém — não uma por contato.
+  // Uma linha por empresa, em cada rodada que preencheu alguém dela — não uma por contato.
   "contact.address_book_name_filled",
   "contacts.imported",
   "contact.anonymized",

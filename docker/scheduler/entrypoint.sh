@@ -95,7 +95,8 @@ CRONS="
 */30 * * * *|60|api/v1/cron/contact-phones
 # O NOME DA AGENDA. O webhook não traz o nome salvo no celular; esta varredura
 # pergunta ao canal e preenche a ficha. Dez em dez minutos porque quem acabou
-# de conectar o número está olhando a inbox agora, e o lote é pequeno.
+# de conectar o número está olhando a inbox agora. Lote de 5 e prazo de 45 s
+# dentro da rota: o pior caso cabe nos 60 s com folga.
 */10 * * * *|60|api/v1/cron/contact-names
 17 * * * *|60|api/v1/cron/contact-proposals-watcher
 23 * * * *|60|api/v1/cron/followup-sem-agente
