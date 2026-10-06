@@ -47378,8 +47378,8 @@ alter table public.campaign_recipients
 
 notify pgrst, 'reload schema';
 
--- ---- nome da agenda do celular (migration 0565) ----
--- Espelho idempotente da 0565. O webhook não traz o nome salvo no aparelho.
+-- ---- nome da agenda do celular (migration 0573) ----
+-- Espelho idempotente da 0573. O webhook não traz o nome salvo no aparelho.
 -- A varredura pergunta ao canal; o carimbo faz a fila girar em vez de
 -- reprocessar sempre os mesmos. NULL = nunca perguntado.
 alter table public.contacts
