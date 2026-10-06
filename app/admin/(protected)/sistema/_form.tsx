@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
+import { MENSAGEM_DA_RECUSA_DE_ESCRITA, ehRecusaDeEscrita } from "@/lib/auth/recusa-de-escrita-de-admin";
 import type {
   ChaveDeOrcamentoDaInstalacao,
   ComportamentoDaInstalacao,
@@ -56,7 +57,7 @@ export function FormularioDeComportamento({ inicial }: { inicial: ComportamentoD
       const r = await updateComportamento({ ...valores, [campo]: valor });
       if (!r.ok) {
         setValores(anterior);
-        setErro(t("Não deu para salvar. Tente de novo em instantes."));
+        setErro(t(ehRecusaDeEscrita(r.error) ? MENSAGEM_DA_RECUSA_DE_ESCRITA[r.error] : "Não deu para salvar. Tente de novo em instantes."));
       }
     });
   }
@@ -216,6 +217,13 @@ const MODULOS_NA_TELA: ReadonlyArray<{ modulo: ModuloPorFlag; id: string; rotulo
     descricao:
       "Ligado, cada empresa ganha no CRM o cadastro de Empresas (razão social e CNPJ, com os dados públicos preenchidos pela BrasilAPI), as Pessoas que decidem dentro delas, com vários telefones, e a importação de planilha CSV ou Excel. Consultar um CNPJ manda o número para a BrasilAPI. Desligado, as telas e o menu somem.",
   },
+  {
+    modulo: "login_codex",
+    id: "modulo-login-codex",
+    rotulo: "Login do Codex por assinatura",
+    descricao:
+      "Ligado, cada empresa vê em Credenciais o painel para conectar a própria conta do Codex. Desligado por padrão: sem este interruptor nada aparece para as empresas, e a reserva de chamada continua sendo a chave de API da organização.",
+  },
 ];
 
 export function FormularioDeModulos({ ligados }: { ligados: readonly ModuloOpcional[] }) {
@@ -238,7 +246,7 @@ export function FormularioDeModulos({ ligados }: { ligados: readonly ModuloOpcio
       const r = await updateModuloDaInstalacao({ modulo, ligado: valor });
       if (!r.ok) {
         alternar(!valor);
-        setErro(t("Não deu para salvar. Tente de novo em instantes."));
+        setErro(t(ehRecusaDeEscrita(r.error) ? MENSAGEM_DA_RECUSA_DE_ESCRITA[r.error] : "Não deu para salvar. Tente de novo em instantes."));
       }
     });
   }
