@@ -566,6 +566,16 @@ escritos. Nunca invente regra de negócio, número, SLA ou comportamento de prod
 está escrita, diga que não está e pergunte. Ao documentar, marque o que é **CONFIRMADO** (provado
 por código) e o que é **INFERIDO**.
 
+## Cursor Cloud specific instructions
+
+O ambiente de Cloud Agent sobe a stack de desenvolvimento no host, não a imagem Docker do app:
+
+- `pnpm dev` em `http://127.0.0.1:3000`. Supabase local nas portas `54321` (API) e `54322` (Postgres), via `scripts/local-supabase.sh`. Redis e `serverless-redis-http` em `http://127.0.0.1:8079`.
+- O Docker deste VM precisa de `fuse-overlayfs` com iptables desligado. Sem `net.bridge.bridge-nf-call-iptables=0` (e os equivalentes de ip6 e arp), container não fala com container e o `supabase start` morre em `DbSetupError`.
+- O dono semeado é `admin@admin.com`. A senha fica só em `/home/ubuntu/.deskcomm-owner-password`. `.env.local` é gerado no boot e não entra no git.
+- O WAHA não sobe neste ambiente. `GET /api/v1/health` fica com supabase e redis `ok` e waha `down` (`conexao_recusada`).
+- Não rode `ubuntu-local-installer.sh` aqui: ele constrói as imagens de produção e aponta o `.env.local` para a rede do compose. O ciclo de código é `pnpm dev`.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
