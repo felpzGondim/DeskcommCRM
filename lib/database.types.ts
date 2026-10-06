@@ -4428,6 +4428,7 @@ export type Database = {
           organization_id: string
           person_id: string | null
           phone_lookup_at: string | null
+          name_lookup_at: string | null
           phone_number: string | null
           social_identity: string | null
           source: string
@@ -4471,6 +4472,7 @@ export type Database = {
           organization_id: string
           person_id?: string | null
           phone_lookup_at?: string | null
+          name_lookup_at?: string | null
           phone_number?: string | null
           social_identity?: string | null
           source?: string
@@ -4514,6 +4516,7 @@ export type Database = {
           organization_id?: string
           person_id?: string | null
           phone_lookup_at?: string | null
+          name_lookup_at?: string | null
           phone_number?: string | null
           social_identity?: string | null
           source?: string

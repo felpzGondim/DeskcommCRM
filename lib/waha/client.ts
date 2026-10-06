@@ -64,6 +64,22 @@ export const CHAVES_DO_FILTRO_FIXAS = Object.fromEntries(
 ) as Omit<typeof CONVERSAS_IGNORADAS, "groups">;
 
 /**
+ * Sem isto o NOWEB não guarda a agenda do celular, e `GET /api/contacts`
+ * não tem de onde ler o nome salvo. `fullSync` fica desligado: ligá-lo
+ * pede o histórico longo e a doc do canal manda não mudar esse valor
+ * depois do QR.
+ */
+export const STORE_DA_AGENDA = { enabled: true, fullSync: false } as const;
+
+export function storeDaAgendaLigado(config: { noweb?: unknown } | null | undefined): boolean {
+  const noweb = config?.noweb;
+  if (!noweb || typeof noweb !== "object") return false;
+  const store = (noweb as { store?: unknown }).store;
+  if (!store || typeof store !== "object") return false;
+  return (store as { enabled?: unknown }).enabled === true;
+}
+
+/**
  * Teto de relógio das chamadas ao WAHA.
  *
  * 15s não é número escolhido aqui: é o que `docs/specs/03-spec-whatsapp-waha.md`
@@ -253,7 +269,11 @@ export class WahaClient {
     const res = await this.fetchComTeto(`${this.baseUrl}/api/sessions`, {
       method: "POST",
       headers: { "X-Api-Key": this.apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ name, start: false, config: { ignore: CONVERSAS_IGNORADAS } }),
+      body: JSON.stringify({
+        name,
+        start: false,
+        config: { ignore: CONVERSAS_IGNORADAS, noweb: { store: STORE_DA_AGENDA } },
+      }),
     });
     if (!res.ok && !knownSessionConflict(await res.json().catch(() => null), res.status, "create", name)) {
       throw new WahaSessionError("create", res.status);
@@ -387,7 +407,20 @@ export class WahaClient {
         ? sessao.config.ignore
         : {}) as Record<string, unknown>;
       const groupsAtual = typeof ignoreAtual.groups === "boolean" ? ignoreAtual.groups : CONVERSAS_IGNORADAS.groups;
-      const config = { ...sessao.config, ignore: { ...CHAVES_DO_FILTRO_FIXAS, groups: groupsAtual } };
+      const nowebAtual = (typeof sessao.config.noweb === "object" && sessao.config.noweb !== null
+        ? sessao.config.noweb
+        : {}) as Record<string, unknown>;
+      const storeAtual = (typeof nowebAtual.store === "object" && nowebAtual.store !== null
+        ? nowebAtual.store
+        : {}) as Record<string, unknown>;
+      const config = {
+        ...sessao.config,
+        ignore: { ...CHAVES_DO_FILTRO_FIXAS, groups: groupsAtual },
+        noweb: {
+          ...nowebAtual,
+          store: { ...STORE_DA_AGENDA, ...storeAtual, enabled: true },
+        },
+      };
       // Já está como queremos: não reiniciar a sessão à toa. Este caminho roda
       // em TODA reconexão, e um restart desnecessário por rodada seria pior que
       // o gasto que ele evita.
@@ -395,7 +428,9 @@ export class WahaClient {
       // à ORDEM das chaves, então o dia em que o WAHA devolver o mesmo objeto
       // com as chaves noutra sequência, esta guarda passa a dizer "mudou" e a
       // sessão reinicia a cada reconexão — sem que nada tenha mudado.
-      const jaConvergida = Object.entries(CHAVES_DO_FILTRO_FIXAS).every(([k, v]) => ignoreAtual[k] === v);
+      const jaConvergida =
+        Object.entries(CHAVES_DO_FILTRO_FIXAS).every(([k, v]) => ignoreAtual[k] === v) &&
+        storeDaAgendaLigado(sessao.config);
       if (jaConvergida) return;
 
       const res = await this.fetchComTeto(url, {
@@ -555,6 +590,42 @@ export class WahaClient {
       if (!res.ok) return null;
       const body = (await res.json()) as { profilePictureURL?: string | null };
       return body.profilePictureURL ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * O nome salvo na agenda do aparelho, e o apelido do perfil.
+   *
+   * `name` é o que a pessoa GRAVOU no celular. `pushname` é o que o contato
+   * escolheu no próprio perfil — o mesmo campo que o webhook já entrega, e que
+   * falta justamente quando a lista mostra só o telefone. `null` quando o
+   * canal não responde: ausência de agenda não é erro, e quem chama carimba
+   * a tentativa para a fila girar.
+   *
+   * NOWEB só responde isto com o store da sessão ligado. Sem store a chamada
+   * volta erro e este método devolve null — o mesmo contrato de
+   * `resolvePhoneForLid`.
+   */
+  async getContact(
+    session: string,
+    contactId: string,
+    tetoMs = 2_500,
+  ): Promise<{ name: string | null; pushname: string | null; shortName: string | null } | null> {
+    try {
+      const url = new URL(`${this.baseUrl}/api/contacts`);
+      url.searchParams.set("session", session);
+      url.searchParams.set("contactId", contactId);
+      const res = await this.fetchComTeto(url, { headers: { "X-Api-Key": this.apiKey } }, tetoMs);
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        name?: unknown;
+        pushname?: unknown;
+        shortName?: unknown;
+      };
+      const texto = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : null);
+      return { name: texto(body.name), pushname: texto(body.pushname), shortName: texto(body.shortName) };
     } catch {
       return null;
     }

@@ -45254,3 +45254,17 @@ update public.agent_inbox_items i
 create unique index if not exists agent_inbox_event_dead_aberto_unico
   on public.agent_inbox_items (organization_id, kind, title)
   where status = 'open' and kind = 'event_dead';
+
+-- ---- nome da agenda do celular (migration 0498) ----
+-- Espelho idempotente da 0498. O webhook não traz o nome salvo no aparelho.
+-- A varredura pergunta ao canal; o carimbo faz a fila girar em vez de
+-- reprocessar sempre os mesmos. NULL = nunca perguntado.
+alter table public.contacts
+  add column if not exists name_lookup_at timestamptz;
+
+comment on column public.contacts.name_lookup_at is
+  'Última vez que se PERGUNTOU ao canal o nome salvo na agenda do celular. NULL = nunca perguntado. Com valor e name ainda null = o canal não tinha o nome na ocasião.';
+
+create index if not exists idx_contacts_name_lookup_pendente
+  on public.contacts (organization_id, name_lookup_at nulls first)
+  where name is null and is_anonymized = false and kind = 'person';
