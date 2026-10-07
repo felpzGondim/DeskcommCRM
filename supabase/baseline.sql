@@ -45871,6 +45871,47 @@ grant execute on function public.fn_channel_metrics(uuid, timestamptz, timestamp
 
 notify pgrst, 'reload schema';
 
+-- ---- nome da agenda do celular, só para a equipe (migration 0593, PR #2439) ----
+-- Espelho idempotente da 0593. O porquê inteiro está no cabeçalho da migration.
+-- ANTES da varredura de anon: cria função.
+alter table public.contacts
+  add column if not exists address_book_name text;
+
+comment on column public.contacts.address_book_name is
+  'Nome salvo na agenda do celular (varredura contact-names; app WhatsApp Business). SÓ A EQUIPE vê: nunca entra em {{nome}} de automação nem de campanha. Pode ser apelido interno. NULL ao anonimizar.';
+
+alter table public.contacts
+  add column if not exists name_lookup_at timestamptz;
+
+comment on column public.contacts.name_lookup_at is
+  'Última vez que se PERGUNTOU ao canal o nome salvo na agenda do celular. NULL = nunca perguntado. Com valor e address_book_name ainda null = o canal não tinha o nome na ocasião.';
+
+-- Índice PARCIAL: a varredura só olha quem não tem nome nenhum escolhido aqui
+-- nem nome de agenda.
+create index if not exists idx_contacts_name_lookup_pendente
+  on public.contacts (organization_id, name_lookup_at nulls first)
+  where name is null and address_book_name is null and is_anonymized = false and kind = 'person';
+
+create or replace function public.fn_contato_anonimizado_esquece_a_agenda()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.address_book_name := null;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_contato_anonimizado_esquece_a_agenda() from public, anon, authenticated;
+
+drop trigger if exists trg_contato_anonimizado_esquece_a_agenda on public.contacts;
+create trigger trg_contato_anonimizado_esquece_a_agenda
+  before insert or update on public.contacts
+  for each row
+  when (new.is_anonymized is true and new.address_book_name is not null)
+  execute function public.fn_contato_anonimizado_esquece_a_agenda();
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -48046,17 +48087,3 @@ update public.agent_inbox_items i
 create unique index if not exists agent_inbox_canal_pausado_aberto_unico
   on public.agent_inbox_items (organization_id, kind, ref_id)
   where status = 'open' and kind = 'canal_pausado';
-
--- ---- nome da agenda do celular (migration 0573) ----
--- Espelho idempotente da 0573. O webhook não traz o nome salvo no aparelho.
--- A varredura pergunta ao canal; o carimbo faz a fila girar em vez de
--- reprocessar sempre os mesmos. NULL = nunca perguntado.
-alter table public.contacts
-  add column if not exists name_lookup_at timestamptz;
-
-comment on column public.contacts.name_lookup_at is
-  'Última vez que se PERGUNTOU ao canal o nome salvo na agenda do celular. NULL = nunca perguntado. Com valor e name ainda null = o canal não tinha o nome na ocasião.';
-
-create index if not exists idx_contacts_name_lookup_pendente
-  on public.contacts (organization_id, name_lookup_at nulls first)
-  where name is null and is_anonymized = false and kind = 'person';

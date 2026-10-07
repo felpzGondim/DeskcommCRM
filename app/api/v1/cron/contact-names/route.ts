@@ -1,5 +1,6 @@
 /**
- * contact-names — copia para a ficha o nome salvo na agenda do celular.
+ * contact-names — copia para a ficha o nome salvo na agenda do celular, num
+ * campo que SÓ A EQUIPE vê (`address_book_name`).
  *
  * O webhook só entrega o apelido do perfil. Contato salvo no aparelho, sem
  * apelido, chega na inbox como telefone — medido na caixa de uma instalação
@@ -7,10 +8,15 @@
  * não viaja na mensagem; ela se pergunta ao canal, como a foto e o telefone
  * do id opaco.
  *
+ * O nome da agenda NUNCA vai para `name` nem para `display_name`: é o rótulo
+ * que alguém da empresa escreveu no celular, e aqueles dois são o que o
+ * `{{nome}}` das automações e das campanhas lê (decisão do mantenedor no PR
+ * #2439; o porquê inteiro em `patchDoNome`).
+ *
  * Carimba mesmo sem nome. Sem isso os mesmos primeiros N voltariam em toda
  * rodada e quem está no fim da fila nunca seria perguntado. Quem já tem
- * `name` (digitado na ficha ou vindo da planilha) fica de fora: esse nome
- * foi escolhido aqui e a agenda não o substitui.
+ * `name` (digitado na ficha ou vindo da planilha) fica de fora: a equipe já o
+ * reconhece. Quem já tem nome da agenda também.
  *
  * Fica de fora: empresa parada (a rodada gasta chamada ao canal e escreve na
  * ficha) e contato marcado como pessoal (o que é do dono do número não entra
@@ -62,6 +68,7 @@ interface ContactRow {
   wa_identity: string | null;
   name: string | null;
   display_name: string | null;
+  address_book_name: string | null;
   /** Status da org embutido — quem decide é `ehOperante`, não uma lista de ids. */
   organizations?: { status?: string | null } | Array<{ status?: string | null }> | null;
 }
@@ -86,11 +93,12 @@ async function handle(req: NextRequest): Promise<Response> {
   const { data: contatos, error: queryError } = await admin
     .from("contacts")
     .select(
-      "id, organization_id, phone_number, wa_lid, wa_identity, name, display_name, organizations:organization_id!inner(status)",
+      "id, organization_id, phone_number, wa_lid, wa_identity, name, display_name, address_book_name, organizations:organization_id!inner(status)",
     )
     // Empresa parada sai no banco, ANTES do limit — senão ela ocuparia o lote.
     .eq("organizations.status", STATUS_OPERANTE)
     .is("name", null)
+    .is("address_book_name", null)
     .eq("kind", "person")
     .eq("is_anonymized", false)
     .eq("is_personal", false)
@@ -115,7 +123,7 @@ async function handle(req: NextRequest): Promise<Response> {
   for (const c of rows) {
     if (Date.now() > prazo) break;
     varridos++;
-    const carimbar = async (extra: { name?: string; display_name?: string }): Promise<boolean> => {
+    const carimbar = async (extra: { address_book_name?: string; display_name?: string }): Promise<boolean> => {
       const { data: afetadas } = await admin
         .from("contacts")
         .update({
@@ -127,8 +135,10 @@ async function handle(req: NextRequest): Promise<Response> {
         .eq("is_anonymized", false)
         .eq("is_personal", false)
         // A ficha pode ter ganhado nome entre a seleção e esta gravação
-        // (edição na tela, planilha). Não substituir.
+        // (edição na tela, planilha), ou nome da agenda pelo app WhatsApp
+        // Business. Não substituir.
         .is("name", null)
+        .is("address_book_name", null)
         .select("id");
       return (afetadas ?? []).length > 0;
     };
@@ -177,7 +187,7 @@ async function handle(req: NextRequest): Promise<Response> {
 
     const extra = achado ? patchDoNome(c, achado) : {};
     const gravou = await carimbar(extra);
-    if ((extra.name || extra.display_name) && gravou) {
+    if (Object.keys(extra).length > 0 && gravou) {
       preenchidos++;
       preenchidosPorOrg.set(c.organization_id, (preenchidosPorOrg.get(c.organization_id) ?? 0) + 1);
     } else semNome++;

@@ -105,6 +105,7 @@ beforeEach(() => {
       wa_identity: "phone:+5562984480025",
       name: null,
       display_name: null,
+      address_book_name: null,
       organizations: { status: "active" },
     },
   ];
@@ -125,17 +126,29 @@ describe("auth", () => {
 });
 
 describe("o nome da agenda", () => {
-  it("grava o nome salvo e carimba a tentativa", async () => {
+  it("grava o nome salvo no campo da equipe e carimba a tentativa", async () => {
     const r = await chamar();
     expect(await r.json()).toMatchObject({ data: { preenchidos: 1 } });
     const up = ops.find((o) => o.tabela === "contacts" && o.op === "update");
-    expect(up?.payload).toMatchObject({ name: "Cliente da obra" });
+    expect(up?.payload).toMatchObject({ address_book_name: "Cliente da obra" });
     expect(up?.payload).toHaveProperty("name_lookup_at");
+  });
+
+  it("o nome da agenda NUNCA vai para name nem display_name (é o que o {{nome}} lê)", async () => {
+    agenda = { agenda: "Maria caloteira", perfil: "Maria" };
+    await chamar();
+    const ups = ops.filter((o) => o.tabela === "contacts" && o.op === "update");
+    expect(ups).toHaveLength(1);
+    const payload = ups[0]?.payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("name");
+    expect(payload.display_name).not.toBe("Maria caloteira");
+    expect(JSON.stringify({ ...payload, address_book_name: undefined })).not.toContain("caloteira");
   });
 
   it("não substitui nome que a ficha ganhou no meio do lote", async () => {
     await chamar();
     expect(filtrosDo("update")).toContain("is:name");
+    expect(filtrosDo("update")).toContain("is:address_book_name");
   });
 
   it("sem nome na agenda carimba e não inventa", async () => {
@@ -144,6 +157,7 @@ describe("o nome da agenda", () => {
     expect(await r.json()).toMatchObject({ data: { sem_nome: 1, preenchidos: 0 } });
     const up = ops.find((o) => o.tabela === "contacts" && o.op === "update");
     expect(up?.payload).not.toHaveProperty("name");
+    expect(up?.payload).not.toHaveProperty("address_book_name");
     expect(up?.payload).toHaveProperty("name_lookup_at");
     expect(auditou).not.toHaveBeenCalled();
   });
@@ -191,6 +205,7 @@ describe("LGPD e escopo", () => {
     await chamar();
     const f = filtrosDo("select");
     expect(f).toContain("is:name");
+    expect(f).toContain("is:address_book_name");
     expect(f).toContain("eq:kind");
   });
 

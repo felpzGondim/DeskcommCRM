@@ -59,13 +59,13 @@ describe("consulta", () => {
 });
 
 describe("o que gravar", () => {
-  it("o nome da agenda vence o apelido e entra em name", () => {
+  it("o nome da agenda vai para o campo da equipe, nunca para name nem display_name", () => {
     expect(
       patchDoNome(
         { name: null, display_name: "Zé" },
         { agenda: "José Arlindo", perfil: "Zé" },
       ),
-    ).toEqual({ name: "José Arlindo" });
+    ).toEqual({ address_book_name: "José Arlindo" });
   });
 
   it("sem agenda, o apelido só preenche quando a tela não tem nome", () => {

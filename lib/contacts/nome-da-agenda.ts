@@ -90,17 +90,24 @@ export async function consultarNomeDaAgenda(
 }
 
 /**
- * O que gravar. A agenda entra em `name` — é o nome que uma pessoa escolheu,
- * e é ele que a tela mostra primeiro. O apelido do perfil só preenche
- * `display_name` quando a tela hoje não tem nome nenhum. Nome já digitado
- * no CRM não é tocado.
+ * O que gravar. A agenda entra em `address_book_name`, o campo que SÓ A EQUIPE
+ * vê — nunca em `name` nem em `display_name`. O nome da agenda é o rótulo que
+ * alguém da empresa escreveu no celular ("João obra", "Maria caloteira"), e
+ * `name`/`display_name` são o que o `{{nome}}` das automações e das campanhas
+ * lê: gravado ali, o apelido interno chegaria ao cliente numa saudação
+ * (decisão do mantenedor no PR #2439). Para usar o nome numa mensagem, alguém
+ * o copia para o nome principal na ficha.
+ *
+ * O apelido do perfil só preenche `display_name` quando a tela hoje não tem
+ * nome nenhum — é o mesmo dado que o webhook já grava ali. Nome já digitado no
+ * CRM não é tocado.
  */
 export function patchDoNome(
   atual: { name: string | null; display_name: string | null },
   achado: NomeAchado,
-): { name?: string; display_name?: string } {
+): { address_book_name?: string; display_name?: string } {
   if ((atual.name ?? "").trim() !== "") return {};
-  if (achado.agenda) return { name: achado.agenda };
+  if (achado.agenda) return { address_book_name: achado.agenda };
   if (!nomeDoContato(atual) && achado.perfil) return { display_name: achado.perfil };
   return {};
 }
