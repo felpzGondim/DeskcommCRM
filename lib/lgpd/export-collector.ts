@@ -37,9 +37,10 @@ export interface ContactSnapshot {
   /**
    * O nome que a equipe salvou na agenda do celular (PR #2439). Só a equipe o
    * vê na tela, mas é dado pessoal do titular: a anonimização o apaga
-   * (`trg_contato_anonimizado_esquece_a_agenda`), então o acesso o entrega.
-   * Antes do #2439 o nome da coexistência ia para `display_name`, que já saía
-   * aqui — sem este campo o titular passaria a receber menos.
+   * (`trg_contato_anonimizado_esquece_a_agenda`), então o `data.json` o leva.
+   * Quem RECEBE o `data.json` é o titular fora do Brasil: o worker só assina a
+   * ligação dele quando o país não é o padrão (`lgpd-export-worker.ts`). No
+   * Brasil o arquivo fica guardado sem ser enviado, e o PDF não lê este campo.
    */
   address_book_name: string | null;
   email: string | null;

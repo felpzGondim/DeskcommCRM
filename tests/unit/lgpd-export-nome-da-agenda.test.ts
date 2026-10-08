@@ -8,10 +8,9 @@ import { describe, expect, it, vi } from "vitest";
  * pela regra de `lgpd-exporta-o-que-redige.test.ts`, o que se apaga a pedido do
  * titular é o que se entrega a pedido dele.
  *
- * E há uma regressão a evitar: antes do #2439 o nome que vinha do app WhatsApp
- * Business (coexistência) ia para `display_name`, que o `data.json` já
- * entregava. Movido para o campo próprio sem entrar aqui, o titular passaria a
- * receber MENOS do que recebia.
+ * Quem recebe o `data.json` é o titular FORA do Brasil (o worker só assina a
+ * ligação do arquivo quando o país não é o padrão). No Brasil o arquivo fica
+ * guardado sem ser enviado, e o PDF — que é o que sai — não lê este campo.
  *
  * O banco falso devolve só as colunas pedidas no `select` — senão a linha
  * chegaria inteira e o teste ficaria verde mesmo com a coluna fora da consulta.

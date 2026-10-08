@@ -10,6 +10,6 @@ Esse nome é só da equipe: ele nunca entra no `{{nome}}` das mensagens automát
 
 Vale também para quem usa a conexão oficial junto com o app WhatsApp Business: o nome que a equipe dá ao contato no app passa a ir para esse mesmo campo, e não mais para o nome de exibição (que as campanhas usam). Nomes que já tinham chegado por esse caminho antes desta versão continuam onde estão: não há como separá-los do apelido do perfil.
 
-Ao anonimizar um contato (LGPD), o nome da agenda é apagado junto. E quando o titular pede acesso aos dados dele, o nome da agenda sai no arquivo de dados (`data.json`), no campo `address_book_name` — o mesmo arquivo que já entregava esse nome quando ele vinha no nome de exibição.
+LGPD: ao anonimizar um contato, o nome da agenda é apagado junto. Quando o titular pede acesso aos dados dele, o nome da agenda entra no arquivo de dados (`data.json`, campo `address_book_name`). Fora do Brasil o titular recebe esse arquivo, então recebe o nome. No Brasil o arquivo fica guardado com a cópia, mas não é enviado, e o PDF que o titular recebe não mostra o nome da agenda.
 
 Contribuição de @felpzGondim (#2439), a primeira dele no projeto.
