@@ -103,10 +103,13 @@ describe("o cabeçalho sabe quando a lista está na tela", () => {
   it("a regra do CSS usa o mesmo atributo, a mesma classe e o mesmo id", () => {
     const css = readFileSync("app/globals.css", "utf8");
     expect(css).toContain(`html[${ATTR_LISTA_DO_INBOX}] .${CLASSE_QUE_SOME_NA_LISTA}`);
+    expect(css).toContain(`html[data-inbox-conversa] .${CLASSE_QUE_SOME_NA_LISTA}`);
     expect(css).toContain(`#${ID_DA_FAIXA_DO_INBOX}`);
+    expect(css).toContain("#faixa-da-conversa");
     // A barra usa as constantes, não uma segunda grafia do mesmo nome.
     const barra = readFileSync("components/shell/TopBar.tsx", "utf8");
     expect(barra).toContain("CLASSE_QUE_SOME_NA_LISTA");
     expect(barra).toContain("ID_DA_FAIXA_DO_INBOX");
+    expect(barra).toContain("ID_DA_FAIXA_DA_CONVERSA");
   });
 });

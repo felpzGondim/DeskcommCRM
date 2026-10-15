@@ -213,7 +213,7 @@ test("rejeitar tira a sugestão da tela e diz que rejeitou; sem agente publicado
     const gerada = page.waitForResponse(
       (r) => r.url().endsWith("/draft-reply") && r.request().method() === "POST",
     );
-    await painel(page).getByRole("button", { name: "Sugerir resposta", exact: true }).click();
+    await page.getByRole("button", { name: "Sugerir resposta", exact: true }).click();
     const resposta = await gerada;
     expect(resposta.status(), await resposta.text()).toBe(200);
     // 20s, e não os 5s do padrão: entre o 200 do POST e o rótulo na tela há o
@@ -247,7 +247,7 @@ test("rejeitar tira a sugestão da tela e diz que rejeitou; sem agente publicado
       "a sugestão rejeitada continua oferecendo os botões de decisão",
     ).toHaveCount(0);
     await expect(
-      painel(page).getByText("Assistência do agente", { exact: true }),
+      page.getByRole("button", { name: "Sugerir resposta", exact: true }),
       "o painel não voltou ao estado neutro",
     ).toBeVisible();
     // E a confirmação FICA — sem ela, Rejeitar apenas esvaziaria a tela em
@@ -283,7 +283,7 @@ test("rejeitar tira a sugestão da tela e diz que rejeitou; sem agente publicado
     const falhou = page.waitForResponse(
       (r) => r.url().endsWith("/draft-reply") && r.request().method() === "POST",
     );
-    await painel(page).getByRole("button", { name: "Sugerir resposta", exact: true }).click();
+    await page.getByRole("button", { name: "Sugerir resposta", exact: true }).click();
     const recusa = await falhou;
     expect(recusa.status()).toBe(422);
     expect((await recusa.json()).error.code).toBe("reply_no_agent");

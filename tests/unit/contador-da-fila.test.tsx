@@ -7,6 +7,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const contagem: { fila?: number; unassigned: number } = { unassigned: 0 };
 vi.mock("@/hooks/auth/AuthProvider", () => ({ useAuth: () => ({ activeOrg: { orgId: "org-1" } }) }));
@@ -36,6 +37,16 @@ describe("contador da fila no menu", () => {
     contagem.unassigned = 0;
     const { container } = render(<ContadorDaFila compacto={false} />);
     expect(container.innerHTML).toBe("");
+  });
+
+  it("o número não vai no HTML do servidor — senão a hidratação acusa a aba", () => {
+    contagem.fila = 2;
+    // O cache já tem o 2, como no recarregamento quente. O servidor ainda assim
+    // não pode emitir o span: a página que chegou no navegador saiu sem ele.
+    const html = renderToStaticMarkup(<ContadorDaFila compacto={false} />);
+    expect(html).not.toContain("contador-da-fila");
+    render(<ContadorDaFila compacto={false} />);
+    expect(screen.getAllByTestId("contador-da-fila").at(-1)?.textContent).toBe("2");
   });
 
   it("Inbox está no menu com o contador da fila declarado", () => {

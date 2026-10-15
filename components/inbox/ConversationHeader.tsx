@@ -1,5 +1,6 @@
 "use client";
-import { useState, type RefObject } from "react";
+import { useLayoutEffect, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "@/hooks/i18n/useT";
 import Link from "next/link";
 import {
@@ -36,6 +37,7 @@ import { DialButton } from "@/components/voice/DialButton";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { ID_DAS_ACOES_NA_FICHA } from "@/lib/inbox/lista-no-cabecalho";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -49,6 +51,8 @@ interface Props {
   botaoBuscaRef?: RefObject<HTMLButtonElement | null>;
   /** Seleciona outra conversa no Inbox — a aba Número do Transferir abre a do outro número. */
   onAbrirConversa?: (id: string) => void;
+  /** A ficha do celular está aberta: as ações que saíram da linha moram nela. */
+  fichaAberta?: boolean;
 }
 
 /**
@@ -83,6 +87,7 @@ export function ConversationHeader({
   onBuscar,
   buscaAberta,
   botaoBuscaRef,
+  fichaAberta = false,
 }: Props) {
   const t = useT();
   const { user } = useAuth();
@@ -99,6 +104,17 @@ export function ConversationHeader({
   const [reassignOpen, setReassignOpen] = useState(false);
   const [confirmFecharOpen, setConfirmFecharOpen] = useState(false);
   const [confirmArquivarOpen, setConfirmArquivarOpen] = useState(false);
+  const [acoesNaFicha, setAcoesNaFicha] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!fichaAberta) {
+      setAcoesNaFicha(null);
+      return;
+    }
+    const achar = () => setAcoesNaFicha(document.getElementById(ID_DAS_ACOES_NA_FICHA));
+    achar();
+    const frame = requestAnimationFrame(achar);
+    return () => cancelAnimationFrame(frame);
+  }, [fichaAberta]);
 
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c, t);
@@ -178,21 +194,25 @@ export function ConversationHeader({
     // de antes (uma linha), e quando aperta a barra desce para a linha de baixo.
     // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
     // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 max-md:flex-nowrap max-md:gap-2 max-md:px-3 max-md:py-2">
+      <div className="flex min-w-0 items-center gap-2 max-md:flex-1">
+        <div className="min-w-0 max-md:flex max-md:flex-1 max-md:items-center max-md:gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 max-md:flex-1">
           <ChannelLogo channel={conversation.channel_sessions} size={20} />
           <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
-          <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+          <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px] max-md:hidden">
             {t(STATUS_LABEL[status] ?? status)}
           </Badge>
           {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
               escrever agora?" se faz ANTES de digitar, não depois de receber um
-              `failed` com um código de cinco dígitos. */}
-          <JanelaSelo
-            provider={conversation.channel_sessions?.provider ?? null}
-            lastInboundAt={conversation.last_inbound_at}
-          />
+              `failed` com um código de cinco dígitos. No celular a linha é
+              nome, quem manda e Assumir — a janela continua na ficha. */}
+          <span className="max-md:hidden">
+            <JanelaSelo
+              provider={conversation.channel_sessions?.provider ?? null}
+              lastInboundAt={conversation.last_inbound_at}
+            />
+          </span>
         </div>
 
         {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
@@ -200,7 +220,7 @@ export function ConversationHeader({
             funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
             por texto, faria a mesma pergunta ter três respostas diferentes na
             mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
-        <div className="mt-1 flex items-center gap-2" data-testid="comando-da-conversa">
+        <div className="mt-1 flex items-center gap-2 max-md:mt-0" data-testid="comando-da-conversa">
           {comando.quem === "humano" ? (
             <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
           ) : comando.quem === "automatico" ? (
@@ -212,10 +232,11 @@ export function ConversationHeader({
           )}
         </div>
         {phone && (
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground max-md:hidden">
             <Phone size={11} weight="regular" aria-hidden /> {phone}
           </p>
         )}
+        </div>
       </div>
 
       {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a
@@ -227,6 +248,14 @@ export function ConversationHeader({
           motivo da barra. */}
       <div className="flex min-w-0 flex-col items-end gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {(() => {
+          // No celular a linha cabe nome, quem manda e Assumir. O resto muda
+          // para a ficha quando ela abre — o mesmo nó, para o teste do header
+          // continuar vendo um botão só. `md:contents` achata o grupo no
+          // desktop, então a ordem da barra não muda.
+          const noCabecalho = acoesNaFicha == null;
+          const leitura = (
+            <div className={noCabecalho ? "max-md:hidden md:contents" : "contents"}>
         {/* Primeira da barra e sem rótulo escrito: é ferramenta de LEITURA, não
             ação de atendimento, e não muda de lugar com o estado da conversa.
             Só o ícone porque a barra já quebrou a caixa útil em 1280px uma vez
@@ -250,26 +279,16 @@ export function ConversationHeader({
         {!conversation.is_group && c?.id && (
           <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
         )}
-        {isOpen && (
-          <Button
-            size="sm"
-            variant="default"
-            disabled={claim.isPending}
-            // O rótulo NÃO muda (é contrato: `inbox-header-nao-trava` e o
-            // dicionário de espanhol o citam). O que faltava era a consequência
-            // dita: desde a 0173 assumir também para o atendimento automático, e
-            // um botão que muda duas coisas precisa anunciar as duas.
-            title={t("Você passa a responder esta conversa e o atendimento automático para aqui.")}
-            onClick={() =>
-              claim.mutate({
-                conversation_id: conversation.id,
-                expected_assignee: conversation.assigned_to_user_id,
-              })
-            }
-          >
-            {t("Assumir")}
-          </Button>
-        )}
+            </div>
+          );
+          const acoes = (
+            <div
+              className={
+                noCabecalho
+                  ? "flex min-w-0 flex-wrap items-center gap-1.5 max-md:hidden md:contents"
+                  : "flex min-w-0 flex-wrap items-center gap-1.5"
+              }
+            >
         {isMineAssigned && (
           <Button
             size="sm"
@@ -383,7 +402,7 @@ export function ConversationHeader({
             Abaixo de 1280 o painel não existe, e aí esta é a única porta para o
             contato — por isso a condição é a mesma do painel, e não um valor
             escolhido à parte. Não é esconder ação; é não repeti-la. */}
-        {c?.id && (
+        {c?.id && noCabecalho && (
           <Button asChild size="sm" variant="ghost" className="xl:hidden">
             <Link href={`/app/contacts/${c.id}`} className="flex items-center gap-1">
               {t("Ver contato")}
@@ -391,6 +410,37 @@ export function ConversationHeader({
             </Link>
           </Button>
         )}
+            </div>
+          );
+          const grupos = (
+            <>
+              {leitura}
+              {acoes}
+            </>
+          );
+          return (
+            <>
+              {acoesNaFicha ? createPortal(grupos, acoesNaFicha) : leitura}
+              {isOpen && (
+          <Button
+            size="sm"
+            variant="default"
+            disabled={claim.isPending}
+            title={t("Você passa a responder esta conversa e o atendimento automático para aqui.")}
+            onClick={() =>
+              claim.mutate({
+                conversation_id: conversation.id,
+                expected_assignee: conversation.assigned_to_user_id,
+              })
+            }
+          >
+            {t("Assumir")}
+          </Button>
+        )}
+              {acoesNaFicha ? null : acoes}
+            </>
+          );
+        })()}
       </div>
         {/* O aviso pertence à operação automática. Abaixo da barra ele não
             alarga a ficha do contato nem muda a posição dos botões.
@@ -398,7 +448,7 @@ export function ConversationHeader({
             a mesma cara de uma conversa normal. O testid é contrato:
             `escalacao-ciclo.spec.ts` o clica. */}
         {motivo !== null && (
-          <Badge variant="outline" className="h-4 w-fit max-w-full truncate px-1.5 text-[10px]"
+          <Badge variant="outline" className="h-4 w-fit max-w-full truncate px-1.5 text-[10px] max-md:hidden"
             title={t(ROTULO_DO_MOTIVO[motivo])} data-testid="badge-atendimento-humano">
             {t(ROTULO_DO_MOTIVO[motivo])}
           </Badge>

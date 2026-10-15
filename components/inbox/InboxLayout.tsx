@@ -1,6 +1,12 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { sincronizarListaNoCabecalho } from "@/lib/inbox/lista-no-cabecalho";
+import { createPortal } from "react-dom";
+import {
+  ID_DA_FAIXA_DA_CONVERSA,
+  ID_DAS_ACOES_NA_FICHA,
+  sincronizarConversaNoCabecalho,
+  sincronizarListaNoCabecalho,
+} from "@/lib/inbox/lista-no-cabecalho";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/auth/AuthProvider";
@@ -168,11 +174,21 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
   }, [tab, setFilterValue]);
 
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? idNaUrl);
-  // A lista na tela liga o CSS que entrega o cabeçalho aos filtros. Conversa
-  // aberta desliga: o cabeçalho volta a ser o da conta, e a faixa some.
+  // Lista: o cabeçalho vira a faixa de filtros. Conversa: o mesmo cabeçalho
+  // recebe Conversas e Ficha, e a conta continua no menu. Os dois atributos
+  // não ficam ligados juntos.
+  const [faixaDaConversa, setFaixaDaConversa] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    sincronizarListaNoCabecalho(selectedId == null);
-    return () => sincronizarListaNoCabecalho(false);
+    const conversaAberta = selectedId != null;
+    sincronizarListaNoCabecalho(!conversaAberta);
+    sincronizarConversaNoCabecalho(conversaAberta);
+    setFaixaDaConversa(
+      conversaAberta ? document.getElementById(ID_DA_FAIXA_DA_CONVERSA) : null,
+    );
+    return () => {
+      sincronizarListaNoCabecalho(false);
+      sincronizarConversaNoCabecalho(false);
+    };
   }, [selectedId]);
   const ultimoIdNaUrl = useRef(idNaUrl);
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
@@ -520,34 +536,50 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
           que ele é a única saída. A porta da ficha, essa sim, depende da
           conversa, e só aparece quando há uma.
         */}
-        {selectedId && (
-          <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-1 px-2"
-              onClick={() => handleSelect(null)}
-            >
-              <CaretLeft size={16} />
-              {t("Conversas")}
-            </Button>
-            <div className="flex-1" />
-            {selectedConversation && (
-              <Sheet open={fichaAberta} onOpenChange={setFichaAberta}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 gap-1 px-2 xl:hidden">
-                    <IdentificationCard size={16} />
-                    {t("Ficha")}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[min(22rem,90vw)] overflow-y-auto p-0">
-                  <SheetTitle className="sr-only">{t("Ficha do contato")}</SheetTitle>
-                  <CRMSidePanel conversation={selectedConversation} />
-                </SheetContent>
-              </Sheet>
-            )}
-          </div>
-        )}
+        {selectedId &&
+          (() => {
+            // No app de verdade o vão mora no cabeçalho, na mesma linha do
+            // menu. Sem esse elemento (teste que não monta a barra) a volta
+            // continua na coluna, senão a conversa não tem saída.
+            const barra = (
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1 px-2"
+                  onClick={() => handleSelect(null)}
+                >
+                  <CaretLeft size={16} />
+                  {t("Conversas")}
+                </Button>
+                <div className="flex-1" />
+                {selectedConversation && (
+                  <Sheet open={fichaAberta} onOpenChange={setFichaAberta}>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-9 gap-1 px-2 xl:hidden">
+                        <IdentificationCard size={16} />
+                        {t("Ficha")}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-[min(22rem,90vw)] overflow-y-auto p-0">
+                      <SheetTitle className="sr-only">{t("Ficha do contato")}</SheetTitle>
+                      <div
+                        id={ID_DAS_ACOES_NA_FICHA}
+                        className="flex flex-wrap gap-2 border-b px-3 py-3 pr-12"
+                      />
+                      <CRMSidePanel conversation={selectedConversation} />
+                    </SheetContent>
+                  </Sheet>
+                )}
+              </div>
+            );
+            if (faixaDaConversa) return createPortal(barra, faixaDaConversa);
+            return (
+              <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
+                {barra}
+              </div>
+            );
+          })()}
         {selectedConversation ? (
           <>
             {/* `key`: trocar de conversa desmonta a confirmação de Fechar/Arquivar
@@ -555,6 +587,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
             <ConversationHeader
               key={selectedConversation.id}
               conversation={selectedConversation}
+              fichaAberta={fichaAberta}
               onAbrirConversa={handleSelect}
               onBuscar={() =>
                 buscaAberta

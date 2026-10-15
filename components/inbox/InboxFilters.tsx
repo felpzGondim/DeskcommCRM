@@ -36,6 +36,7 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useContactTagVocabulary } from "@/hooks/contacts/useContactTagVocabulary";
 import { useConversationTagVocabulary } from "@/hooks/inbox/useConversationTags";
 import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
+import { useContagemDepoisDaHidratacao } from "@/hooks/inbox/contagem-depois-da-hidratacao";
 import type { Role, VisibilityMode } from "@/lib/auth/types";
 
 export type InboxTab = "unassigned" | "mine" | "all" | "closed" | "archived" | "ai";
@@ -211,6 +212,7 @@ export function InboxFilters({ value, onChange, encaixarNoCabecalho = false }: P
     tagMode: value.tagMode,
     channel_session_id: value.channel_session_id,
   });
+  const contagemVisivel = useContagemDepoisDaHidratacao();
 
   const tabs = activeOrg
     ? visibleInboxTabs(activeOrg.role, activeOrg.visibility_mode)
@@ -646,7 +648,7 @@ export function InboxFilters({ value, onChange, encaixarNoCabecalho = false }: P
                   className="shrink-0 gap-1 rounded-none border-b-2 border-transparent px-0 pb-2 pt-1 text-xs font-medium text-text-muted data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-text data-[state=active]:shadow-none"
                 >
                   {t(meta.label)}
-                  {typeof count === "number" && count > 0 && (
+                  {contagemVisivel && typeof count === "number" && count > 0 && (
                     <span className="text-[11px] tabular-nums text-text-subtle">{count}</span>
                   )}
                 </TabsTrigger>

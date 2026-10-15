@@ -7,6 +7,7 @@ import { UserMenu } from "./UserMenu";
 import { SearchTrigger } from "./SearchTrigger";
 import {
   CLASSE_QUE_SOME_NA_LISTA,
+  ID_DA_FAIXA_DA_CONVERSA,
   ID_DA_FAIXA_DO_INBOX,
 } from "@/lib/inbox/lista-no-cabecalho";
 
@@ -30,6 +31,11 @@ export function TopBar() {
         `display: none`, e este flex não come o lugar da busca.
       */}
       <div id={ID_DA_FAIXA_DO_INBOX} />
+      {/*
+        Conversa aberta no celular: Conversas e Ficha ocupam o lugar que a
+        lista entregava aos filtros. O CSS só mostra um dos dois vãos.
+      */}
+      <div id={ID_DA_FAIXA_DA_CONVERSA} />
       <div className={`${CLASSE_QUE_SOME_NA_LISTA} flex min-w-0 flex-1 justify-center md:max-w-md`}>
         <SearchTrigger />
       </div>

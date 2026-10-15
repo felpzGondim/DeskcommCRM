@@ -15,7 +15,7 @@ import { AttachMenu } from "@/components/inbox/composer/AttachMenu";
 import { AttachmentPreviewDialog } from "@/components/inbox/composer/AttachmentPreviewDialog";
 import { ContactPickerDialog } from "@/components/inbox/composer/ContactPickerDialog";
 import { AudioRecorder } from "@/components/inbox/composer/AudioRecorder";
-import { ReplyReviewPanel } from "@/components/inbox/composer/ReplyReviewPanel";
+import { ID_DO_BOTAO_SUGERIR, ReplyReviewPanel } from "@/components/inbox/composer/ReplyReviewPanel";
 import { EmojiButton } from "@/components/inbox/composer/EmojiButton";
 import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/TemplateMenu";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
@@ -300,9 +300,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           mode === "note" && "border-warning/40 bg-warning-bg",
         )}
       >
-        {mode === "reply" && (
-          <ReplyReviewPanel conversationId={conversationId} disabled={isDisabled} />
-        )}
+        <ReplyReviewPanel
+          conversationId={conversationId}
+          disabled={isDisabled}
+          mostrarCorpo={mode === "reply"}
+        />
         <TemplateMenu
           open={menuOpen}
           query={slash.query}
@@ -332,7 +334,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </p>
           </div>
         )}
-        <div className="mb-1.5 flex gap-1">
+        <div className="mb-1.5 flex flex-wrap items-center gap-1" data-testid="modos-do-composer">
           <button
             type="button"
             onClick={() => setMode("reply")}
@@ -357,6 +359,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           >
             {t("Nota interna")}
           </button>
+          <div id={ID_DO_BOTAO_SUGERIR} className="contents" />
         </div>
         {/*
           A FAIXA DA CITAÇÃO — o que o atendente escolheu responder.

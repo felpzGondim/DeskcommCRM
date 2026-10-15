@@ -104,9 +104,10 @@ describe("Composer + modo nota interna", () => {
 
     // F3 (#1863): o "+" deixou de ser exclusivo da resposta — a nota passou a
     // aceitar anexo. O que continua sumindo é o que sairia para o cliente:
-    // rascunho sugerido (é uma mensagem) e áudio (grava mensagem).
+    // a caixa de revisão (é uma mensagem) e áudio (grava mensagem). O botão
+    // de sugerir fica ao lado de "Nota interna" nos dois modos.
     expect(screen.getByRole("button", { name: /anexar/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /sugerir resposta/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sugerir resposta/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /gravar áudio/i })).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/nota interna/i)).toBeInTheDocument();
   });
