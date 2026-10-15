@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { sincronizarListaNoCabecalho } from "@/lib/inbox/lista-no-cabecalho";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/auth/AuthProvider";
@@ -167,6 +168,12 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
   }, [tab, setFilterValue]);
 
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? idNaUrl);
+  // A lista na tela liga o CSS que entrega o cabeçalho aos filtros. Conversa
+  // aberta desliga: o cabeçalho volta a ser o da conta, e a faixa some.
+  useLayoutEffect(() => {
+    sincronizarListaNoCabecalho(selectedId == null);
+    return () => sincronizarListaNoCabecalho(false);
+  }, [selectedId]);
   const ultimoIdNaUrl = useRef(idNaUrl);
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -401,6 +408,12 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
   //
   // `dvh` em vez de `vh` porque no celular a `vh` ignora a barra do navegador — o
   // mesmo corte, só que pior e mudando conforme se rola a página.
+  //
+  // No celular o `<main>` do inbox não tem padding (`p-0` até o `md`). A conta
+  // da altura não pode continuar descontando os dois `--space-6`: sobraria um
+  // vão vazio embaixo do compositor. O `md:` devolve a conta de sempre, que é
+  // a que combina com o `md:p-6`. O `env(safe-area-inset-bottom)` é a barra do
+  // sistema, que o `dvh` não tira.
 
   // TRÊS COLUNAS QUE CABEM — medido, não estimado.
   //
@@ -423,7 +436,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
   return (
     <OpenConversationProvider conversationId={selectedId}>
     <div
-      className="grid h-[calc(100dvh-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] w-full grid-cols-1 md:grid-cols-[300px_1fr] xl:grid-cols-[272px_1fr_296px] 2xl:grid-cols-[300px_1fr_320px]"
+      className="grid h-[calc(100dvh-3.5rem-env(safe-area-inset-bottom,0px)-var(--rodape-ocupado,0px))] w-full grid-cols-1 md:h-[calc(100dvh-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] md:grid-cols-[300px_1fr] xl:grid-cols-[272px_1fr_296px] 2xl:grid-cols-[300px_1fr_320px]"
       /*
        * O ESTADO DO TEMPO REAL, LEGÍVEL DE FORA — mesmo par que o dossiê do lead
        * já publica (`LeadDossier`), e pela mesma razão: quando a entrega morre,
@@ -466,7 +479,11 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
           colunas.lista,
         )}
       >
-        <InboxFilters value={filterValue} onChange={setFilterValue} />
+        <InboxFilters
+          value={filterValue}
+          onChange={setFilterValue}
+          encaixarNoCabecalho={selectedId == null}
+        />
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationList
             listQuery={listQ}

@@ -24,6 +24,29 @@
    coisas que no v3 ele não vencia. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/*
+ * Lista do inbox no celular: o cabeçalho vira a faixa de filtros.
+ *
+ * `data-inbox-lista` só existe enquanto a lista está na tela (lib/inbox/
+ * lista-no-cabecalho.ts). Abaixo de `md` (48rem) o sino, o idioma e a conta
+ * somem da barra — ficam no menu — e o vão ao lado do hambúrguer recebe os
+ * filtros. No desktop nada disto vale: a faixa nasce `display: none`.
+ */
+#faixa-dos-filtros {
+  display: none;
+}
+@media (width < 48rem) {
+  html[data-inbox-lista] .cabecalho-some-na-lista {
+    display: none;
+  }
+  html[data-inbox-lista] #faixa-dos-filtros {
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    DeskcommCRM — Design System tokens (Sage palette · density Aerada)
    Source of truth: /app/design/lib/tokens.ts (PALETTES.sage)

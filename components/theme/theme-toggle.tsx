@@ -19,7 +19,14 @@ import { useT } from "@/hooks/i18n/useT";
  * `className` existe para a tarja do Modo Plataforma, que tem 40px de altura e
  * não comporta os 44px de alvo de toque do `size="icon"`.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  atalho = true,
+}: {
+  className?: string;
+  /** A segunda cópia (o menu do celular) não pode ouvir o mesmo atalho. */
+  atalho?: boolean;
+}) {
   const t = useT();
   const { theme, setTheme } = useTheme();
 
@@ -27,7 +34,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light");
   };
 
-  useHotkeys("mod+shift+l", cycle, { preventDefault: true }, [theme]);
+  useHotkeys("mod+shift+l", cycle, { preventDefault: true, enabled: atalho }, [theme, atalho]);
 
   const Icon = theme === "dark" ? Moon : theme === "system" ? MonitorPlay : Sun;
 

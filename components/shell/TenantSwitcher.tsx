@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { setActiveOrg } from "@/app/actions/shell/setActiveOrg";
 
-export function TenantSwitcher() {
+export function TenantSwitcher({ idDeTeste = "tenant-switcher" }: { idDeTeste?: string } = {}) {
   const t = useT();
   const user = useUser();
   const active = useActiveOrg();
@@ -69,7 +69,7 @@ export function TenantSwitcher() {
           className="gap-2"
           aria-label={`${t("Organização")}: ${active?.name ?? t("Selecionar org")}`}
           title={user.support ? "Saia do acompanhamento para trocar de organização" : undefined}
-          data-testid="tenant-switcher"
+          data-testid={idDeTeste}
         >
           <Storefront size={16} weight="duotone" aria-hidden />
           <span className="hidden max-w-[160px] truncate md:inline">
@@ -82,7 +82,7 @@ export function TenantSwitcher() {
         {user.organizations.map((org) => (
           <DropdownMenuItem
             key={org.organization_id}
-            data-testid={`tenant-switcher-item-${org.organization_id}`}
+            data-testid={`${idDeTeste}-item-${org.organization_id}`}
             onClick={() => { void switchTo(org.organization_id); }}
             className="flex items-center justify-between"
           >

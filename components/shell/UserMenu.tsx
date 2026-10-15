@@ -24,7 +24,14 @@ function initials(name: string | null, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
-export function UserMenu() {
+export function UserMenu({
+  idDoSeletor,
+  atalhoDoTema = true,
+}: {
+  /** A cópia do menu não pode repetir o `data-testid` da barra. */
+  idDoSeletor?: string;
+  atalhoDoTema?: boolean;
+} = {}) {
   const t = useT();
   const user = useUser();
   const { signOut } = useAuth();
@@ -32,8 +39,8 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-2">
-      <SeletorDeIdioma />
-      <ThemeToggle />
+      <SeletorDeIdioma idDeTeste={idDoSeletor} />
+      <ThemeToggle atalho={atalhoDoTema} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full" aria-label={t("Menu do usuário")}>
