@@ -195,8 +195,7 @@ export function ConversationHeader({
     // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
     // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 max-md:flex-nowrap max-md:gap-2 max-md:px-3 max-md:py-2">
-      <div className="flex min-w-0 items-center gap-2 max-md:flex-1">
-        <div className="min-w-0 max-md:flex max-md:flex-1 max-md:items-center max-md:gap-2">
+      <div className="min-w-0 max-md:flex max-md:flex-1 max-md:items-center max-md:gap-2">
         <div className="flex min-w-0 items-center gap-1.5 max-md:flex-1">
           <ChannelLogo channel={conversation.channel_sessions} size={20} />
           <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
@@ -236,7 +235,6 @@ export function ConversationHeader({
             <Phone size={11} weight="regular" aria-hidden /> {phone}
           </p>
         )}
-        </div>
       </div>
 
       {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a

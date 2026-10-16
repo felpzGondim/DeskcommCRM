@@ -193,35 +193,37 @@ export function ReplyReviewPanel({
       (notice.draftId === draft.id &&
         (notice.kind === "error" ||
           ["approved", "sending", "sent", "dismissed"].includes(draft.status))));
-  const ocioso = !mostrarCorpo || (!draft && !aviso);
-  const secao = (tituloOcioso: boolean) => (
+  // Nota interna não mostra a caixa. Sem rascunho e sem aviso, a faixa ociosa
+  // também sai: o botão já está ao lado de "Nota interna".
+  const mostrarSecao = mostrarCorpo && Boolean(draft || aviso);
+  const avisoNaSecao = aviso && notice && (
+    <p role="status" className="text-xs">
+      {notice.message}
+    </p>
+  );
+  const secao = mostrarSecao ? (
     <section
       className="mb-3 space-y-2 rounded-md border bg-muted/30 p-3"
       aria-label={t("Assistência do agente")}
     >
-      {(draft || tituloOcioso) && (
-        <p className="text-sm font-medium">
-          {t(draft ? (statuses[draft.status] ?? "Assistência do agente") : "Assistência do agente")}
-        </p>
+      {draft && (
+        <p className="text-sm font-medium">{t(statuses[draft.status] ?? "Assistência do agente")}</p>
       )}
       {corpo}
-      {aviso && notice && (
-        <p role="status" className="text-xs">
-          {notice.message}
-        </p>
-      )}
+      {avisoNaSecao}
     </section>
-  );
-  // O vão ao lado de "Nota interna" existe: o botão sai da faixa e a faixa
-  // ociosa sai junto. Sem o vão (painel montado sozinho) a faixa de hoje fica.
+  ) : null;
+  // Um lugar só para o botão. Com o vão, ele sai da seção. Sem o vão (o painel
+  // montado sozinho), ele continua dentro da faixa de hoje.
   if (slot) {
     return (
       <>
         {createPortal(botao, slot)}
-        {ocioso ? null : secao(false)}
+        {secao}
       </>
     );
   }
+  if (!mostrarCorpo) return botao;
   return (
     <section
       className="mb-3 space-y-2 rounded-md border bg-muted/30 p-3"
@@ -234,11 +236,7 @@ export function ReplyReviewPanel({
         {botao}
       </div>
       {corpo}
-      {aviso && notice && (
-        <p role="status" className="text-xs">
-          {notice.message}
-        </p>
-      )}
+      {avisoNaSecao}
     </section>
   );
 }

@@ -575,7 +575,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
             );
             if (faixaDaConversa) return createPortal(barra, faixaDaConversa);
             return (
-              <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
+              <div className="flex w-full min-w-0 items-center border-b border-border px-1 py-1 md:hidden">
                 {barra}
               </div>
             );
