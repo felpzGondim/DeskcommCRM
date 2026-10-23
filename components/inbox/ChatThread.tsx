@@ -30,6 +30,8 @@ interface Props {
   provider?: string | null;
   /** Escolher uma mensagem para responder. Sobe até o composer. */
   onResponder?: (m: Message) => void;
+  /** Põe o cursor no campo depois da escolha — o menu não fica com o foco. */
+  onFocarResposta?: () => void;
   /**
    * Quem é o dono da conversa HOJE, e quem é o contato.
    *
@@ -85,6 +87,7 @@ export function ChatThread({
   conversationId,
   provider,
   onResponder,
+  onFocarResposta,
   dono,
   contatoId,
   searchTerm = "",
@@ -388,6 +391,7 @@ export function ChatThread({
                   searchMatch={resultados.has(item.data.id)}
                   debugCitations={debugCitations}
                   onResponder={onResponder}
+                  onFocarResposta={onFocarResposta}
                   // A citada sai da MESMA lista já carregada: buscar no servidor
                   // por cada citação faria uma consulta por bolha. Quando a
                   // citada é antiga demais e ficou fora da página, o fio some —

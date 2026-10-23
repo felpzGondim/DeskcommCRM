@@ -629,6 +629,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
                 searchTerm={buscaAberta ? busca.termo : ""}
                 provider={selectedConversation.channel_sessions?.provider ?? null}
                 onResponder={setRespondendo}
+                onFocarResposta={handleFocusReply}
                 // O cartão da passagem escolhe o gesto a partir de quem é o dono
                 // da conversa: sem dono convida a assumir, com outro dono diz
                 // quem atende. Sem estes dois campos ele cairia no estado mais

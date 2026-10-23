@@ -95,6 +95,40 @@ describe("Composer + modo nota interna", () => {
     expect(input).toHaveValue("");
   });
 
+  it("Nota interna e Responder deixam o campo pronto para digitar", () => {
+    renderComposer();
+    const campo = screen.getByLabelText(/mensagem/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /nota interna/i }));
+    expect(campo).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: /^responder$/i }));
+    expect(campo).toHaveFocus();
+    expect(screen.getByPlaceholderText(/escreva uma mensagem/i)).toBeInTheDocument();
+  });
+
+  it("citar uma mensagem estando em nota interna volta para a resposta", () => {
+    const qc = new QueryClient();
+    const citado = { id: "m1", body: "quero remarcar", direction: "inbound" };
+    const { rerender } = render(
+      <QueryClientProvider client={qc}>
+        <Composer conversationId="conv-1" />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /nota interna/i }));
+    expect(screen.getByPlaceholderText(/nota interna/i)).toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={qc}>
+        <Composer conversationId="conv-1" respondendo={citado} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByPlaceholderText(/escreva uma mensagem/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cancelar resposta/i })).toBeInTheDocument();
+    expect(screen.getByText("quero remarcar")).toBeInTheDocument();
+  });
+
   it("alterna pra modo nota interna: some rascunho/áudio, muda placeholder — e o ANEXO FICA", () => {
     renderComposer();
     expect(screen.getByRole("button", { name: /anexar/i })).toBeInTheDocument();

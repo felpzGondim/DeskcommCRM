@@ -149,8 +149,22 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const menuOpen = mode === "reply" && slash.open && !menuDismissed;
 
   useImperativeHandle(ref, () => ({
-    focus: () => taRef.current?.focus(),
+    focus: () => taRef.current?.focus({ preventScroll: true }),
   }));
+
+  // Citar uma mensagem estando em nota interna é escolher escrever para o
+  // cliente. Sem a troca, o que se digita vira nota e a faixa da citação nem
+  // aparece — ela só existe no modo resposta.
+  const idCitado = respondendo?.id ?? null;
+  const [citacaoVista, setCitacaoVista] = useState<string | null>(idCitado);
+  if (idCitado !== citacaoVista) {
+    setCitacaoVista(idCitado);
+    if (idCitado) setMode("reply");
+  }
+
+  function focarCampo() {
+    taRef.current?.focus({ preventScroll: true });
+  }
 
   // send/createNote fora do disable: o texto some na hora do envio; travar o campo
   // até a API voltar impedia digitar a próxima mensagem com o campo ainda cheio.
@@ -337,7 +351,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         <div className="mb-1.5 flex flex-wrap items-center gap-1" data-testid="modos-do-composer">
           <button
             type="button"
-            onClick={() => setMode("reply")}
+            onClick={() => {
+              setMode("reply");
+              focarCampo();
+            }}
             className={cn(
               "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
               mode === "reply"
@@ -349,7 +366,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
           <button
             type="button"
-            onClick={() => setMode("note")}
+            onClick={() => {
+              setMode("note");
+              focarCampo();
+            }}
             className={cn(
               "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
               mode === "note"
