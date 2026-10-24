@@ -38,6 +38,12 @@ O workflow de release do original usa um GitHub App. Não é necessário copiar
 seus segredos: o caminho deste fork é o push da tag personalizada, seguido da
 publicação das imagens e da release pelo próprio workflow de imagens.
 
+No CI, enquanto o fork não tiver sua primeira release, a comparação do kit de
+atualização usa a release publicada do original. As tags necessárias são
+buscadas apenas no checkout do runner, sem publicá-las no fork. O teste do kit
+antigo (`v1.63.0`) continua sendo executado. Depois da primeira release própria,
+a comparação passa a usar a release do fork.
+
 ## Conectar uma VPS que já usa a versão oficial
 
 Esta configuração do fork NÃO muda uma VPS existente. Antes da migração,
