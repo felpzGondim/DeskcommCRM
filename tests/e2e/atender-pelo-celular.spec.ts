@@ -224,6 +224,9 @@ test.describe("atender pelo celular", () => {
     });
     expect(fonteDaBusca, "busca com menos de 16px amplia a página no iPhone").toBeGreaterThanOrEqual(16);
 
+    const nome = await page.getByRole("heading", { name: NOME, exact: true }).boundingBox();
+    expect(nome, "o nome do contato não apareceu").not.toBeNull();
+    expect(nome!.width, "o responsável comprimiu o nome do contato a poucas letras").toBeGreaterThanOrEqual(100);
     const m = await medirCamada(page);
     expect(m.fixa, "a conversa não virou camada fixa").toBe(true);
     expect(Math.abs(m.topo - m.baseDoCabecalho), `topo ${m.topo} ≠ cabeçalho ${m.baseDoCabecalho}`).toBeLessThanOrEqual(1);

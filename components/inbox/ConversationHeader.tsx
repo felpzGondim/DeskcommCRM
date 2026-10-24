@@ -515,7 +515,7 @@ export function ConversationHeader({
       {c?.id && (
         <FaixaDaCarteira contactId={c.id} quemAtendeId={conversation.assigned_to_user_id} />
       )}
-      <div className="min-w-0 max-md:flex max-md:flex-1 max-md:items-center max-md:gap-2">
+      <div className="min-w-0 max-md:flex-1">
         <div className="flex min-w-0 items-center gap-1.5 max-md:flex-1">
           <ChannelLogo channel={conversation.channel_sessions} size={20} />
           <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
@@ -563,7 +563,7 @@ export function ConversationHeader({
             funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
             por texto, faria a mesma pergunta ter três respostas diferentes na
             mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
-        <div className="mt-1 flex min-w-0 items-center gap-2 max-md:mt-0" data-testid="comando-da-conversa">
+        <div className="mt-1 flex min-w-0 items-center gap-2" data-testid="comando-da-conversa">
           {comando.quem === "humano" ? (
             <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
           ) : comando.quem === "automatico" ? (
