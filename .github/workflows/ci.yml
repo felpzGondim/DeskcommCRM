@@ -634,6 +634,11 @@ jobs:
         # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.
         timeout-minutes: 5
 
+      - name: Referências publicadas para a primeira release do fork
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/preparar-referencias-do-fork.sh
+
       - name: RLS isolation + governance invariants (pg${{ matrix.pg }})
         # O token é só para `gh release view`: o test:db confere o update.sh da
         # última release publicada (issue #1909), e a API anônima tem teto de 60

@@ -571,6 +571,35 @@ jobs:
           done
           echo "stable agora aponta para ${numero} em todas as imagens do conjunto"
 
+  # No fork, a release só fica visível ao atualizador depois do conjunto de
+  # imagens e dos testes de boot. A release oficial continua no fluxo original.
+  publicar-release-do-fork:
+    needs: [promover-stable]
+    if: github.repository == 'felpzGondim/DeskcommCRM' && github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publicar a versão personalizada para o atualizador
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # A numeração própria evita colidir com tags trazidas do upstream.
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-felpz\.[0-9]+$ ]] || {
+            echo "Não é uma versão personalizada felpz; nenhuma release criada."
+            exit 0
+          }
+          # Uma repetição do workflow não edita nem republica releases existentes.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "A release $TAG já existe."
+            exit 0
+          fi
+          gh release create "$TAG" --verify-tag --target main \
+            --title "$TAG" --generate-notes --latest --prerelease=false
+
   # As imagens de FUNDO sobem — e o laço do event_log CARREGA? (issue #604)
   #
   # `imagem-do-app-sobe` prova a imagem do app. As imagens `deskcomm-worker`
