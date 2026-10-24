@@ -53,7 +53,7 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
   // No inbox do celular o padding da casca é margem que a conversa não pode
   // perder. O desktop mantém o `p-6`, e a altura da grade desconta o mesmo
   // valor — os dois têm de continuar combinando (ver InboxLayout).
-  const inbox = usePathname().startsWith("/app/inbox");
+  const inbox = usePathname()?.startsWith("/app/inbox") ?? false;
   return (
     /*
       `min-h-dvh`, e não `min-h-screen`: `100vh` no celular é a janela com a
