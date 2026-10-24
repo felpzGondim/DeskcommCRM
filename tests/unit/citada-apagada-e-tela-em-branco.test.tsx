@@ -154,7 +154,7 @@ describe("no celular sempre há exatamente UMA coluna na tela", () => {
     expect(classes).toContain("max-md:fixed");
     expect(classes).toContain("max-md:inset-x-0");
     expect(classes).toContain("max-md:z-[45]");
-    expect(conversa).toContain("max-md:top-[max(var(--vv-topo,0px),var(--faixas-de-cima,0px))]");
+    expect(conversa).toContain("max-md:top-[calc(max(var(--vv-topo,0px),var(--faixas-de-cima,0px))+3.5rem)]");
     expect(conversa).toMatch(/max-md:h-\[calc\(var\(--vv-topo,0px\)\+var\(--vv-altura,100dvh\)-/);
     expect(classes).toContain("max-md:pb-[env(safe-area-inset-bottom)]");
     // Com o teclado aberto o indicador de home não está na tela.

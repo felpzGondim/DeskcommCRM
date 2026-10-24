@@ -35,7 +35,7 @@ import { Check } from "@/lib/ui/icons";
  * em vigor é metade da pergunta de quem procura este botão.
  */
 
-export function SeletorDeIdioma() {
+export function SeletorDeIdioma({ idDeTeste = "seletor-de-idioma" }: { idDeTeste?: string } = {}) {
   const t = useT();
   const idioma = useIdioma();
   const emVigor = idiomaVisivelPorCodigo(idioma);
@@ -87,7 +87,7 @@ export function SeletorDeIdioma() {
           size="icon"
           disabled={salvando}
           aria-label={`${t("Idioma")}: ${emVigor.nomeNativo}`}
-          data-testid="seletor-de-idioma"
+          data-testid={idDeTeste || "seletor-de-idioma"}
         >
           <span className="text-xs font-semibold tabular-nums">
             {emVigor.rotuloCurto}

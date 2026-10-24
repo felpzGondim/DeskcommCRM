@@ -45,6 +45,13 @@ interface Props {
    * abre a escolha de destino; quem executa é o hook da tela.
    */
   onEncaminhar?: (m: Message) => void;
+  /**
+   * Para onde o cursor vai depois dessa escolha.
+   *
+   * O menu devolve o foco à setinha ao fechar. Sem isto, quem clicou
+   * "Responder a esta mensagem" ainda precisa clicar o campo para digitar.
+   */
+  onFocarResposta?: () => void;
   /** A mensagem citada por ESTA, quando houver — desenha o fio. */
   citada?: Message | null;
   /** As reações a ESTA mensagem — marca no canto do balão, nunca balão próprio. */
@@ -115,6 +122,7 @@ export function MessageBubble({
   debugCitations,
   onResponder,
   onEncaminhar,
+  onFocarResposta,
   citada,
   reacoes,
   viewerUserId,
@@ -133,7 +141,8 @@ export function MessageBubble({
   const [confirmandoReenvio, setConfirmandoReenvio] = useState(false);
   const salvandoEdicao = useRef(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const abrindoEdicao = useRef(false);
+  /** O menu devolve o foco à setinha; estes dois destinos impedem isso. */
+  const destinoDoFoco = useRef<"edicao" | "resposta" | null>(null);
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setAgora(Date.now()), 60_000);
@@ -346,16 +355,26 @@ export function MessageBubble({
             </DropdownMenuTrigger>
             <DropdownMenuContent align={isOutbound ? "end" : "start"} sideOffset={4}
               onCloseAutoFocus={(event) => {
-                if (!abrindoEdicao.current) return;
-                // O Radix devolve o foco à setinha ao fechar o menu. Isso rola o
-                // fio de volta e esconde o Salvar logo depois de abrir o editor.
+                const destino = destinoDoFoco.current;
+                if (!destino) return;
+                // O Radix devolve o foco à setinha num setTimeout, depois do
+                // clique. Na edição isso rola o fio e esconde o Salvar; na
+                // resposta, o cursor volta para a setinha e a pessoa ainda
+                // precisa clicar o campo para digitar.
                 event.preventDefault();
-                abrindoEdicao.current = false;
-                editorRef.current?.querySelector("textarea")?.focus({ preventScroll: true });
-                editorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                destinoDoFoco.current = null;
+                if (destino === "edicao") {
+                  editorRef.current?.querySelector("textarea")?.focus({ preventScroll: true });
+                  editorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                  return;
+                }
+                onFocarResposta?.();
               }}>
               {onResponder && (
-                <DropdownMenuItem onSelect={() => onResponder(message)}>
+                <DropdownMenuItem onSelect={() => {
+                  destinoDoFoco.current = "resposta";
+                  onResponder(message);
+                }}>
                   <ArrowBendUpLeft size={16} aria-hidden />{t("Responder a esta mensagem")}
                 </DropdownMenuItem>
               )}
@@ -366,7 +385,7 @@ export function MessageBubble({
               )}
               {podeEditar && onEditar && (
                 <DropdownMenuItem onSelect={() => {
-                  abrindoEdicao.current = true;
+                  destinoDoFoco.current = "edicao";
                   setTexto(message.body ?? "");
                   setEditando(true);
                 }}>

@@ -1,5 +1,12 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition } from "react";
+import { createPortal } from "react-dom";
+import {
+  ID_DA_FAIXA_DA_CONVERSA,
+  ID_DAS_ACOES_NA_FICHA,
+  sincronizarConversaNoCabecalho,
+  sincronizarListaNoCabecalho,
+} from "@/lib/inbox/lista-no-cabecalho";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
@@ -82,10 +89,10 @@ import {
  * CONVERSA EM TELA CHEIA (F2 da ADR-0006). Escolhida, a conversa vira uma
  * camada `fixed` abaixo do `md`, em vez de um layout novo:
  *
- *   - `z-[45]` cobre o TopBar (z-20) e a barra de abas (z-40) sem que ninguém
- *     os edite, e fica abaixo das faixas de cima e dos portais Radix (z-50);
- *   - o topo desconta `--faixas-de-cima`: o aviso de canal caído é o único
- *     sinal de "nada entra nem sai" quando só há um número;
+ *   - `z-[45]` cobre a barra de abas (z-40), mas começa abaixo do cabeçalho:
+ *     nele ficam o menu, Conversas e Ficha. Os portais Radix seguem em z-50;
+ *   - o topo desconta `--faixas-de-cima` e reserva os 3.5rem do cabeçalho;
+ *     o aviso de canal caído continua visível acima das duas peças;
  *   - `--vv-topo`/`--vv-altura` (`useAlturaVisivel`) colam a camada na área
  *     visível com o teclado aberto; sem eles vale o `100dvh`;
  *   - a área segura de baixo sai quando o teclado abre, porque aí o indicador
@@ -98,8 +105,8 @@ import {
  */
 const CAMADA_DA_CONVERSA = [
   "max-md:fixed max-md:inset-x-0 max-md:z-[45] max-md:bg-background",
-  "max-md:top-[max(var(--vv-topo,0px),var(--faixas-de-cima,0px))]",
-  "max-md:h-[calc(var(--vv-topo,0px)+var(--vv-altura,100dvh)-max(var(--vv-topo,0px),var(--faixas-de-cima,0px)))]",
+  "max-md:top-[calc(max(var(--vv-topo,0px),var(--faixas-de-cima,0px))+3.5rem)]",
+  "max-md:h-[calc(var(--vv-topo,0px)+var(--vv-altura,100dvh)-max(var(--vv-topo,0px),var(--faixas-de-cima,0px))-3.5rem)]",
   "max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)] max-md:data-[teclado-aberto]:pb-0",
 ].join(" ");
 
@@ -324,6 +331,22 @@ export function InboxLayout({
   }, [tab, setFilterValue]);
 
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? idNaUrl);
+  // Lista: o cabeçalho vira a faixa de filtros. Conversa: o mesmo cabeçalho
+  // recebe Conversas e Ficha, e a conta continua no menu. Os dois atributos
+  // não ficam ligados juntos.
+  const [faixaDaConversa, setFaixaDaConversa] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const conversaAberta = selectedId != null;
+    sincronizarListaNoCabecalho(!conversaAberta);
+    sincronizarConversaNoCabecalho(conversaAberta);
+    setFaixaDaConversa(
+      conversaAberta ? document.getElementById(ID_DA_FAIXA_DA_CONVERSA) : null,
+    );
+    return () => {
+      sincronizarListaNoCabecalho(false);
+      sincronizarConversaNoCabecalho(false);
+    };
+  }, [selectedId]);
   const ultimoIdNaUrl = useRef(idNaUrl);
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -829,6 +852,12 @@ export function InboxLayout({
   //
   // `dvh` em vez de `vh` porque no celular a `vh` ignora a barra do navegador — o
   // mesmo corte, só que pior e mudando conforme se rola a página.
+  //
+  // No celular o `<main>` do inbox não tem padding (`p-0` até o `md`). A conta
+  // da altura não pode continuar descontando os dois `--space-6`: sobraria um
+  // vão vazio embaixo do compositor. O `md:` devolve a conta de sempre, que é
+  // a que combina com o `md:p-6`. O `env(safe-area-inset-bottom)` é a barra do
+  // sistema, que o `dvh` não tira.
 
   // TRÊS COLUNAS QUE CABEM — medido, não estimado.
   //
@@ -853,7 +882,7 @@ export function InboxLayout({
     <div
       ref={gradeRef}
       className={cn(
-        "grid relative h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] w-full grid-cols-1 md:grid-cols-[300px_1fr]",
+        "grid relative h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-env(safe-area-inset-bottom,0px)-var(--rodape-ocupado,0px))] md:h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-var(--space-6)-max(var(--space-6),var(--rodape-ocupado,0px)))] w-full grid-cols-1 md:grid-cols-[300px_1fr]",
         // Recolhido (issue #3004), a terceira trilha vira o trilho estreito do
         // botão de expandir e a conversa fica com o que era da ficha. Duas
         // listas em vez de uma classe com valor em variável: o Tailwind precisa
@@ -907,7 +936,7 @@ export function InboxLayout({
         )}
       >
         <BotaoIniciarConversa />
-        <InboxFilters value={filterValue} onChange={setFilterValue} />
+        <InboxFilters value={filterValue} onChange={setFilterValue} encaixarNoCabecalho={selectedId == null} />
         {podeAgirEmLote && (
           <BarraDeAcoesEmLote
             quantidade={selecao.quantidade}
@@ -970,34 +999,50 @@ export function InboxLayout({
           que ele é a única saída. A porta da ficha, essa sim, depende da
           conversa, e só aparece quando há uma.
         */}
-        {selectedId && (
-          <div className="flex items-center gap-1 border-b border-border px-1 py-1 md:hidden">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1 px-2"
-              onClick={() => handleSelect(null)}
-            >
-              <CaretLeft size={16} />
-              {t("Conversas")}
-            </Button>
-            <div className="flex-1" />
-            {selectedConversation && (
-              <Sheet open={fichaAberta} onOpenChange={setFichaAberta}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1 px-2 xl:hidden">
-                    <IdentificationCard size={16} />
-                    {t("Ficha")}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[min(22rem,90vw)] overflow-y-auto p-0">
-                  <SheetTitle className="sr-only">{t("Ficha do contato")}</SheetTitle>
-                  <CRMSidePanel conversation={selectedConversation} />
-                </SheetContent>
-              </Sheet>
-            )}
-          </div>
-        )}
+        {selectedId &&
+          (() => {
+            // No app de verdade o vão mora no cabeçalho, na mesma linha do
+            // menu. Sem esse elemento (teste que não monta a barra) a volta
+            // continua na coluna, senão a conversa não tem saída.
+            const barra = (
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 px-2"
+                  onClick={() => handleSelect(null)}
+                >
+                  <CaretLeft size={16} />
+                  {t("Conversas")}
+                </Button>
+                <div className="flex-1" />
+                {selectedConversation && (
+                  <Sheet open={fichaAberta} onOpenChange={setFichaAberta}>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="sm" className="gap-1 px-2 xl:hidden">
+                        <IdentificationCard size={16} />
+                        {t("Ficha")}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-[min(22rem,90vw)] overflow-y-auto p-0">
+                      <SheetTitle className="sr-only">{t("Ficha do contato")}</SheetTitle>
+                      <div
+                        id={ID_DAS_ACOES_NA_FICHA}
+                        className="flex flex-wrap gap-2 border-b px-3 py-3 pr-12"
+                      />
+                      <CRMSidePanel conversation={selectedConversation} />
+                    </SheetContent>
+                  </Sheet>
+                )}
+              </div>
+            );
+            if (faixaDaConversa) return createPortal(barra, faixaDaConversa);
+            return (
+              <div className="flex w-full min-w-0 items-center border-b border-border px-1 py-1 md:hidden">
+                {barra}
+              </div>
+            );
+          })()}
         {selectedConversation ? (
           <>
             {/* `key`: trocar de conversa desmonta a confirmação de Fechar/Arquivar
@@ -1005,12 +1050,13 @@ export function InboxLayout({
             <ConversationHeader
               key={selectedConversation.id}
               conversation={selectedConversation}
+              fichaAberta={fichaAberta}
               onAbrirConversa={handleSelect}
-              onBuscar={() =>
-                buscaAberta
-                  ? fecharBusca()
-                  : setBusca({ conversaId: selectedConversation.id, termo: "" })
-              }
+              onBuscar={() => {
+                setFichaAberta(false);
+                if (buscaAberta) fecharBusca();
+                else setBusca({ conversaId: selectedConversation.id, termo: "" });
+              }}
               buscaAberta={buscaAberta}
               botaoBuscaRef={botaoBuscaRef}
             />
@@ -1047,6 +1093,7 @@ export function InboxLayout({
                 provider={selectedConversation.channel_sessions?.provider ?? null}
                 onResponder={setRespondendo}
                 onEncaminhar={setEncaminhando}
+                onFocarResposta={handleFocusReply}
                 // O cartão da passagem escolhe o gesto a partir de quem é o dono
                 // da conversa: sem dono convida a assumir, com outro dono diz
                 // quem atende. Sem estes dois campos ele cairia no estado mais

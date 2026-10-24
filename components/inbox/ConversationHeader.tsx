@@ -1,5 +1,7 @@
 "use client";
-import { useState, type RefObject } from "react";
+import { useLayoutEffect, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import { ID_DAS_ACOES_NA_FICHA } from "@/lib/inbox/lista-no-cabecalho";
 import { useT } from "@/hooks/i18n/useT";
 import Link from "next/link";
 import {
@@ -48,6 +50,7 @@ import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 
 interface Props {
+  fichaAberta?: boolean;
   conversation: ConversationWithContact;
   /**
    * A busca DENTRO da conversa (#1793): abre um campo que filtra só as
@@ -89,6 +92,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ConversationHeader({
   conversation,
+  fichaAberta = false,
   onAbrirConversa,
   onBuscar,
   buscaAberta,
@@ -110,6 +114,17 @@ export function ConversationHeader({
   const [confirmFecharOpen, setConfirmFecharOpen] = useState(false);
   const [confirmArquivarOpen, setConfirmArquivarOpen] = useState(false);
   const [confirmPessoalOpen, setConfirmPessoalOpen] = useState(false);
+  const [acoesNaFicha, setAcoesNaFicha] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!fichaAberta) {
+      setAcoesNaFicha(null);
+      return;
+    }
+    const achar = () => setAcoesNaFicha(document.getElementById(ID_DAS_ACOES_NA_FICHA));
+    achar();
+    const frame = requestAnimationFrame(achar);
+    return () => cancelAnimationFrame(frame);
+  }, [fichaAberta]);
 
   const c = conversation.contacts ?? null;
   const displayName = rotuloParaAEquipe(c, t);
@@ -220,113 +235,18 @@ export function ConversationHeader({
   if (user.support?.access_mode === "support_readonly") return <header className="flex items-center justify-between border-b p-4">
     <strong>{displayName}</strong><span className="text-sm text-muted-foreground">{STATUS_LABEL[status] ?? status} · Somente leitura</span>
   </header>;
-  return (
-    // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele
-    // media 707px de `min-content` — a identidade do contato encolhia bem
-    // (`min-w-0` + `truncate`), mas a barra de ações era `shrink-0` e não
-    // quebrava. Como a coluna do meio do inbox é `1fr`, que é
-    // `minmax(auto, 1fr)`, ela não podia ficar menor que esses 707px, e o
-    // painel de CRM era empurrado 311px para fora da viewport em 1280px.
-    //
-    // Reorganizar em vez de esconder: acima de ~1440px o header fica IDÊNTICO ao
-    // de antes (uma linha), e quando aperta a barra desce para a linha de baixo.
-    // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
-    // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
-    //
-    // NO CELULAR a quebra vira o problema oposto: com ~390px de largura a barra
-    // descia em três ou quatro fileiras de botões e comia metade da tela,
-    // deixando quase nada para as mensagens. Abaixo do `md` a barra é UMA
-    // fileira que rola na horizontal — a mesma régua de não esconder ação, sem
-    // pagar em altura. `py-2` pelo mesmo motivo: cada pixel de altura ali é
-    // tirado da conversa.
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2 md:gap-3 md:px-4 md:py-3">
-      {/* FAIXA DA CARTEIRA (#2591, regra 2): "este cliente pertence à carteira de
-          A". `w-full` a põe numa linha própria acima da identidade, sem disputar
-          espaço com a barra de ações — a faixa só existe quando o dono é OUTRA
-          pessoa (o componente decide; sem carteira ele não desenha nada). */}
-      {c?.id && (
-        <FaixaDaCarteira contactId={c.id} quemAtendeId={conversation.assigned_to_user_id} />
-      )}
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <ChannelLogo channel={conversation.channel_sessions} size={20} />
-          <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
-          <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
-            {t(STATUS_LABEL[status] ?? status)}
-          </Badge>
-          {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
-              escrever agora?" se faz ANTES de digitar, não depois de receber um
-              `failed` com um código de cinco dígitos. */}
+  const acoes = (
+    <div className={acoesNaFicha
+      ? "flex min-w-0 flex-wrap items-center gap-1.5"
+      : "hidden min-w-0 flex-wrap items-center gap-1.5 md:flex"}>
+      {acoesNaFicha && (
+        <span className="md:hidden">
           <JanelaSelo
             provider={conversation.channel_sessions?.provider ?? null}
             lastInboundAt={conversation.last_inbound_at}
           />
-          {/* #2383: O CANAL DESTA CONVERSA, NO CABEÇALHO — a acepção que faltava
-              da issue: a lista já dizia por onde a conversa entrou, a conversa
-              ABERTA não dizia. O logo ao lado nomeia o provedor, não o número:
-              com "Peças" e "Vendas" conectados, ele é idêntico nos dois casos.
-
-              O TEXTO é o mesmo da lista e da tela `/app/connections`
-              (`rotuloDoCanalDaConversa` → `nomeDoCanal`): uma segunda cadeia de
-              regras aqui seria como as leituras de "quem manda" divergiram —
-              três telas, um fato, uma fonte.
-
-              `max-w` + `truncate` respondem ao critério de aceite "layout
-              utilizável com nomes de canal maiores": o badge encolhe e o `title`
-              devolve o texto inteiro. Sem canal (grupo, conversa sem sessão,
-              não-WA) não há rótulo nenhum e esta barra fica exatamente como
-              estava — o badge é acréscimo, não substituição. */}
-          {rotuloCanal && (
-            <Badge
-              variant="outline"
-              className="h-4 min-w-0 max-w-[9rem] truncate px-1.5 text-[10px]"
-              title={`${t("Entrou por")} ${rotuloCanal}`}
-              data-testid="canal-da-conversa"
-            >
-              <span className="truncate">{rotuloCanal}</span>
-            </Badge>
-          )}
-        </div>
-
-        {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
-            pessoa, anel vazado para o automático. É o mesmo componente do card do
-            funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
-            por texto, faria a mesma pergunta ter três respostas diferentes na
-            mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
-        <div className="mt-1 flex items-center gap-2" data-testid="comando-da-conversa">
-          {comando.quem === "humano" ? (
-            <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
-          ) : comando.quem === "automatico" ? (
-            <OwnerBadge ownerKind="ai" ownerName={t("Automático")} />
-          ) : (
-            // `ninguem`, `aguardando` e `encerrada` sem dono caem aqui: o disco
-            // TRACEJADO do OwnerBadge, que é como o funil já desenha "ninguém".
-            <OwnerBadge ownerKind={null} ownerName={null} />
-          )}
-        </div>
-        {phone && (
-          // No celular o telefone sai: cada linha do cabeçalho é altura tirada
-          // do fio, e o número continua na Ficha.
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground max-md:hidden">
-            <Phone size={11} weight="regular" aria-hidden /> {phone}
-          </p>
-        )}
-      </div>
-
-      {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a
-          barra pode encolher e quebrar internamente, e os botões continuam
-          todos visíveis e clicáveis — só que em duas linhas quando preciso.
-          Esta coluna existe para o selo do automático morar ABAIXO da barra
-          (#1625): na linha do nome ele alargava a identidade e empurrava a
-          barra inteira para baixo. Ela também não é `shrink-0`, pelo mesmo
-          motivo da barra. */}
-      {/* NO CELULAR (F2 da ADR-0006): com o teclado aberto a coluna sai e o fio
-          fica com a altura (`data-teclado-aberto`, de `useAlturaVisivel`); a
-          máscara apaga a borda direita para dizer que a fileira rola, e o `pr-8`
-          deixa o último botão fora da máscara quando rolado até o fim. Tudo
-          `max-md:` — no computador encolher a janela não é teclado. */}
-      <div className="flex min-w-0 flex-col items-end gap-1 max-md:w-full max-md:items-stretch max-md:group-data-[teclado-aberto]/conversa:hidden">
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 max-md:flex-nowrap max-md:overflow-x-auto max-md:pb-1 max-md:pr-8 max-md:[&>*]:shrink-0 max-md:[mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]">
+        </span>
+      )}
         {/* Primeira da barra e sem rótulo escrito: é ferramenta de LEITURA, não
             ação de atendimento, e não muda de lugar com o estado da conversa.
             Só o ícone porque a barra já quebrou a caixa útil em 1280px uma vez
@@ -372,29 +292,7 @@ export function ConversationHeader({
           bloqueio={motivoDoContato(c, t)}
           encerrada={status === "closed"}
         />
-        {isOpen && (
-          <Button
-            size="sm"
-            variant="default"
-            // No celular, a ação que a pessoa veio fazer abre a fileira — sem
-            // rolar para achá-la. Só CSS: a ordem do DOM não muda.
-            className="max-md:order-first"
-            disabled={claim.isPending}
-            // O rótulo NÃO muda (é contrato: `inbox-header-nao-trava` e o
-            // dicionário de espanhol o citam). O que faltava era a consequência
-            // dita: desde a 0173 assumir também para o atendimento automático, e
-            // um botão que muda duas coisas precisa anunciar as duas.
-            title={t("Você passa a responder esta conversa e o atendimento automático para aqui.")}
-            onClick={() =>
-              claim.mutate({
-                conversation_id: conversation.id,
-                expected_assignee: conversation.assigned_to_user_id,
-              })
-            }
-          >
-            {t("Assumir")}
-          </Button>
-        )}
+
         {isMineAssigned && (
           <Button
             size="sm"
@@ -588,6 +486,141 @@ export function ConversationHeader({
             </Link>
           </Button>
         )}
+    </div>
+  );
+  return (
+    // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele
+    // media 707px de `min-content` — a identidade do contato encolhia bem
+    // (`min-w-0` + `truncate`), mas a barra de ações era `shrink-0` e não
+    // quebrava. Como a coluna do meio do inbox é `1fr`, que é
+    // `minmax(auto, 1fr)`, ela não podia ficar menor que esses 707px, e o
+    // painel de CRM era empurrado 311px para fora da viewport em 1280px.
+    //
+    // Reorganizar em vez de esconder: acima de ~1440px o header fica IDÊNTICO ao
+    // de antes (uma linha), e quando aperta a barra desce para a linha de baixo.
+    // Nenhuma ação some — um menu "mais" esconderia o "Lembrar" que a spec
+    // `canais-baseline` clica, e, pior, esconderia ação de quem atende.
+    //
+    // NO CELULAR a quebra vira o problema oposto: com ~390px de largura a barra
+    // descia em três ou quatro fileiras de botões e comia metade da tela,
+    // deixando quase nada para as mensagens. Abaixo do `md` a barra é UMA
+    // fileira que rola na horizontal — a mesma régua de não esconder ação, sem
+    // pagar em altura. `py-2` pelo mesmo motivo: cada pixel de altura ali é
+    // tirado da conversa.
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2 md:gap-3 md:px-4 md:py-3">
+      {/* FAIXA DA CARTEIRA (#2591, regra 2): "este cliente pertence à carteira de
+          A". `w-full` a põe numa linha própria acima da identidade, sem disputar
+          espaço com a barra de ações — a faixa só existe quando o dono é OUTRA
+          pessoa (o componente decide; sem carteira ele não desenha nada). */}
+      {c?.id && (
+        <FaixaDaCarteira contactId={c.id} quemAtendeId={conversation.assigned_to_user_id} />
+      )}
+      <div className="min-w-0 max-md:flex max-md:flex-1 max-md:items-center max-md:gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 max-md:flex-1">
+          <ChannelLogo channel={conversation.channel_sessions} size={20} />
+          <h2 className="min-w-0 truncate text-sm font-semibold" title={displayName}>{displayName}</h2>
+          <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+            {t(STATUS_LABEL[status] ?? status)}
+          </Badge>
+          {/* Ao lado do estado, não escondido num painel: a pergunta "dá para
+              escrever agora?" se faz ANTES de digitar, não depois de receber um
+              `failed` com um código de cinco dígitos. */}
+          <span className="max-md:hidden">
+          <JanelaSelo
+            provider={conversation.channel_sessions?.provider ?? null}
+            lastInboundAt={conversation.last_inbound_at}
+          />
+          </span>
+          {/* #2383: O CANAL DESTA CONVERSA, NO CABEÇALHO — a acepção que faltava
+              da issue: a lista já dizia por onde a conversa entrou, a conversa
+              ABERTA não dizia. O logo ao lado nomeia o provedor, não o número:
+              com "Peças" e "Vendas" conectados, ele é idêntico nos dois casos.
+
+              O TEXTO é o mesmo da lista e da tela `/app/connections`
+              (`rotuloDoCanalDaConversa` → `nomeDoCanal`): uma segunda cadeia de
+              regras aqui seria como as leituras de "quem manda" divergiram —
+              três telas, um fato, uma fonte.
+
+              `max-w` + `truncate` respondem ao critério de aceite "layout
+              utilizável com nomes de canal maiores": o badge encolhe e o `title`
+              devolve o texto inteiro. Sem canal (grupo, conversa sem sessão,
+              não-WA) não há rótulo nenhum e esta barra fica exatamente como
+              estava — o badge é acréscimo, não substituição. */}
+          {rotuloCanal && (
+            <Badge
+              variant="outline"
+              className="h-4 min-w-0 max-w-[9rem] truncate px-1.5 text-[10px]"
+              title={`${t("Entrou por")} ${rotuloCanal}`}
+              data-testid="canal-da-conversa"
+            >
+              <span className="truncate">{rotuloCanal}</span>
+            </Badge>
+          )}
+        </div>
+
+        {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
+            pessoa, anel vazado para o automático. É o mesmo componente do card do
+            funil e do dossiê: um terceiro jeito de dizer "quem manda", por cor ou
+            por texto, faria a mesma pergunta ter três respostas diferentes na
+            mesma tela. Cor não sobrevive ao daltonismo nem ao teste do metro. */}
+        <div className="mt-1 flex min-w-0 items-center gap-2 max-md:mt-0" data-testid="comando-da-conversa">
+          {comando.quem === "humano" ? (
+            <OwnerBadge ownerKind="user" ownerName={comando.nome ?? t("Atendente")} />
+          ) : comando.quem === "automatico" ? (
+            <OwnerBadge ownerKind="ai" ownerName={t("Automático")} />
+          ) : (
+            // `ninguem`, `aguardando` e `encerrada` sem dono caem aqui: o disco
+            // TRACEJADO do OwnerBadge, que é como o funil já desenha "ninguém".
+            <OwnerBadge ownerKind={null} ownerName={null} />
+          )}
+        </div>
+        {phone && (
+          // No celular o telefone sai: cada linha do cabeçalho é altura tirada
+          // do fio, e o número continua na Ficha.
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground max-md:hidden">
+            <Phone size={11} weight="regular" aria-hidden /> {phone}
+          </p>
+        )}
+      </div>
+
+      {/* `shrink-0` saiu daqui: era ele que impunha o piso de largura. Agora a
+          barra pode encolher e quebrar internamente, e os botões continuam
+          todos visíveis e clicáveis — só que em duas linhas quando preciso.
+          Esta coluna existe para o selo do automático morar ABAIXO da barra
+          (#1625): na linha do nome ele alargava a identidade e empurrava a
+          barra inteira para baixo. Ela também não é `shrink-0`, pelo mesmo
+          motivo da barra. */}
+      {/* NO CELULAR (F2 da ADR-0006): com o teclado aberto a coluna sai e o fio
+          fica com a altura (`data-teclado-aberto`, de `useAlturaVisivel`); a
+          máscara apaga a borda direita para dizer que a fileira rola, e o `pr-8`
+          deixa o último botão fora da máscara quando rolado até o fim. Tudo
+          `max-md:` — no computador encolher a janela não é teclado. */}
+      <div className="flex min-w-0 flex-col items-end gap-1 max-md:group-data-[teclado-aberto]/conversa:hidden">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 max-md:flex-nowrap max-md:overflow-x-auto max-md:pb-1 max-md:pr-8 max-md:[&>*]:shrink-0 max-md:[mask-image:linear-gradient(to_right,black_calc(100%_-_2rem),transparent)]">
+        {isOpen && (
+          <Button
+            size="sm"
+            variant="default"
+            // No celular, a ação que a pessoa veio fazer abre a fileira — sem
+            // rolar para achá-la. Só CSS: a ordem do DOM não muda.
+            className="max-md:order-first"
+            disabled={claim.isPending}
+            // O rótulo NÃO muda (é contrato: `inbox-header-nao-trava` e o
+            // dicionário de espanhol o citam). O que faltava era a consequência
+            // dita: desde a 0173 assumir também para o atendimento automático, e
+            // um botão que muda duas coisas precisa anunciar as duas.
+            title={t("Você passa a responder esta conversa e o atendimento automático para aqui.")}
+            onClick={() =>
+              claim.mutate({
+                conversation_id: conversation.id,
+                expected_assignee: conversation.assigned_to_user_id,
+              })
+            }
+          >
+            {t("Assumir")}
+          </Button>
+        )}
+        {acoesNaFicha ? createPortal(acoes, acoesNaFicha) : acoes}
       </div>
         {/* O aviso pertence à operação automática. Abaixo da barra ele não
             alarga a ficha do contato nem muda a posição dos botões.

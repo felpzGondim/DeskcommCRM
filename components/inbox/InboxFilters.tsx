@@ -1,6 +1,8 @@
 "use client";
 import { useT } from "@/hooks/i18n/useT";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ID_DA_FAIXA_DO_INBOX } from "@/lib/inbox/lista-no-cabecalho";
 import { CaretLeft, CaretRight, MagnifyingGlass } from "@/lib/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +38,7 @@ import { useConversationTagVocabulary } from "@/hooks/inbox/useConversationTags"
 import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
 import { roleAtLeast, type Role, type VisibilityMode } from "@/lib/auth/types";
 import { SeletorDeAtendente } from "@/components/inbox/SeletorDeAtendente";
+import { useContagemDepoisDaHidratacao } from "@/hooks/inbox/contagem-depois-da-hidratacao";
 
 export type InboxTab = "unassigned" | "mine" | "all" | "closed" | "archived" | "ai";
 
@@ -114,11 +117,26 @@ export function comAba(value: InboxFiltersValue, tab: InboxTab): InboxFiltersVal
 interface Props {
   value: InboxFiltersValue;
   onChange: (next: InboxFiltersValue) => void;
+  /**
+   * No celular, Não lidos, Grupos e as etiquetas sobem para o cabeçalho.
+   * Só a lista pede isto: com a conversa aberta a faixa sairia por cima dela.
+   */
+  encaixarNoCabecalho?: boolean;
 }
 
-export function InboxFilters({ value, onChange }: Props) {
+export function InboxFilters({ value, onChange, encaixarNoCabecalho = false }: Props) {
   const t = useT();
   const [searchInput, setSearchInput] = useState(value.search);
+  // O alvo do portal. Sem ele (teste, desktop antes do efeito, conversa aberta)
+  // a faixa móvel não existe — e os botões do desktop continuam sendo os únicos.
+  const [faixa, setFaixa] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!encaixarNoCabecalho) {
+      setFaixa(null);
+      return;
+    }
+    setFaixa(document.getElementById(ID_DA_FAIXA_DO_INBOX));
+  }, [encaixarNoCabecalho]);
   const tabsListRef = useRef<HTMLDivElement>(null);
   const [moreTabs, setMoreTabs] = useState({ left: false, right: false });
   const updateMoreTabs = useCallback(() => {
@@ -220,6 +238,7 @@ export function InboxFilters({ value, onChange }: Props) {
     tagMode: value.tagMode,
     channel_session_id: value.channel_session_id,
   });
+  const contagemVisivel = useContagemDepoisDaHidratacao();
 
   // Filtro por ATENDENTE: só para gerente ou acima (a lista de quem atende é da
   // gestão; o atendente comum continua vendo só o escopo dele, que a RLS impõe).
@@ -389,6 +408,43 @@ export function InboxFilters({ value, onChange }: Props) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  const classeDoFiltro = (ligado: boolean) =>
+    cn(
+      "inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full md:h-9 border px-3 text-xs font-medium transition-colors",
+      "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      ligado
+        ? "border-accent bg-accent text-accent-foreground"
+        : "border-border bg-transparent text-text-muted hover:bg-surface-elevated",
+    );
+  // Função, e não elemento guardado: o mesmo objeto React não pode aparecer
+  // nos dois lugares (a coluna, no desktop; o cabeçalho, no celular).
+  const botoesDeEstado = () => (
+    <>
+      {/* Botão pressionável em vez de Switch: o filtro vive na mesma linha
+          da busca, e o Switch com rótulo pedia uma linha inteira só para
+          si numa coluna de 280px. */}
+      <button
+        type="button"
+        aria-pressed={value.onlyUnread}
+        onClick={() => onChange({ ...value, onlyUnread: !value.onlyUnread })}
+        className={classeDoFiltro(value.onlyUnread)}
+      >
+        {t("Não lidos")}
+      </button>
+      {/* MESMO PADRÃO do botão acima: filtro auxiliar pressionável, na
+          mesma linha. "Grupos" manda `is_group=true` na listagem — sem ele
+          a aba mostra tudo, individual e grupo misturados, como hoje. */}
+      <button
+        type="button"
+        aria-pressed={value.onlyGroups ?? false}
+        onClick={() => onChange({ ...value, onlyGroups: !value.onlyGroups })}
+        className={classeDoFiltro(value.onlyGroups ?? false)}
+      >
+        {t("Grupos")}
+      </button>
+    </>
+  );
+
   return (
     <div className="border-b border-border bg-background">
       <div className="space-y-2 px-3 pt-3 pb-2">
@@ -414,44 +470,64 @@ export function InboxFilters({ value, onChange }: Props) {
               aria-label={t("Buscar conversas")}
             />
           </div>
-          {/* Botão pressionável em vez de Switch: o filtro vive na mesma linha
-              da busca, e o Switch com rótulo pedia uma linha inteira só para
-              si numa coluna de 280px. */}
-          <button
-            type="button"
-            aria-pressed={value.onlyUnread}
-            onClick={() => onChange({ ...value, onlyUnread: !value.onlyUnread })}
-            className={cn(
-              "h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors",
-              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              value.onlyUnread
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-border bg-transparent text-text-muted hover:bg-surface-elevated",
-            )}
-          >
-            {t("Não lidos")}
-          </button>
-          {/* MESMO PADRÃO do botão acima: filtro auxiliar pressionável, na
-              mesma linha. "Grupos" manda `is_group=true` na listagem — sem ele
-              a aba mostra tudo, individual e grupo misturados, como hoje. */}
-          <button
-            type="button"
-            aria-pressed={value.onlyGroups ?? false}
-            onClick={() => onChange({ ...value, onlyGroups: !value.onlyGroups })}
-            className={cn(
-              "h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-colors",
-              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              value.onlyGroups
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-border bg-transparent text-text-muted hover:bg-surface-elevated",
-            )}
-          >
-            {t("Grupos")}
-          </button>
+          {/* No celular estes botões moram no cabeçalho (o portal abaixo).
+              `hidden md:flex` tira-os da coluna estreita sem apagá-los do
+              desktop, onde continuam ao lado da busca. */}
+          <div className="hidden shrink-0 items-center gap-2 md:flex">{botoesDeEstado()}</div>
         </div>
 
+        {/*
+          A faixa do celular: Não lidos, Grupos e cada etiqueta na mesma
+          linha, rolando para o lado. O alvo é o vão do cabeçalho, ao lado
+          do menu. Sem o alvo (ou com a conversa aberta) ela não nasce —
+          senão os botões apareceriam duas vezes na árvore de acessibilidade.
+        */}
+        {faixa
+          ? createPortal(
+              <div
+                role="group"
+                aria-label={t("Filtros da caixa")}
+                className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain px-1 [scrollbar-width:thin]"
+              >
+                {botoesDeEstado()}
+                {mostrarSeletorDeTag &&
+                  opcoesDoSeletor.map((tag) => {
+                    const ativa = etiquetas.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        aria-pressed={ativa}
+                        onClick={() => alternaEtiqueta(tag)}
+                        className={cn(classeDoFiltro(ativa), "max-w-[9rem]")}
+                      >
+                        <PontoDaEtiqueta tag={tag} />
+                        <span className="truncate">{tag}</span>
+                      </button>
+                    );
+                  })}
+                {etiquetas.length > 1 && (
+                  <button
+                    type="button"
+                    aria-pressed={value.tagMode === "ou"}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        tagMode: value.tagMode === "ou" ? undefined : "ou",
+                      })
+                    }
+                    className={classeDoFiltro(value.tagMode === "ou")}
+                  >
+                    {value.tagMode === "ou" ? t("Qualquer uma (OU)") : t("Todas (E)")}
+                  </button>
+                )}
+              </div>,
+              faixa,
+            )
+          : null}
+
         {(showChannelSwitch || mostrarSeletorDeTag || mostrarSeletorDeAtendente) && (
-          <div className="flex gap-2">
+          <div className={cn("flex gap-2", !showChannelSwitch && !mostrarSeletorDeAtendente && "max-md:hidden")}>
             {showChannelSwitch && (
               <Select
                 value={value.channel_session_id ?? "all"}
@@ -483,6 +559,7 @@ export function InboxFilters({ value, onChange }: Props) {
             )}
 
             {mostrarSeletorDeTag && (
+              <div className="hidden min-w-0 flex-1 md:flex">
               <DropdownMenu onOpenChange={(aberto) => {
                 if (!aberto) setBuscaDeEtiqueta("");
               }}>
@@ -617,6 +694,7 @@ export function InboxFilters({ value, onChange }: Props) {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
             )}
 
             {mostrarSeletorDeAtendente && (
@@ -687,7 +765,7 @@ export function InboxFilters({ value, onChange }: Props) {
                   className="shrink-0 gap-1 rounded-none border-b-2 border-transparent px-0 pb-2 pt-1 text-xs font-medium text-text-muted data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-text data-[state=active]:shadow-none"
                 >
                   {t(meta.label)}
-                  {typeof count === "number" && count > 0 && (
+                  {contagemVisivel && typeof count === "number" && count > 0 && (
                     <span className="text-[11px] tabular-nums text-text-subtle">{count}</span>
                   )}
                 </TabsTrigger>

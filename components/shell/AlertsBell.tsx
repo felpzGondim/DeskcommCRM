@@ -12,7 +12,7 @@ import { Bell } from "@/lib/ui/icons";
  * Sino da central de avisos (Operação Visível F1): contador de avisos abertos
  * do runtime do agente no header; clique leva a /app/ai/inbox.
  */
-export function AlertsBell() {
+export function AlertsBell({ idDeTeste = "alerts-bell" }: { idDeTeste?: string } = {}) {
   const { user, activeOrg } = useAuth();
   if (
     !destinosDaInterface(
@@ -22,9 +22,9 @@ export function AlertsBell() {
     ).some((d) => d.href === "/app/ai/inbox")
   )
     return null;
-  return <VisibleAlertsBell />;
+  return <VisibleAlertsBell idDeTeste={idDeTeste} />;
 }
-function VisibleAlertsBell() {
+function VisibleAlertsBell({ idDeTeste }: { idDeTeste: string }) {
   const t = useT();
   const { data } = useAgentInbox("open");
   // O som da organização para a etapa que avisa e o pedido de pessoa.
@@ -39,13 +39,13 @@ function VisibleAlertsBell() {
           ? `${t("Central de avisos")} — ${count} ${t("em aberto")}`
           : t("Central de avisos")
       }
-      data-testid="alerts-bell"
+      data-testid={idDeTeste}
       className="relative inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:h-9 lg:w-9"
     >
       <Bell size={18} aria-hidden />
       {count > 0 ? (
         <span
-          data-testid="alerts-bell-count"
+          data-testid={`${idDeTeste}-count`}
           className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-destructive-foreground"
         >
           {count > 99 ? "99+" : count}

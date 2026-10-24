@@ -280,8 +280,22 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const opcaoAtual = opcoes[mencaoIndice] ?? opcoes[0];
 
   useImperativeHandle(ref, () => ({
-    focus: () => taRef.current?.focus(),
+    focus: () => taRef.current?.focus({ preventScroll: true }),
   }));
+
+  // Citar uma mensagem estando em nota interna é escolher escrever para o
+  // cliente. Sem a troca, o que se digita vira nota e a faixa da citação nem
+  // aparece — ela só existe no modo resposta.
+  const idCitado = respondendo?.id ?? null;
+  const [citacaoVista, setCitacaoVista] = useState<string | null>(idCitado);
+  if (idCitado !== citacaoVista) {
+    setCitacaoVista(idCitado);
+    if (idCitado) setMode("reply");
+  }
+
+  function focarCampo() {
+    taRef.current?.focus({ preventScroll: true });
+  }
 
   // send/createNote fora do disable: o texto some na hora do envio; travar o campo
   // até a API voltar impedia digitar a próxima mensagem com o campo ainda cheio.
@@ -819,10 +833,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </p>
           </div>
         )}
-        <div className="mb-1.5 flex gap-1">
+        <div className="mb-1.5 flex flex-wrap items-center gap-1" data-testid="modos-do-composer">
           <button
             type="button"
-            onClick={() => setMode("reply")}
+            onClick={() => {
+              setMode("reply");
+              focarCampo();
+            }}
             className={cn(
               "min-h-11 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:min-h-0 lg:px-2.5",
               mode === "reply"
@@ -834,7 +851,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
           <button
             type="button"
-            onClick={() => setMode("note")}
+            onClick={() => {
+              setMode("note");
+              focarCampo();
+            }}
             className={cn(
               "min-h-11 rounded-full px-3 py-1 text-xs font-medium transition-colors lg:min-h-0 lg:px-2.5",
               mode === "note"
@@ -844,6 +864,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           >
             {t("Nota interna")}
           </button>
+          {(!sugestao || mode === "note") && (
+            <DraftReplyButton
+              conversationId={conversationId}
+              disabled={isDisabled}
+              onDraft={() => {
+                setMode("reply");
+                void invalidar();
+                focarCampo();
+              }}
+            />
+          )}
         </div>
         {/*
           A FAIXA DA CITAÇÃO — o que o atendente escolheu responder.
@@ -935,15 +966,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             texto NÃO é despejado no campo: quem revisa e decide é o bloco, e ter
             o mesmo texto nos dois lugares diria duas vezes a mesma coisa.
           */}
-          {mode === "reply" && !sugestao && (
-            <DraftReplyButton
-              conversationId={conversationId}
-              disabled={isDisabled}
-              onDraft={() => {
-                void invalidar();
-              }}
-            />
-          )}
+
           <textarea
             ref={taRef}
             value={text}

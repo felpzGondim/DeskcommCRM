@@ -21,6 +21,7 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -205,4 +206,30 @@ describe("#998 (irmão do par) — retomar a IA também move o número do bucket
       });
     },
   );
+});
+
+describe("o número da aba não entra no HTML do servidor", () => {
+  it("com a contagem já no cache, a primeira pintura não desenha o span", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(["conversation-counts", "org-1", ""], {
+      fila: 0,
+      automatico: 0,
+      unassigned: 0,
+      mine: 6,
+      all: 32,
+      closed: 0,
+    });
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={qc}>
+        <InboxFilters value={BARRA_SEM_FILTRO} onChange={() => {}} />
+      </QueryClientProvider>,
+    );
+    expect(html).not.toContain(">32<");
+    render(
+      <QueryClientProvider client={qc}>
+        <InboxFilters value={BARRA_SEM_FILTRO} onChange={() => {}} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("tab", { name: /Todas/ }).textContent).toContain("32");
+  });
 });

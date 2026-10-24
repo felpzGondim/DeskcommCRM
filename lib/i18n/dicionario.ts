@@ -1608,6 +1608,7 @@ export const DICIONARIO: Traducoes = {
   "Qualquer uma (OU)": { es: "Cualquiera (O)" },
   "Apenas não lidos": { es: "Solo no leídos" },
   "Não lidos": { es: "No leídos" },
+  "Filtros da caixa": { es: "Filtros de la bandeja" },
   Grupo: { es: "Grupo" },
   Fila: { es: "Cola" },
   Minhas: { es: "Mías" },

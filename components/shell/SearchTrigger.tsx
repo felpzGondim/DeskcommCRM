@@ -1,18 +1,30 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MagnifyingGlass } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 
-export function SearchTrigger() {
+export function SearchTrigger({ atalho = true }: { atalho?: boolean } = {}) {
   const t = useT();
   const [open, setOpen] = useState(false);
 
   // `enableOnFormTags`: o atalho precisa funcionar com o cursor dentro do
   // composer do inbox, que é onde o operador passa o dia.
-  useHotkeys("mod+k", () => setOpen(true), { preventDefault: true, enableOnFormTags: true });
+  useHotkeys("mod+k", () => setOpen(true), {
+    preventDefault: true,
+    enableOnFormTags: true,
+    enabled: atalho,
+  });
+  // O menu do celular pede a busca sem montar um segundo diálogo por cima
+  // da gaveta. Quem ouve é a cópia da barra, que já existe — só está escondida.
+  useEffect(() => {
+    if (!atalho) return;
+    const abrir = () => setOpen(true);
+    window.addEventListener("deskcomm:abrir-busca", abrir);
+    return () => window.removeEventListener("deskcomm:abrir-busca", abrir);
+  }, [atalho]);
 
   return (
     <>

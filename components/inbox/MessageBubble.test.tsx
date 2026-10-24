@@ -569,3 +569,30 @@ describe("MessageBubble — mensagem que falhou", () => {
     expect(screen.queryByRole("button", { name: "Tentar de novo" })).toBeNull();
   });
 });
+
+describe("MessageBubble — responder deixa o campo pronto", () => {
+  it("o cursor vai para o campo, e não volta para a setinha da mensagem", async () => {
+    const user = userEvent.setup();
+    const onResponder = vi.fn();
+    render(
+      <>
+        <MessageBubble
+          message={msg({ direction: "inbound", body: "oi" })}
+          onResponder={onResponder}
+          onFocarResposta={() => {
+            screen.getByRole("textbox", { name: "Mensagem" }).focus();
+          }}
+        />
+        <textarea aria-label="Mensagem" />
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Opções da mensagem" }));
+    await user.click(screen.getByRole("menuitem", { name: "Responder a esta mensagem" }));
+
+    expect(onResponder).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Mensagem" })).toHaveFocus();
+    });
+  });
+});
