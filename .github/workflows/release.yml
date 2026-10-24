@@ -37,7 +37,9 @@ permissions:
 
 jobs:
   abrir-pr-de-release:
-    if: github.event_name == 'workflow_dispatch'
+    # Este fork usa tags personalizadas e a publicação de publish-image.yml.
+    # O GitHub App de release pertence ao fluxo original.
+    if: github.event_name == 'workflow_dispatch' && github.repository != 'felpzGondim/DeskcommCRM'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,7 +100,7 @@ jobs:
             --title "Release ${VERSAO}" --body-file /tmp/corpo.md
 
   cortar-tag:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.repository != 'felpzGondim/DeskcommCRM'
     runs-on: ubuntu-latest
     permissions:
       contents: read
