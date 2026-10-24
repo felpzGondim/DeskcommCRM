@@ -10,15 +10,22 @@
  * texto de qualquer jeito: o que este caso segura é a CLASSE, que é o que decide
  * o nome no navegador de verdade.
  */
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
-vi.mock("@/components/shell/CommandPalette", () => ({ CommandPalette: () => null }));
+vi.mock("@/components/shell/CommandPalette", () => ({ CommandPalette: ({ open }: { open: boolean }) => open ? <div role="dialog">Busca</div> : null }));
 
 import { SearchTrigger } from "./SearchTrigger";
 
 describe("lupa da busca no topo", () => {
+  it("o menu do celular abre a busca mesmo com o gatilho escondido", () => {
+    const vista = render(<SearchTrigger />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => window.dispatchEvent(new Event("app:abrir-busca")));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Busca");
+    vista.unmount();
+  });
   it("o rótulo fica na árvore de acessibilidade abaixo de md", () => {
     render(<SearchTrigger />);
     const botao = screen.getByRole("button", { name: /Buscar\.\.\./ });

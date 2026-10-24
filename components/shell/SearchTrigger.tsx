@@ -22,8 +22,8 @@ export function SearchTrigger({ atalho = true }: { atalho?: boolean } = {}) {
   useEffect(() => {
     if (!atalho) return;
     const abrir = () => setOpen(true);
-    window.addEventListener("deskcomm:abrir-busca", abrir);
-    return () => window.removeEventListener("deskcomm:abrir-busca", abrir);
+    window.addEventListener("app:abrir-busca", abrir);
+    return () => window.removeEventListener("app:abrir-busca", abrir);
   }, [atalho]);
 
   return (

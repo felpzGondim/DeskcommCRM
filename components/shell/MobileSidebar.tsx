@@ -99,7 +99,7 @@ export function GavetaDeNavegacao({ comoAba = false }: { comoAba?: boolean }) {
             className="gap-2 text-muted-foreground"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new Event("deskcomm:abrir-busca"));
+              window.dispatchEvent(new Event("app:abrir-busca"));
             }}
           >
             <MagnifyingGlass size={14} aria-hidden />
@@ -123,7 +123,7 @@ export function GavetaDeNavegacao({ comoAba = false }: { comoAba?: boolean }) {
             className="gap-2 text-muted-foreground"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new Event("deskcomm:abrir-busca"));
+              window.dispatchEvent(new Event("app:abrir-busca"));
             }}
           >
             <MagnifyingGlass size={14} aria-hidden />
