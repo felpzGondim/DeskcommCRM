@@ -188,6 +188,9 @@ test.describe("no celular, com o dedo", () => {
     await page.locator("nav[data-barra-inferior]").getByRole("button", { name: "Mais" }).tap();
     const gaveta = page.getByRole("dialog");
     await expect(gaveta).toBeVisible();
+    await expect(gaveta.getByRole("button", { name: "Buscar...", exact: true })).toHaveCount(1);
+    await expect(gaveta.getByTestId("alerts-bell-menu")).toHaveCount(1);
+    await expect(gaveta.getByTestId("seletor-de-idioma-menu")).toHaveCount(1);
     const links = await alturas(page, '[role="dialog"] a[href]');
     expect(links.length, "a gaveta abriu sem links").toBeGreaterThan(0);
     for (const { texto, h } of links) expect(h, `link da gaveta "${texto}"`).toBeGreaterThanOrEqual(PISO_DE_TOQUE);
