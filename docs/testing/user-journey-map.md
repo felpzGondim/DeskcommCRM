@@ -1772,12 +1772,12 @@ CI — a coluna abaixo diz QUEM mede, não o que foi medido.
 
 | # | Caso | Expectativa | Quem mede |
 |---|------|-------------|-----------|
-| J49.1 (A-1) | Tela cheia | coluna `fixed` com topo = `--faixas-de-cima` e base = 844 (±1); `elementFromPoint` sobre o TopBar e sobre a barra de abas cai DENTRO da conversa; `body.scrollWidth ≤ 390` e, como a camada é `fixed` e não aumenta o documento, `scrollWidth − clientWidth` da própria coluna ≤ 1 e a borda direita da fileira do composer ≤ 390; fio ≥ 300px (o valor real vai como anotação do teste); busca da lista e campo de mensagem com fonte ≥ 16px; o foco não fica num elemento da lista escondida | E2E (CI) + UNIT `citada-apagada-e-tela-em-branco` (classes da camada, só `max-md:`) |
-| J49.2 (A-2) | Alvos tocáveis | «‹ Conversas» e «Ficha» ≥ 44×44; todo botão da fileira de ações ≥ 44 de altura; «Assumir» dentro da tela e com o menor `left` da fileira | E2E (CI) + UNIT `inbox-header-nao-trava` |
+| J49.1 (A-1) | Tela cheia | coluna `fixed` com topo = base do TopBar e base = 844 (±1); `elementFromPoint` sobre o TopBar fica FORA da conversa, e sobre a barra de abas cai DENTRO dela; `body.scrollWidth ≤ 390` e, como a camada é `fixed` e não aumenta o documento, `scrollWidth − clientWidth` da própria coluna ≤ 1 e a borda direita da fileira do composer ≤ 390; fio ≥ 300px (o valor real vai como anotação do teste); busca da lista e campo de mensagem com fonte ≥ 16px; o foco não fica num elemento da lista escondida | E2E (CI) + UNIT `citada-apagada-e-tela-em-branco` (classes da camada, só `max-md:`) |
+| J49.2 (A-2) | Alvos tocáveis | «‹ Conversas» e «Ficha» ≥ 44×44; «Assumir» visível no cabeçalho; «Transferir», «Fechar» e «Arquivar» na Ficha com ≥ 44×44, dentro da tela, sem duplicar «Assumir» | E2E (CI) + UNIT `inbox-header-nao-trava` |
 | J49.3 (A-3) | Voltar pela tela, depois o voltar do navegador | a lista aparece sem `id=`; o voltar do navegador vai para a entrada ANTERIOR à lista (`?filter=mine`), não reabre a conversa | E2E (CI) + UNIT `voltar-do-inbox-no-celular` |
 | J49.4 (A-4) | Link direto (o clique no aviso) e voltar | a lista aparece e `history.length` não muda | E2E (CI) + UNIT |
 | J49.5 (A-5) | Gesto de voltar do sistema | devolve a lista, sem `id=` | E2E (CI) |
-| J49.6 (A-6) `[P0]` | WhatsApp desconectado | com a faixa na tela o documento não rola (`scrollY` ≤ 1 depois de `scrollTo` ao fim); aberta a conversa, topo da camada = base das faixas (±1), a faixa continua por cima (`elementFromPoint`), o composer termina ≤ 844 e a barra de voltar fica abaixo da faixa; de volta à lista e com a página rolada (espaçador de 3000px no `<main>`), o topo do `<header>` sticky = base das faixas (±1) e `elementFromPoint` no topo dele cai no header | E2E (CI, conexão `FAILED` semeada e apagada no `finally`, com a remoção conferida) + UNIT `faixas-de-cima` |
+| J49.6 (A-6) `[P0]` | WhatsApp desconectado | com a faixa na tela o documento não rola (`scrollY` ≤ 1 depois de `scrollTo` ao fim); aberta a conversa, topo da camada = base do TopBar (±1), a faixa continua por cima (`elementFromPoint`), o composer termina ≤ 844 e a barra de voltar fica abaixo da faixa; de volta à lista e com a página rolada (espaçador de 3000px no `<main>`), o topo do `<header>` sticky = base das faixas (±1) e `elementFromPoint` no topo dele cai no header | E2E (CI, conexão `FAILED` semeada e apagada no `finally`, com a remoção conferida) + UNIT `faixas-de-cima` |
 | J49.7 (A-7) | Teclado aberto, modelo Android | janela de 500px: `data-teclado-aberto`, fileira de ações escondida, último balão dentro do fio e composer ≤ 500 | E2E (CI) + UNIT `altura-visivel` |
 
 **NÃO MEDIDO — só o aparelho prova:** o teclado do iOS (que NÃO encolhe a
@@ -1796,9 +1796,9 @@ Safari antigo; o voltar do Android instalado aberto a frio pelo aviso, que
 sai do app direto da conversa (já era assim antes desta entrega).
 
 **Limite aceito (acessibilidade):** com a conversa aberta no celular, o
-`TopBar` e a barra de abas ficam cobertos pela camada mas seguem na árvore de
+a barra de abas fica coberta pela camada mas segue na árvore de
 acessibilidade e na ordem de foco — o VoiceOver e o TalkBack alcançam
-controles escondidos atrás da conversa. A lista fica `invisible` (fora da
+controles da barra de abas escondidos atrás da conversa. O TopBar permanece visível; a lista fica `invisible` (fora da
 árvore); as barras da casca não, porque ficam no `AppShell` e tirá-las exige
 um sinal da casca que esta entrega não criou.
 
@@ -3910,3 +3910,23 @@ código e a hora anteriores e se houve confirmação).
 **NÃO COBERTO, declarado:** que o canal de verdade entrega o reenvio (o CI não tem
 WhatsApp; o caminho termina em «Não enviada — sem conexão»); o toque num iPhone e num
 Android reais; o reenvio de mídia pela tela (coberto só pela regra e pela rota).
+
+### Integração do fork — layout de celular (2026-10-24)
+
+CONFIRMADO por testes de componentes: `InboxFilters` porta filtros/etiquetas
+para `TopBar`; `InboxLayout` reserva a navegação Conversas/Ficha no mesmo
+cabeçalho. `ConversationHeader` move as ações para a ficha e mantém Assumir
+no cabeçalho, sem duplicações. `Composer` mantém revisão de sugestões e
+encaminhamento atuais; o foco retorna ao campo ao responder uma mensagem.
+A geometria e o teclado são medidos pela spec J49 acima; testes de componente
+não provam pixels. Sem novas tabelas, rotas ou automações.
+
+Living System Checklist: entrada pelos dados de conversas e filtros existentes;
+saída para os mesmos hooks de seleção, envio e gestão; registro pelas rotas
+atuais de mensagem/atendimento, sem mutação nova. Superfície e porta: Inbox
+pelo menu existente, filtros no TopBar e ações na Ficha. Anti-morte e retorno:
+permanecem os fluxos atuais de fila, transferência e revisão de sugestão; esta
+integração reorganiza controles e não cria demanda nem decisão automática.
+Configuração: mesmos filtros e permissões; sem variável nova. Continuidade
+IA↔humano: Assumir e Devolver ao automático preservados. Mapa: J49 atualizado;
+as arestas existentes não mudaram.

@@ -3,6 +3,8 @@ import { useEffect, type ReactNode } from "react";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
 import { BarraInferior } from "@/components/shell/BarraInferior";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { BarraDeProgressoNavegacao } from "@/components/shell/BarraDeProgressoNavegacao";
 import { useSinalDePresenca } from "@/hooks/atendimento/useSinalDePresenca";
 import { useInboundMessageAlerts } from "@/hooks/notifications/useInboundMessageAlerts";
@@ -48,6 +50,10 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
   // o `p-6` inteiro é rodapé. Com o painel de chamada na tela, é ele que
   // decide a faixa que o conteúdo perde, e ninguém mais mede isso por fora.
   const ocupacaoDoRodape = useOcupacaoDoRodape();
+  // No inbox do celular o padding da casca é margem que a conversa não pode
+  // perder. O desktop mantém o `p-6`, e a altura da grade desconta o mesmo
+  // valor — os dois têm de continuar combinando (ver InboxLayout).
+  const inbox = usePathname()?.startsWith("/app/inbox") ?? false;
   return (
     /*
       `min-h-dvh`, e não `min-h-screen`: `100vh` no celular é a janela com a
@@ -110,7 +116,7 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
           peça fixa quem cobre isso é o terceiro termo do `max()` do contrato.
         */}
         <main
-          className="flex-1 overflow-auto p-4 pb-area-segura sm:p-6"
+          className={cn("flex-1 overflow-auto", inbox ? "p-0 md:p-6" : "p-4 pb-area-segura sm:p-6")}
           style={estiloDaReserva(ocupacaoDoRodape)}
           data-rodape-ocupado={ocupacaoDoRodape}
         >

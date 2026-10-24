@@ -263,7 +263,8 @@ function montar(cenario: Cenario) {
 function barraDeAcoes(ancora: string): HTMLElement {
   const botao = screen.getByText(ancora).closest("button");
   expect(botao, `a âncora "${ancora}" não renderizou um botão`).toBeTruthy();
-  const barra = (botao as HTMLElement).parentElement;
+  const pai = (botao as HTMLElement).parentElement!;
+  const barra = pai.classList.contains("md:flex") ? pai.parentElement : pai;
   expect(barra, "a barra de ações não renderizou").toBeTruthy();
   return barra as HTMLElement;
 }

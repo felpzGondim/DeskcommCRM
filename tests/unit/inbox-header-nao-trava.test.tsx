@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { ID_DAS_ACOES_NA_FICHA } from "@/lib/inbox/lista-no-cabecalho";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 
 /**
@@ -159,32 +160,44 @@ describe("header do inbox — não trava a largura da tela", () => {
     expect(screen.queryByRole("button", { name: "Mais ações" }), "ação de quem atende escondida num menu").toBeNull();
   });
 
-  it("no celular a barra é UMA fileira que rola, não três ou quatro que comem a conversa", () => {
-    // Relato de quem atende pelo telefone: com ~390px a barra quebrava em várias
-    // fileiras e sobrava pouca altura para as mensagens. Abaixo do `md` ela não
-    // quebra — rola na horizontal — e nenhum botão encolhe até virar ilegível.
+  it("no celular Assumir fica no cabeçalho e as demais ações têm destino na ficha", () => {
     renderHeader();
-    const classes = barraDeAcoes().className.split(/\s+/);
-    for (const c of ["max-md:flex-nowrap", "max-md:overflow-x-auto", "max-md:[&>*]:shrink-0"]) {
-      expect(classes, `sem \`${c}\` a barra volta a empilhar fileiras no celular`).toContain(c);
-    }
+    const acoes = barraDeAcoes();
+    expect(acoes.className.split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "md:flex"]));
+    const assumir = screen.getByRole("button", { name: "Assumir" });
+    expect(acoes.contains(assumir)).toBe(false);
+    expect(assumir.className.split(/\s+/)).toContain("max-md:order-first");
+    expect(assumir.parentElement?.parentElement?.className)
+      .toContain("max-md:group-data-[teclado-aberto]/conversa:hidden");
   });
 
-  it("no celular Assumir vem primeiro, a fileira mostra que rola e some com o teclado (F2)", () => {
-    // Só CSS: a ordem do DOM (a do computador e a do teclado) não muda.
-    renderHeader();
-    const assumir = screen.getByRole("button", { name: "Assumir" });
-    expect(assumir.className.split(/\s+/)).toContain("max-md:order-first");
-
-    const barra = barraDeAcoes();
-    expect(barra.className, "sem a máscara nada indica que há botões à direita").toMatch(
-      /max-md:\[mask-image:linear-gradient\(/,
+  it("abrir e fechar a ficha move as mesmas ações sem duplicar botões", () => {
+    const destino = document.createElement("div");
+    destino.id = ID_DAS_ACOES_NA_FICHA;
+    document.body.appendChild(destino);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (aberta: boolean) => (
+      <QueryClientProvider client={client}>
+        <ConversationHeader conversation={conversation} fichaAberta={aberta} />
+      </QueryClientProvider>
     );
-    // Com o teclado aberto a coluna das ações sai, e o fio fica com a altura.
-    // `max-md:` é obrigatório: no computador encolher a janela não é teclado.
-    const coluna = barra.parentElement as HTMLElement;
-    expect(coluna.className.split(/\s+/)).toContain("max-md:group-data-[teclado-aberto]/conversa:hidden");
-    expect(coluna.className).not.toMatch(/(?:^|\s)group-data-\[teclado-aberto\]/);
+    const vista = render(ui(false));
+    try {
+      expect(destino).toBeEmptyDOMElement();
+      vista.rerender(ui(true));
+      for (const nome of ["Transferir", "Fechar", "Arquivar"]) {
+        expect(within(destino).getByRole("button", { name: nome })).toBeInTheDocument();
+        expect(screen.getAllByRole("button", { name: nome })).toHaveLength(1);
+      }
+      expect(within(destino).queryByRole("button", { name: "Assumir" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Assumir" })).toBeInTheDocument();
+      vista.rerender(ui(false));
+      expect(destino).toBeEmptyDOMElement();
+      expect(vista.container).toContainElement(screen.getByRole("button", { name: "Transferir" }));
+    } finally {
+      vista.unmount();
+      destino.remove();
+    }
   });
 
   it("no celular o telefone sai do cabeçalho (continua na Ficha)", () => {

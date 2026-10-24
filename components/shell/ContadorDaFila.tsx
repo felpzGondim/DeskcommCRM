@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/hooks/auth/AuthProvider";
+import { useContagemDepoisDaHidratacao } from "@/hooks/inbox/contagem-depois-da-hidratacao";
 import { useConversationCounts } from "@/hooks/inbox/useConversationCounts";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
@@ -19,8 +20,9 @@ export function ContadorDaFila({ compacto }: { compacto: boolean }) {
   const t = useT();
   const { activeOrg } = useAuth();
   const { data } = useConversationCounts(activeOrg?.orgId ?? null);
+  const contagemVisivel = useContagemDepoisDaHidratacao();
   const esperando = data?.fila ?? data?.unassigned ?? 0;
-  if (!esperando) return null;
+  if (!contagemVisivel || !esperando) return null;
   const rotulo =
     esperando === 1 ? t("1 conversa esperando uma pessoa") : `${esperando} ${t("conversas esperando uma pessoa")}`;
   return (

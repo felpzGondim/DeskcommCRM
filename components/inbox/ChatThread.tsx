@@ -33,6 +33,8 @@ interface Props {
   onResponder?: (m: Message) => void;
   /** Escolher uma mensagem para encaminhar a outra conversa (#2835). */
   onEncaminhar?: (m: Message) => void;
+  /** Põe o cursor no campo depois da escolha — o menu não fica com o foco. */
+  onFocarResposta?: () => void;
   /**
    * Quem é o dono da conversa HOJE, e quem é o contato.
    *
@@ -89,6 +91,7 @@ export function ChatThread({
   provider,
   onResponder,
   onEncaminhar,
+  onFocarResposta,
   dono,
   contatoId,
   searchTerm = "",
@@ -444,6 +447,7 @@ export function ChatThread({
                   debugCitations={debugCitations}
                   onResponder={onResponder}
                   onEncaminhar={onEncaminhar}
+                  onFocarResposta={onFocarResposta}
                   // A citada sai da MESMA lista já carregada: buscar no servidor
                   // por cada citação faria uma consulta por bolha. Quando a
                   // citada é antiga demais e ficou fora da página, o fio some —

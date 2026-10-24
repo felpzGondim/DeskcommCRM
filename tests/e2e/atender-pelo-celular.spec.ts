@@ -200,6 +200,7 @@ async function medirCamada(page: Page) {
       topo: r?.top ?? -1,
       base: r?.bottom ?? -1,
       faixas,
+      baseDoCabecalho: document.querySelector("header")!.getBoundingClientRect().bottom,
       cobreTopBar: dentro(195, faixas + 28),
       cobreAbas: dentro(195, window.innerHeight - 14),
       larguraDoBody: document.body.scrollWidth,
@@ -214,7 +215,7 @@ async function medirCamada(page: Page) {
 }
 
 test.describe("atender pelo celular", () => {
-  test("A-1 a conversa ocupa a tela inteira e cobre as barras", async ({ page }) => {
+  test("A-1 a conversa ocupa a área útil e preserva o cabeçalho", async ({ page }) => {
     await entrar(page);
     await abrirPelaLista(page);
     const fonteDaBusca = await page.evaluate(() => {
@@ -223,11 +224,14 @@ test.describe("atender pelo celular", () => {
     });
     expect(fonteDaBusca, "busca com menos de 16px amplia a página no iPhone").toBeGreaterThanOrEqual(16);
 
+    const nome = await page.getByRole("heading", { name: NOME, exact: true }).boundingBox();
+    expect(nome, "o nome do contato não apareceu").not.toBeNull();
+    expect(nome!.width, "o responsável comprimiu o nome do contato a poucas letras").toBeGreaterThanOrEqual(100);
     const m = await medirCamada(page);
     expect(m.fixa, "a conversa não virou camada fixa").toBe(true);
-    expect(Math.abs(m.topo - m.faixas), `topo ${m.topo} ≠ faixas ${m.faixas}`).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.topo - m.baseDoCabecalho), `topo ${m.topo} ≠ cabeçalho ${m.baseDoCabecalho}`).toBeLessThanOrEqual(1);
     expect(Math.abs(m.base - ALTURA), `base ${m.base}`).toBeLessThanOrEqual(1);
-    expect(m.cobreTopBar, "a barra de cima aparece por cima da conversa").toBe(true);
+    expect(m.cobreTopBar, "a conversa cobriu a navegação do cabeçalho").toBe(false);
     expect(m.cobreAbas, "a barra de abas aparece por cima da conversa").toBe(true);
     expect(m.larguraDoBody).toBeLessThanOrEqual(LARGURA);
     expect(m.estouroDaColuna, "algo dentro da conversa estoura na horizontal").toBeLessThanOrEqual(1);
@@ -248,7 +252,7 @@ test.describe("atender pelo celular", () => {
     await page.screenshot({ path: path.join(EVIDENCE, "a1-tela-cheia.png") });
   });
 
-  test("A-2 alvos com 44px e Assumir primeiro, dentro da tela", async ({ page }) => {
+  test("A-2 navegação e ações na ficha têm alvos de 44px dentro da tela", async ({ page }) => {
     await entrar(page);
     await page.goto(`/app/inbox?filter=all&id=${conversa}`);
     await esperarConversa(page);
@@ -260,23 +264,20 @@ test.describe("atender pelo celular", () => {
       expect(r!.width, `"${nome}" com ${r!.width}px de largura`).toBeGreaterThanOrEqual(44);
     }
 
-    const fileira = await page
-      .getByRole("button", { name: "Transferir", exact: true })
-      .evaluate((botao) => {
-        const barra = botao.parentElement!;
-        const filhos = Array.from(barra.children)
-          .map((f) => ({ texto: (f as HTMLElement).innerText.trim(), r: f.getBoundingClientRect() }))
-          .filter((f) => f.r.width > 0 && f.r.height > 0);
-        return filhos.map((f) => ({ texto: f.texto, esquerda: f.r.left, direita: f.r.right, altura: f.r.height }));
-      });
-    const baixos = fileira.filter((f) => f.altura < 44);
-    expect(baixos, "botão da fileira de ações abaixo de 44px").toEqual([]);
-    const assumir = fileira.find((f) => f.texto === "Assumir");
-    expect(assumir, "Assumir não está na fileira").toBeTruthy();
-    expect(assumir!.esquerda).toBeGreaterThanOrEqual(0);
-    expect(assumir!.direita).toBeLessThanOrEqual(LARGURA);
-    const maisAEsquerda = Math.min(...fileira.map((f) => f.esquerda));
-    expect(Math.abs(assumir!.esquerda - maisAEsquerda), "Assumir não é o primeiro da fileira").toBeLessThanOrEqual(1);
+    const assumir = page.getByRole("button", { name: "Assumir", exact: true });
+    await expect(assumir).toBeVisible();
+    await page.getByRole("button", { name: "Ficha", exact: true }).tap();
+    const acoes = page.locator("#acoes-na-ficha");
+    for (const nome of ["Transferir", "Fechar", "Arquivar"]) {
+      const botao = acoes.getByRole("button", { name: nome, exact: true });
+      await expect(botao).toBeVisible();
+      const r = (await botao.boundingBox())!;
+      expect(r.height).toBeGreaterThanOrEqual(44);
+      expect(r.width).toBeGreaterThanOrEqual(44);
+      expect(r.x).toBeGreaterThanOrEqual(0);
+      expect(r.x + r.width).toBeLessThanOrEqual(LARGURA);
+    }
+    await expect(acoes.getByRole("button", { name: "Assumir", exact: true })).toHaveCount(0);
   });
 
   test("A-3 voltar pela tela não reabre a conversa no voltar do navegador", async ({ page }) => {
@@ -361,12 +362,13 @@ test.describe("atender pelo celular", () => {
         const campo = document.querySelector('textarea[aria-label="Mensagem"]')!.getBoundingClientRect();
         return {
           baseDasFaixas: involucro.bottom,
+          baseDoCabecalho: document.querySelector("header")!.getBoundingClientRect().bottom,
           topoDaCamada: coluna?.getBoundingClientRect().top ?? -1,
           faixaPorCima: el.contains(alvo),
           baseDoCampo: campo.bottom,
         };
       });
-      expect(Math.abs(m.topoDaCamada - m.baseDasFaixas), JSON.stringify(m)).toBeLessThanOrEqual(1);
+      expect(Math.abs(m.topoDaCamada - m.baseDoCabecalho), JSON.stringify(m)).toBeLessThanOrEqual(1);
       expect(m.faixaPorCima, "a conversa cobriu o aviso de canal desconectado").toBe(true);
       expect(m.baseDoCampo, "o composer saiu pela borda de baixo").toBeLessThanOrEqual(ALTURA);
       const barraDeVoltar = await voltar(page).boundingBox();
@@ -409,14 +411,14 @@ test.describe("atender pelo celular", () => {
     await entrar(page);
     await page.goto(`/app/inbox?filter=all&id=${conversa}`);
     await esperarConversa(page);
-    await expect(page.getByRole("button", { name: "Transferir", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Assumir", exact: true })).toBeVisible();
 
     await page.getByLabel("Mensagem", { exact: true }).tap();
     try {
       // Modelo Android (`interactive-widget=resizes-content`): o teclado encolhe a janela.
       await page.setViewportSize({ width: LARGURA, height: 500 });
       await expect(page.locator("[data-teclado-aberto]")).toHaveCount(1);
-      await expect(page.getByRole("button", { name: "Transferir", exact: true })).toBeHidden();
+      await expect(page.getByRole("button", { name: "Assumir", exact: true })).toBeHidden();
 
       await expect
         .poll(
@@ -443,7 +445,8 @@ test.describe("atender pelo celular", () => {
     await esperarConversa(page);
     // A busca nas mensagens só existe aberta: abre antes de varrer, senão o
     // campo dela passaria sem medida.
-    await page.getByRole("button", { name: "Buscar nesta conversa", exact: true }).tap();
+    await page.getByRole("button", { name: "Ficha", exact: true }).tap();
+    await page.locator("#acoes-na-ficha").getByRole("button", { name: "Buscar nesta conversa", exact: true }).tap();
     await expect(page.getByLabel("Buscar nas mensagens carregadas")).toBeVisible();
     // Só o que está DENTRO da camada da conversa: a lista e a barra de cima
     // ficam por baixo dela (invisíveis ou cobertas) e não são alcançáveis.
