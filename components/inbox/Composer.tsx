@@ -864,7 +864,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           >
             {t("Nota interna")}
           </button>
-          {(!sugestao || mode === "note") && (
+          {mode === "reply" && !sugestao && (
             <DraftReplyButton
               conversationId={conversationId}
               disabled={isDisabled}
