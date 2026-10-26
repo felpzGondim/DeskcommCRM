@@ -5,6 +5,7 @@ describe("mapeamento do painel para o Brisa Hub", () => {
   it("usa só ferramenta anunciada e aceita o nome alternativo", () => {
     expect(ferramentaDaAcao("boletos", [{ name: "buscar_boletos" }])?.name).toBe("buscar_boletos");
     expect(ferramentaDaAcao("boletos", [{ name: "status" }])).toBeNull();
+    expect(ferramentaDaAcao("analise", [{ name: "brisa-hub-analise" }])?.name).toBe("brisa-hub-analise");
     expect(ferramentaDaAcao("analise", [{ name: "brisa_hub_analise" }])?.name).toBe("brisa_hub_analise");
   });
 

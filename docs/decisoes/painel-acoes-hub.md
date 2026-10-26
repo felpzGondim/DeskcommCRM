@@ -11,7 +11,7 @@ O arquivo `lib/agent-engine/agent/painel-acoes-hub.ts` concentra os nomes aceito
 | Buscar boletos | `segunda_via_boleto`, `buscar_boletos` | `{}` | `boletos: [{ situacao, vencimento, valor }]` (somente abertos/segunda via) |
 | Consultar contrato e inquilino | `consultar_contrato_inquilino` **ou** `buscar_contrato` + `buscar_inquilino` | `{}` para cada leitura | `contrato: { imovel, valor, vencimento, situacao }`; a ferramenta combinada devolve `inquilino_situacao`, ou `buscar_inquilino` devolve `situacao` |
 | Ficha cadastral / pedir documentos | `buscar_cadastro`, `buscar_ficha_cadastral` | `{}` | `documentos_faltantes: string[]` |
-| Iniciar análise | `brisa_hub_analise`, `iniciar_analise_inquilino` | `{ pedido_id: UUID, conversa_id: UUID }` | O Hub deve retornar sucesso após aceitar o pedido |
+| Iniciar análise | `brisa-hub-analise`, `brisa_hub_analise`, `iniciar_analise_inquilino` | `{ pedido_id: UUID, conversa_id: UUID }` | O Hub deve retornar sucesso após aceitar o pedido |
 
 As três ferramentas de consulta precisam anunciar `annotations.readOnlyHint: true`; sem isso, o botão recusa a chamada. O Hub identifica o inquilino **pelo telefone do contato da conversa** em `X-Deskcomm-Contato-Telefone`, acompanhado de `X-Deskcomm-Contato-Id` e `X-Deskcomm-Canal`. Nunca requer CPF digitado pelo atendente; nunca usa identidade enviada pelo navegador. O Bearer do cadastro identifica a organização no Hub, que deve aplicar seu próprio isolamento. Ausência de telefone, ferramenta ou formato estruturado tem mensagem visível e não derruba o painel.
 

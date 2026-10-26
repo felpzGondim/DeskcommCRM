@@ -5,7 +5,7 @@ export const ACOES_HUB = {
   boletos: { rotulo: "Buscar boletos", ferramentas: ["segunda_via_boleto", "buscar_boletos"] },
   contrato: { rotulo: "Consultar contrato e inquilino", ferramentas: ["consultar_contrato_inquilino", "buscar_contrato"] },
   ficha: { rotulo: "Ficha cadastral / pedir documentos", ferramentas: ["buscar_cadastro", "buscar_ficha_cadastral"] },
-  analise: { rotulo: "Iniciar análise de inquilino", ferramentas: ["brisa_hub_analise", "iniciar_analise_inquilino"] },
+  analise: { rotulo: "Iniciar análise de inquilino", ferramentas: ["brisa-hub-analise", "brisa_hub_analise", "iniciar_analise_inquilino"] },
 } as const;
 
 export type AcaoHub = keyof typeof ACOES_HUB;
