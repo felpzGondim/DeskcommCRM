@@ -49,5 +49,30 @@ describe("Painel do agente (UI)", () => {
   it("só leitura desabilita os botões", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
+  });
+
+  it("análise exige confirmação antes de chamar a rota", async () => {
+    postMock.mockResolvedValue({ data: { resumo: "Pedido de análise enviado." } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar análise de inquilino" }));
+    expect(postMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar análise" }));
+    await screen.findByText("Pedido de análise enviado.");
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente/acoes",
+      expect.objectContaining({ acao: "analise", confirmar: true, pedidoId: expect.any(String) }),
+    );
+  });
+
+  it("pedido de documentos só preenche o Composer", async () => {
+    postMock.mockResolvedValue({ data: { resumo: "Pendentes", sugestao: "Envie o RG, por favor." } });
+    const preencher = vi.fn();
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={preencher} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ficha cadastral / pedir documentos" }));
+    await screen.findByText("Envie o RG, por favor.");
+    fireEvent.click(screen.getByRole("button", { name: "Usar como resposta" }));
+    expect(preencher).toHaveBeenCalledWith("Envie o RG, por favor.");
+    expect(postMock).toHaveBeenCalledTimes(1);
   });
 });

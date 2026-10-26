@@ -925,6 +925,10 @@ export const AUDIT_ACTIONS = [
    * ⚠️ SEM O TEXTO — mesma regra de `ai.case_chat_asked`.
    */
   "ai.painel_atendente",
+  "ai.painel_atendente.boletos",
+  "ai.painel_atendente.contrato",
+  "ai.painel_atendente.ficha",
+  "ai.painel_atendente.analise",
   /**
    * O aviso de caso no WhatsApp da equipe (migration 0292).
    *

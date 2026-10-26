@@ -6,8 +6,7 @@
  * Regras que esta tela não pode quebrar:
  *  · Nunca envia nada ao cliente. "Usar como resposta" só preenche a caixa de
  *    texto (Composer); quem envia é a pessoa.
- *  · Mostra só o que funciona hoje: "Resumir conversa", "Sugerir resposta" e a
- *    pergunta livre. Os demais botões do plano entram quando existirem.
+ *  · Ações do Hub são mostradas a todos os atendentes; a análise exige confirmação.
  *  · O histórico do painel é só da tela: troca de conversa = painel limpo.
  *  · Qual IA responde é escolhido em IA › Provedores, ponto
  *    "IA do painel do atendente" (`painel_atendente`).
@@ -22,6 +21,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
+import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
 
@@ -48,8 +48,9 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
   const [aberto, setAberto] = useState(true);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [pergunta, setPergunta] = useState("");
-  const [carregando, setCarregando] = useState<Acao | null>(null);
+  const [carregando, setCarregando] = useState<Acao | AcaoHub | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [pedidoAnalise, setPedidoAnalise] = useState<string | null>(null);
   const conversaAtual = useRef(conversationId);
 
   // Troca de conversa = painel limpo: quem usa o painel passa
@@ -88,6 +89,31 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
       if (conversaAtual.current !== daConversa) return;
       const msg = e instanceof Error && e.message ? e.message : t("Não deu para responder agora.");
       setErro(msg);
+    } finally {
+      if (conversaAtual.current === daConversa) setCarregando(null);
+    }
+  }
+
+  async function chamarHub(acao: AcaoHub, pedidoId?: string) {
+    if (carregando || desabilitado) return;
+    const daConversa = conversationId;
+    setErro(null);
+    setCarregando(acao);
+    try {
+      const r = await apiClient.post<{ data: { resumo: string; sugestao?: string } }>(
+        `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
+        acao === "analise" ? { acao, confirmar: true, pedidoId } : { acao },
+      );
+      if (conversaAtual.current !== daConversa) return;
+      setTurnos((ts) => [...ts,
+        { autor: "atendente", texto: t(ACOES_HUB[acao].rotulo) },
+        { autor: "ia", texto: r.data.resumo },
+        ...(r.data.sugestao ? [{ autor: "ia" as const, texto: r.data.sugestao, sugestao: true }] : []),
+      ]);
+      if (acao === "analise") setPedidoAnalise(null);
+    } catch (e) {
+      if (conversaAtual.current !== daConversa) return;
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível consultar o Brisa Hub agora."));
     } finally {
       if (conversaAtual.current === daConversa) setCarregando(null);
     }
@@ -143,6 +169,30 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
               {carregando === "sugerir" ? t("Escrevendo…") : t("Sugerir resposta")}
             </Button>
           </div>
+          <div className="flex flex-wrap gap-2" aria-label={t("Ações do Brisa Hub")}>
+            {(["boletos", "contrato", "ficha"] as const).map((acao) => (
+              <Button key={acao} size="sm" variant="outline" className="h-7 px-2 text-xs"
+                disabled={desabilitado || carregando !== null}
+                onClick={() => void chamarHub(acao)}>
+                {t(ACOES_HUB[acao].rotulo)}
+              </Button>
+            ))}
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+              disabled={desabilitado || carregando !== null}
+              onClick={() => setPedidoAnalise(crypto.randomUUID())}>
+              {t(ACOES_HUB.analise.rotulo)}
+            </Button>
+          </div>
+          {pedidoAnalise && (
+            <div className="rounded-md border border-border p-2 text-xs" role="group" aria-label={t("Confirmar análise")}>
+              <p>{t("Iniciar análise de inquilino vinculado a esta conversa no FC Score+ e Migra? Esta ação será registrada no Brisa Hub.")}</p>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" disabled={desabilitado || carregando !== null}
+                  onClick={() => void chamarHub("analise", pedidoAnalise)}>{t("Confirmar análise")}</Button>
+                <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>{t("Cancelar")}</Button>
+              </div>
+            </div>
+          )}
 
           {turnos.length > 0 && (
             <ol className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite">

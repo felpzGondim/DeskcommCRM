@@ -179,6 +179,8 @@ export type EntradaDaIdempotencia<T> = {
   corpo: unknown;
   /** O efeito. Só é chamado por quem conseguir reservar a chave. */
   executar: () => Promise<{ resposta: T; status: number }>;
+  /** Escritas externas críticas não podem executar se a reserva falhar. */
+  exigirReserva?: boolean;
   /** Relógio injetado — o repo testa janela de tempo assim, não com sleep. */
   agora?: () => Date;
 };
@@ -209,7 +211,8 @@ export async function comIdempotencia<T>(
     const comJanela = somenteVivo
       ? consulta.gt("expires_at", agora().toISOString())
       : consulta;
-    const { data } = await comJanela.maybeSingle();
+    const { data, error } = await comJanela.maybeSingle();
+    if (entrada.exigirReserva && error) throw new Error("idempotency_storage_unavailable");
     return (data as LinhaDaChave | null) ?? null;
   };
 
@@ -253,7 +256,7 @@ export async function comIdempotencia<T>(
     // linha velha é reescrita como reserva nova — com o `expires_at` lido como
     // bilhete, para não roubar a reserva de quem tomou posse entre a leitura e
     // esta gravação.
-    const { data: tomouPosse } = await db
+    const { data: tomouPosse, error: erroDaRetomada } = await db
       .from("idempotency_keys")
       .update({
         request_hash: hashDaColuna(hash),
@@ -265,7 +268,11 @@ export async function comIdempotencia<T>(
       .eq("expires_at", linha.expires_at)
       .select("id")
       .maybeSingle();
+    if (entrada.exigirReserva && erroDaRetomada) throw new Error("idempotency_storage_unavailable");
     if (!tomouPosse) return { tipo: "em_curso" };
+  }
+  if (entrada.exigirReserva && erroDaReserva && (erroDaReserva as { code?: string }).code !== "23505") {
+    throw new Error("idempotency_storage_unavailable");
   }
 
   let efeito: { resposta: T; status: number };

@@ -9,7 +9,7 @@
 |---|---|
 | Qual IA responde | A escolhida em **IA › Provedores → "IA do painel do atendente"** (ponto `painel_atendente`). Na Brisa: Gemini. |
 | Quem vê | Todo atendente (`agent` ou acima). Suporte em modo só leitura vê os botões desabilitados. |
-| O que aparece | Só o que funciona: **Resumir conversa**, **Sugerir resposta** e a pergunta livre. Os demais botões do plano entram quando existirem. |
+| O que aparece | Resumir conversa, Sugerir resposta, pergunta livre e quatro ações do Brisa Hub (ver `docs/decisoes/painel-acoes-hub.md`). |
 | Cadastro e manutenção de contrato | Adiados (parte futura). |
 
 ## Regras que não podem quebrar
