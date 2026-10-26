@@ -17844,6 +17844,42 @@ export const DICIONARIO: Traducoes = {
   "Parâmetro inválido.": {
     es: "Parámetro no válido.",
   },
+  "Resumir conversa": {
+    es: "Resumir conversación",
+  },
+  "A IA não devolveu texto.": {
+    es: "La IA no devolvió texto.",
+  },
+  "Não deu para responder agora.": {
+    es: "No se pudo responder ahora.",
+  },
+  "Texto colocado na caixa de resposta. Revise e envie.": {
+    es: "Texto colocado en el cuadro de respuesta. Revíselo y envíelo.",
+  },
+  "Painel do agente": {
+    es: "Panel del agente",
+  },
+  "Só você vê este painel. Nada aqui é enviado ao cliente.": {
+    es: "Solo usted ve este panel. Nada de aquí se envía al cliente.",
+  },
+  "Escrevendo…": {
+    es: "Escribiendo…",
+  },
+  "Usar como resposta": {
+    es: "Usar como respuesta",
+  },
+  "Pergunte algo sobre esta conversa…": {
+    es: "Pregunte algo sobre esta conversación…",
+  },
+  "IA do painel do atendente": {
+    es: "IA del panel del agente",
+  },
+  "Conversa com quem atende, na coluna da direita da conversa: resume o atendimento e sugere uma resposta. Nunca fala com o cliente — a sugestão só preenche a caixa de texto, e quem envia é o atendente.": {
+    es: "Conversa con quien atiende, en la columna derecha de la conversación: resume la atención y sugiere una respuesta. Nunca habla con el cliente: la sugerencia solo rellena el cuadro de texto y quien envía es el agente.",
+  },
+  "O painel do agente na conversa mostra erro ao resumir ou sugerir resposta, e o atendente segue sem a ajuda.": {
+    es: "El panel del agente en la conversación muestra un error al resumir o sugerir una respuesta, y el agente sigue sin la ayuda.",
+  },
 };
 
 /**

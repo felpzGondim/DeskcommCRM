@@ -58,6 +58,11 @@ import type { Message } from "@/lib/types/messaging";
 
 export interface ComposerHandle {
   focus: () => void;
+  /**
+   * Põe um texto na caixa, em modo RESPOSTA, sem enviar (Painel do agente,
+   * "Usar como resposta"). Quem envia continua sendo o atendente.
+   */
+  preencher: (texto: string) => void;
 }
 
 /**
@@ -281,6 +286,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   useImperativeHandle(ref, () => ({
     focus: () => taRef.current?.focus({ preventScroll: true }),
+    preencher: (texto: string) => {
+      setMode("reply");
+      escreverNoCampo(texto);
+    },
   }));
 
   // Citar uma mensagem estando em nota interna é escolher escrever para o

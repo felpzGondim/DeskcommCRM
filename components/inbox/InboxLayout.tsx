@@ -618,6 +618,8 @@ export function InboxLayout({
   }, [selectedId, searchParams, pathname]);
   const handleVisibleChange = useCallback((ids: string[]) => setVisibleIds(ids), []);
   const handleFocusReply = useCallback(() => composerRef.current?.focus(), []);
+  // Painel do agente: "Usar como resposta" só preenche a caixa; não envia.
+  const usarComoResposta = useCallback((texto: string) => composerRef.current?.preencher(texto), []);
   const handleClaim = useCallback(() => {
     if (!selectedConversation) return;
     claim.mutate({
@@ -1030,7 +1032,7 @@ export function InboxLayout({
                         id={ID_DAS_ACOES_NA_FICHA}
                         className="flex flex-wrap gap-2 border-b px-3 py-3 pr-12"
                       />
-                      <CRMSidePanel conversation={selectedConversation} />
+                      <CRMSidePanel conversation={selectedConversation} onUsarComoResposta={usarComoResposta} />
                     </SheetContent>
                   </Sheet>
                 )}
@@ -1175,6 +1177,7 @@ export function InboxLayout({
           conversation={selectedConversation}
           recolhido={painelRecolhido}
           onAlternarRecolhido={alternarPainelDoContato}
+          onUsarComoResposta={usarComoResposta}
         />
       </div>
 

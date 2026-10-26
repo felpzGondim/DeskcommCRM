@@ -9395,5 +9395,17 @@
   "Etiquetas de ativação": "Activation tags",
   "Etiquetas que ativam (opcional)": "Tags that activate it (optional)",
   "odonto, clínica": "dental, clinic",
-  "Se a conversa ou o contato tiver uma destas etiquetas, a skill entra mesmo sem a palavra-chave.": "If the conversation or the contact has one of these tags, the skill is used even without the keyword."
+  "Se a conversa ou o contato tiver uma destas etiquetas, a skill entra mesmo sem a palavra-chave.": "If the conversation or the contact has one of these tags, the skill is used even without the keyword.",
+  "Resumir conversa": "Summarize conversation",
+  "A IA não devolveu texto.": "The AI returned no text.",
+  "Não deu para responder agora.": "Couldn't answer right now.",
+  "Texto colocado na caixa de resposta. Revise e envie.": "Text placed in the reply box. Review it and send.",
+  "Painel do agente": "Agent panel",
+  "Só você vê este painel. Nada aqui é enviado ao cliente.": "Only you see this panel. Nothing here is sent to the customer.",
+  "Escrevendo…": "Writing…",
+  "Usar como resposta": "Use as reply",
+  "Pergunte algo sobre esta conversa…": "Ask something about this conversation…",
+  "IA do painel do atendente": "Agent panel AI",
+  "Conversa com quem atende, na coluna da direita da conversa: resume o atendimento e sugere uma resposta. Nunca fala com o cliente — a sugestão só preenche a caixa de texto, e quem envia é o atendente.": "Talks with the agent in the right column of the conversation: summarizes the conversation and suggests a reply. It never talks to the customer — the suggestion only fills the text box, and the agent is the one who sends it.",
+  "O painel do agente na conversa mostra erro ao resumir ou sugerir resposta, e o atendente segue sem a ajuda.": "The agent panel in the conversation shows an error when summarizing or suggesting a reply, and the agent continues without the help."
 }
