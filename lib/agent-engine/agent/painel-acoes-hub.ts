@@ -19,12 +19,23 @@ export function ferramentaDoInquilino(anunciadas: readonly FerramentaRemota[]): 
   return anunciadas.find((f) => f.name === "buscar_inquilino") ?? null;
 }
 
+/** Ferramenta conhecida do Hub, descrita como leitura mesmo se a annotation faltar. */
+export function leituraPermitida(acao: Exclude<AcaoHub, "analise">, ferramenta: FerramentaRemota): boolean {
+  return ferramenta.somenteLeitura === true || (acao === "boletos" && ferramenta.name === "segunda_via_boleto");
+}
+
 /** O Hub deve devolver structuredContent. Texto livre não é exibido para evitar PII acidental. */
 export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado: ResultadoRemoto): {
   resumo: string;
   sugestao?: string;
+  links?: Array<{ rotulo: string; url: string }>;
 } | null {
-  const dados = resultado.dados;
+  // Alguns servidores MCP devolvem o objeto em structuredContent; outros o
+  // serializam num bloco text. Só aceitamos JSON e selecionamos campos abaixo.
+  let dados = resultado.dados;
+  if (dados === undefined && resultado.texto.trim().startsWith("{")) {
+    try { dados = JSON.parse(resultado.texto); } catch { return null; }
+  }
   if (!dados || typeof dados !== "object" || Array.isArray(dados)) return null;
   const d = dados as Record<string, unknown>;
   const curto = (v: unknown) => typeof v === "string" ? v.slice(0, 100) : "";
@@ -34,10 +45,20 @@ export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado
   if (acao === "boletos") {
     if (!Array.isArray(d.boletos)) return null;
     const lista = Array.isArray(d.boletos) ? d.boletos.slice(0, 10) : [];
-    return { resumo: lista.length ? lista.map((v, i) => {
+    const links: Array<{ rotulo: string; url: string }> = [];
+    const resumo = lista.length ? lista.map((v, i) => {
       const b = v && typeof v === "object" ? v as Record<string, unknown> : {};
+      if (typeof b.link === "string") {
+        try {
+          const url = new URL(b.link);
+          if (url.protocol === "https:" && !url.username && !url.password) {
+            links.push({ rotulo: `Abrir 2ª via do boleto ${i + 1}`, url: url.href });
+          }
+        } catch { /* link inválido: não aparece */ }
+      }
       return `${i + 1}. ${situacao(b.situacao) || "Em aberto"} · ${data(b.vencimento)} · ${valor(b.valor)}`;
-    }).join("\n") : "Nenhum boleto em aberto encontrado." };
+    }).join("\n") : "Nenhum boleto em aberto encontrado.";
+    return { resumo, links };
   }
   if (acao === "contrato") {
     if (!d.contrato || typeof d.contrato !== "object") return null;

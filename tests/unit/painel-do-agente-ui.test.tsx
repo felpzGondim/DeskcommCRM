@@ -75,4 +75,14 @@ describe("Painel do agente (UI)", () => {
     expect(preencher).toHaveBeenCalledWith("Envie o RG, por favor.");
     expect(postMock).toHaveBeenCalledTimes(1);
   });
+
+  it("mostra link seguro da segunda via na consulta de boletos", async () => {
+    postMock.mockResolvedValue({ data: { resumo: "1. Em aberto · 2026-11-05 · R$ 123.00", links: [
+      { rotulo: "Abrir 2ª via do boleto 1", url: "https://boletos.exemplo/1" },
+    ] } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Buscar boletos" }));
+    const link = await screen.findByRole("link", { name: "Abrir 2ª via do boleto 1" });
+    expect(link).toHaveAttribute("href", "https://boletos.exemplo/1");
+  });
 });

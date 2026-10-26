@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida } from "@/lib/agent-engine/agent/painel-acoes-hub";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const ferramenta = montado && ferramentaDaAcao(pedido.acao, montado.ferramentas);
   const ferramentaInquilino = pedido.acao === "contrato" && montado && ferramenta?.name === "buscar_contrato"
     ? ferramentaDoInquilino(montado.ferramentas) : null;
-  if (!montado || !ferramenta || (pedido.acao !== "analise" && ferramenta.somenteLeitura !== true) ||
+  if (!montado || !ferramenta || (pedido.acao !== "analise" && !leituraPermitida(pedido.acao, ferramenta)) ||
     (pedido.acao === "contrato" && ferramenta.name === "buscar_contrato" && ferramentaInquilino?.somenteLeitura !== true) ||
     (pedido.acao === "analise" &&
     (!ferramenta.inputSchema?.properties?.pedido_id || !ferramenta.inputSchema.properties.conversa_id))) {

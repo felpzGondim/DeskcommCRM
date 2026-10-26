@@ -30,6 +30,7 @@ interface Turno {
   texto: string;
   /** Resposta que pode virar mensagem (só as de "Sugerir resposta"). */
   sugestao?: boolean;
+  links?: Array<{ rotulo: string; url: string }>;
 }
 
 interface Props {
@@ -100,14 +101,14 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     setErro(null);
     setCarregando(acao);
     try {
-      const r = await apiClient.post<{ data: { resumo: string; sugestao?: string } }>(
+      const r = await apiClient.post<{ data: { resumo: string; sugestao?: string; links?: Array<{ rotulo: string; url: string }> } }>(
         `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
         acao === "analise" ? { acao, confirmar: true, pedidoId } : { acao },
       );
       if (conversaAtual.current !== daConversa) return;
       setTurnos((ts) => [...ts,
         { autor: "atendente", texto: t(ACOES_HUB[acao].rotulo) },
-        { autor: "ia", texto: r.data.resumo },
+        { autor: "ia", texto: r.data.resumo, links: r.data.links },
         ...(r.data.sugestao ? [{ autor: "ia" as const, texto: r.data.sugestao, sugestao: true }] : []),
       ]);
       if (acao === "analise") setPedidoAnalise(null);
@@ -206,6 +207,12 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 >
                   <span className="sr-only">{turno.autor === "atendente" ? t("Você") : t("IA")}: </span>
                   {turno.texto}
+                  {turno.autor === "ia" && turno.links?.map((link) => (
+                    <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
+                      className="mt-1 block text-primary underline">
+                      {t(link.rotulo)}
+                    </a>
+                  ))}
                   {turno.autor === "ia" && turno.sugestao && (
                     <div className="mt-1.5">
                       <Button
