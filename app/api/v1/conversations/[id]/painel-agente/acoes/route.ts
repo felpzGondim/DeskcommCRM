@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -93,7 +93,29 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       registrar(true, recibo.tipo === "replay");
       return ok(recibo.resposta, { requestId });
     }
-    const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, {}, { cabecalhos: montado.cabecalhos });
+    let argumentos: Record<string, unknown> = {};
+    if (pedido.acao === "boletos" && ferramenta.name === "segunda_via_boleto") {
+      const { data: ultima, error: erroMensagem } = await db.from("messages")
+        .select("body,sent_at")
+        .eq("organization_id", orgId)
+        .eq("conversation_id", id)
+        .eq("direction", "inbound")
+        .is("revoked_at", null)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (erroMensagem) throw new Error("message_read_failed");
+      const cpf3 = tresDigitosDoCliente(ultima?.body, ultima?.sent_at);
+      if (!cpf3) {
+        registrar(true);
+        return ok({
+          resumo: "Aguardando os três primeiros dígitos do CPF do titular, enviados pelo cliente nesta conversa. O atendente não precisa digitá-los.",
+          sugestao: "Para localizar sua 2ª via, por favor informe somente os três primeiros dígitos do CPF do titular do contrato. Não envie o CPF completo.",
+        }, { requestId });
+      }
+      argumentos = { tres_primeiros_digitos_cpf: cpf3 };
+    }
+    const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, argumentos, { cabecalhos: montado.cabecalhos });
     if (pedido.acao === "contrato" && ferramentaInquilino) {
       const inquilino = await chamarFerramentaRemota(montado.servidor, ferramentaInquilino.name, {}, { cabecalhos: montado.cabecalhos });
       const dadosContrato = r.dados && typeof r.dados === "object" ? r.dados as Record<string, unknown> : {};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apresentarResultado, ferramentaDaAcao, leituraPermitida } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { apresentarResultado, ferramentaDaAcao, leituraPermitida, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 
 describe("mapeamento do painel para o Brisa Hub", () => {
   it("usa só ferramenta anunciada e aceita o nome alternativo", () => {
@@ -31,6 +31,29 @@ describe("mapeamento do painel para o Brisa Hub", () => {
     }) });
     expect(r?.links).toEqual([{ rotulo: "Abrir 2ª via do boleto 1", url: "https://boletos.exemplo/segunda-via/1" }]);
     expect(r?.resumo).not.toMatch(/Ana|123\.456/);
+  });
+
+  it("explica a exigência atual do Hub e sugere pedir só os dígitos ao cliente", () => {
+    const r = apresentarResultado("boletos", { texto: "", dados: {
+      resultado: "precisa_cpf", instrucao: "Peça os três dígitos ao cliente",
+    } });
+    expect(r?.resumo).toContain("cliente precisa informar");
+    expect(r?.sugestao).toContain("Não envie o CPF completo");
+  });
+
+  it("aceita só uma mensagem recente composta exatamente por três dígitos", () => {
+    const agora = Date.parse("2026-10-26T17:00:00Z");
+    expect(tresDigitosDoCliente(" 123 ", "2026-10-26T16:59:00Z", agora)).toBe("123");
+    expect(tresDigitosDoCliente("CPF 123", "2026-10-26T16:59:00Z", agora)).toBeNull();
+    expect(tresDigitosDoCliente("12345678900", "2026-10-26T16:59:00Z", agora)).toBeNull();
+    expect(tresDigitosDoCliente("123", "2026-10-26T16:00:00Z", agora)).toBeNull();
+  });
+
+  it("aceita valor e situação no formato real retornado pelo serviço de boletos", () => {
+    const r = apresentarResultado("boletos", { texto: "", dados: {
+      resultado: "ok", boletos: [{ vencimento: "05/11/2026", valor: "R$ 1.200,50", situacao: "a vencer", link: "https://boletos.exemplo/1" }],
+    } });
+    expect(r?.resumo).toContain("a vencer · 05/11/2026 · R$ 1.200,50");
   });
 
   it("gera sugestão somente com tipos de documento reconhecidos", () => {

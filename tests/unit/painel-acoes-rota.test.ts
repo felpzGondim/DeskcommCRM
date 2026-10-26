@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   role: vi.fn(), support: vi.fn(), rate: vi.fn(), client: vi.fn(), admin: vi.fn(),
-  load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(),
+  load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(), ultimaMensagem: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -29,13 +29,18 @@ describe("rota das ações do painel", () => {
     mocks.support.mockResolvedValue(null);
     mocks.role.mockResolvedValue({ ok: true, user: { id: "user-1", idioma: "pt-BR" }, org: { orgId: "org-1" } });
     mocks.rate.mockResolvedValue({ allowed: true });
-    const from = (table: string) => ({
-      select: () => ({ eq: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: table === "conversations"
+    mocks.ultimaMensagem.mockReturnValue({ body: "123", sent_at: new Date().toISOString() });
+    const from = (table: string) => {
+      const q = {
+        select: () => q, eq: () => q, is: () => q, order: () => q, limit: () => q,
+        maybeSingle: async () => ({ data: table === "conversations"
           ? { id: "conversa-1", contact_id: "contato-1" }
-          : { id: "contato-1", is_anonymized: false, phone_number: "+5511999999999" } }) }),
-      }) }),
-    });
+          : table === "contacts"
+            ? { id: "contato-1", is_anonymized: false, phone_number: "+5511999999999" }
+            : mocks.ultimaMensagem(), error: null }),
+      };
+      return q;
+    };
     mocks.client.mockResolvedValue({ from });
     mocks.admin.mockReturnValue({});
     mocks.load.mockResolvedValue({ servidor: { endpoint: "https://hub.test/mcp", chave: "secret" },
@@ -50,8 +55,16 @@ describe("rota das ações do painel", () => {
     expect(r.status).toBe(200);
     expect(mocks.role).toHaveBeenCalledWith("agent", expect.any(Object));
     expect(mocks.load).toHaveBeenCalledWith(expect.anything(), "org-1", expect.objectContaining({ contatoDoTurno: "contato-1" }));
-    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "segunda_via_boleto", {}, expect.anything());
+    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "segunda_via_boleto", { tres_primeiros_digitos_cpf: "123" }, expect.anything());
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "ai.painel_atendente.boletos" }));
+  });
+
+  it("sem resposta de três dígitos do cliente só sugere texto no Composer", async () => {
+    mocks.ultimaMensagem.mockReturnValue({ body: "Quero a 2ª via", sent_at: new Date().toISOString() });
+    const r = await POST(req({ acao: "boletos" }), ctx);
+    expect(r.status).toBe(200);
+    expect(JSON.stringify(await r.json())).toContain("três primeiros dígitos");
+    expect(mocks.call).not.toHaveBeenCalled();
   });
 
   it("não chama o Hub sem confirmação e pedido válido", async () => {

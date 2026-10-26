@@ -24,6 +24,14 @@ export function leituraPermitida(acao: Exclude<AcaoHub, "analise">, ferramenta: 
   return ferramenta.somenteLeitura === true || (acao === "boletos" && ferramenta.name === "segunda_via_boleto");
 }
 
+/** Usa apenas a resposta recente do próprio cliente; nunca extrai CPF completo. */
+export function tresDigitosDoCliente(body: unknown, sentAt: unknown, agora = Date.now()): string | null {
+  if (typeof body !== "string" || !/^\s*[0-9]{3}\s*$/.test(body)) return null;
+  const enviadoEm = typeof sentAt === "string" ? Date.parse(sentAt) : NaN;
+  if (!Number.isFinite(enviadoEm) || enviadoEm > agora || agora - enviadoEm > 30 * 60_000) return null;
+  return body.trim();
+}
+
 /** O Hub deve devolver structuredContent. Texto livre não é exibido para evitar PII acidental. */
 export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado: ResultadoRemoto): {
   resumo: string;
@@ -40,9 +48,24 @@ export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado
   const d = dados as Record<string, unknown>;
   const curto = (v: unknown) => typeof v === "string" ? v.slice(0, 100) : "";
   const data = (v: unknown) => typeof v === "string" && /^\d{2}\/\d{2}\/\d{4}$|^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
-  const situacao = (v: unknown) => typeof v === "string" && /^(em aberto|vencido|pago|ativo|encerrado|pendente)$/i.test(v) ? v : "";
-  const valor = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? `R$ ${v.toFixed(2)}` : "";
+  const situacao = (v: unknown) => typeof v === "string" && /^(em aberto|a vencer|vencido|pago|ativo|encerrado|pendente)$/i.test(v) ? v : "";
+  const valor = (v: unknown) => {
+    if (typeof v === "number" && Number.isFinite(v)) return `R$ ${v.toFixed(2)}`;
+    return typeof v === "string" && /^R\$ \d{1,3}(?:\.\d{3})*,\d{2}$/.test(v) ? v : "";
+  };
   if (acao === "boletos") {
+    if (d.resultado === "precisa_cpf") return {
+      resumo: "Para consultar boletos, o cliente precisa informar os três primeiros dígitos do CPF do titular. O atendente não digita CPF neste painel.",
+      sugestao: "Para localizar sua 2ª via, por favor informe somente os três primeiros dígitos do CPF do titular do contrato. Não envie o CPF completo.",
+    };
+    if (d.resultado === "sem_boletos") return { resumo: "Nenhum boleto em aberto encontrado para esta conversa." };
+    if (d.resultado === "nao_encontrado") return { resumo: "O telefone desta conversa não foi encontrado em um contrato ativo no Brisa Hub." };
+    if (d.resultado === "bloqueado" || d.resultado === "limite_consultas") return {
+      resumo: "A consulta automática de boletos está temporariamente bloqueada no Brisa Hub. Encaminhe o caso à equipe responsável.",
+    };
+    if (d.resultado !== undefined && d.resultado !== "ok") return {
+      resumo: "O Brisa Hub não conseguiu consultar boletos agora. Encaminhe o caso à equipe responsável.",
+    };
     if (!Array.isArray(d.boletos)) return null;
     const lista = Array.isArray(d.boletos) ? d.boletos.slice(0, 10) : [];
     const links: Array<{ rotulo: string; url: string }> = [];
