@@ -920,6 +920,12 @@ export const AUDIT_ACTIONS = [
    */
   "ai.case_chat_asked",
   /**
+   * Painel do agente (parte 1): o atendente pediu resumo, sugestão de resposta
+   * ou fez uma pergunta à IA no painel da conversa. Nada é enviado ao cliente.
+   * ⚠️ SEM O TEXTO — mesma regra de `ai.case_chat_asked`.
+   */
+  "ai.painel_atendente",
+  /**
    * O aviso de caso no WhatsApp da equipe (migration 0292).
    *
    * Três códigos e não um: "saiu", "não saiu em definitivo" e "alguém mudou a

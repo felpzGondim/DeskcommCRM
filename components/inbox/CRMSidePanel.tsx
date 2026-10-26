@@ -4,6 +4,7 @@ import { CartaoDaCarteira } from "@/components/contacts/CartaoDaCarteira";
 import { RoteirosDoContato } from "@/components/contacts/RoteirosDoContato";
 import { AcervoSearch } from "./AcervoSearch";
 import { LeadEnrichment } from "./LeadEnrichment";
+import { PainelDoAgente } from "./PainelDoAgente";
 import { AnuncioDoContato, type AnuncioDeOrigem, type AnuncioMaisRecente } from "./AnuncioDoContato";
 import { UltimasComprasDoContato } from "@/components/contacts/UltimasCompras";
 import type { ProspectEnrichment } from "@/lib/prospecting/schema";
@@ -62,6 +63,11 @@ interface Props {
    * `Sheet` do Inbox não o passa.
    */
   onAlternarRecolhido?: () => void;
+  /**
+   * Painel do agente: "Usar como resposta" preenche o Composer da conversa.
+   * Sem isto (ex.: testes), o painel oferece "Copiar".
+   */
+  onUsarComoResposta?: (texto: string) => void;
 }
 
 interface LeadRow {
@@ -704,7 +710,7 @@ function BotaoDeRecolherDoPainel({
   );
 }
 
-export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolhido }: Props) {
+export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolhido, onUsarComoResposta }: Props) {
   const { user, activeOrg } = useAuth();
   const readonly = user.support?.access_mode === "support_readonly";
   // Criar tarefa é `agent`+ (a rota cobra `requireRole("agent")`): a MESMA régua
@@ -716,6 +722,8 @@ export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolh
   // `POST /api/v1/leads/[id]/clone` cobra no servidor. Escrita como `roleAtLeast`
   // pelo mesmo motivo de `podeCriarTarefa` acima — os dublês de `useAuth` dos
   // testes deste painel não expõem `usePermission`, e a semântica é a mesma.
+  // Painel do agente: o mesmo piso da rota (`requireRole("agent")`).
+  const podeUsarPainelDoAgente = (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
   const podeLevarParaOutroFunil = (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
   // O MESMO piso da ficha do contato para o bloco da carteira (#2591): `agent`+
   // é quem LÊ a carteira (o GET da rota cobra `requireRole("agent")`), e o
@@ -1009,6 +1017,18 @@ export function CRMSidePanel({ conversation, recolhido = false, onAlternarRecolh
           )}
         </Card>
       </section>
+
+      {/* PAINEL DO AGENTE (parte 1) — a IA conversa com o atendente; nunca
+          envia ao cliente. Visível a todo atendente (`agent`+), decisão do
+          dono em 26/10/2026. Ver docs/decisoes/painel-agente.md. */}
+      {conversation && podeUsarPainelDoAgente && (
+        <PainelDoAgente
+          key={conversation.id}
+          conversationId={conversation.id}
+          onUsarComoResposta={onUsarComoResposta}
+          desabilitado={readonly}
+        />
+      )}
 
       {/* O BLOCO CARTEIRA NO PAINEL DO INBOX (#3026) — de quem é este cliente,
           respondido onde quem atende está. Antes a carteira só aparecia nesta

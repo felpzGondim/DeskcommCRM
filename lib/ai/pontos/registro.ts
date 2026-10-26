@@ -261,6 +261,20 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
     registraEm: "llm_calls",
   },
   {
+    id: "painel_atendente",
+    rotulo: "IA do painel do atendente",
+    oQueFaz:
+      "Conversa com quem atende, na coluna da direita da conversa: resume o atendimento e sugere uma resposta. Nunca fala com o cliente — a sugestão só preenche a caixa de texto, e quem envia é o atendente.",
+    papel: "atender",
+    // Sem tools: o servidor monta o contexto (as mensagens da conversa) antes
+    // de chamar o modelo, como em `case_chat`. Qualquer modelo de texto serve.
+    exige: {},
+    emissor: "lib/agent-engine/agent/painel-do-atendente.ts",
+    sintomaDeFalha:
+      "O painel do agente na conversa mostra erro ao resumir ou sugerir resposta, e o atendente segue sem a ajuda.",
+    registraEm: "llm_calls",
+  },
+  {
     id: "proposal_assistant",
     rotulo: "Ajustar proposta por instrução",
     oQueFaz:
