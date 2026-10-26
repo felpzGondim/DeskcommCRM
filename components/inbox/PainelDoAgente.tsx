@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
@@ -98,7 +99,9 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
       toast.success(t("Texto colocado na caixa de resposta. Revise e envie."));
       return;
     }
-    void navigator.clipboard?.writeText(texto).then(() => toast.success(t("Copiado.")));
+    void copyToClipboard(texto).then((ok) => {
+      if (ok) toast.success(t("Copiado."));
+    });
   }
 
   return (
