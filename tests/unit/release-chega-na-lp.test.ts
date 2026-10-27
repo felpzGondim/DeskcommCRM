@@ -277,11 +277,21 @@ describe("a release chega à página de changelog da LP", () => {
     expect(doutrina).toContain("A versão aparece na página de changelog da LP?");
   });
 
-  it("toda seção do CHANGELOG segue o cabeçalho que a LP sabe ler", () => {
+  it("toda seção oficial do CHANGELOG segue o cabeçalho que a LP sabe ler", () => {
     // A mesma expressão de deskcomm-site/lib/changelog.ts (CABECALHO_VERSAO).
     const CABECALHO_VERSAO = /^## \[(\d+\.\d+\.\d+)\]\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s*$/;
     const cabecalhos = changelog.split("\n").filter((l) => l.startsWith("## "));
-    const fora = cabecalhos.filter((l) => !CABECALHO_VERSAO.test(l) && l.trim() !== "## [Não lançado]");
+    // As revisões deste fork vão ao seu atualizador, não à LP oficial. Só
+    // aceitamos esse formato enquanto o fluxo oficial estiver explicitamente
+    // desabilitado para o fork e existir a publicação separada das suas imagens.
+    const CABECALHO_FORK = /^## \[\d+\.\d+\.\d+-felpz\.\d+\]\s*[—–-]\s*\d{4}-\d{2}-\d{2}\s*$/;
+    if (cabecalhos.some((l) => CABECALHO_FORK.test(l))) {
+      expect(release).toContain("github.repository != 'felpzGondim/DeskcommCRM'");
+      const publicacao = readFileSync(join(RAIZ, ".github/workflows/publish-image.yml"), "utf8");
+      expect(publicacao).toContain("publicar-release-do-fork:");
+      expect(publicacao).toContain("github.repository == 'felpzGondim/DeskcommCRM'");
+    }
+    const fora = cabecalhos.filter((l) => !CABECALHO_VERSAO.test(l) && !CABECALHO_FORK.test(l) && l.trim() !== "## [Não lançado]");
     expect(fora, "seção que a página de changelog da LP não reconheceria").toEqual([]);
     expect(cabecalhos.filter((l) => CABECALHO_VERSAO.test(l)).length).toBeGreaterThan(0);
   });

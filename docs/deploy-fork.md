@@ -20,6 +20,15 @@ alterados neste fork quando houver conflitos com o original.
    arm64 usando o `GITHUB_TOKEN`, sem credenciais de produção.
 2. Depois de revisar e integrar as mudanças na `main`, execute o CI e confira
    os resultados. Uma branch de configuração ainda não é uma versão de produção.
+   Antes da próxima publicação, confira os fragmentos já presentes na tag da
+   release anterior. Arquive somente os que continuam idênticos, preservando
+   o texto integral em `docs/releases/fragmentos/<tag>/`; fragmentos novos ou
+   alterados permanecem em `.changes/`. Assim, a guarda do acervo mede apenas
+   mudanças ainda não publicadas neste fork.
+   Acrescente as notas da revisão personalizada ao `CHANGELOG.md` sem mudar
+   os números oficiais do upstream. Preserve um cabeçalho para a revisão
+   anterior: ele permite ao atualizador reconhecer onde termina o histórico
+   de quem já está nela. Confira a extração e o limite em bytes do agente.
 3. Crie uma tag inédita no commit aprovado da `main`, no formato
    `v<versão-base>-felpz.<revisão>`, por exemplo `v1.66.1-felpz.1`.
    Use a versão-base REAL do upstream incorporado; o exemplo não recomenda
