@@ -21,6 +21,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
+import { randomId } from "@/lib/random-id";
 import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
@@ -137,7 +138,7 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
         { autor: "ia", texto: r.data.resumo },
       ]);
       if (r.data.pronto && r.data.previaToken) {
-        setPedidoAnalise({ pedidoId: crypto.randomUUID(), previaToken: r.data.previaToken });
+        setPedidoAnalise({ pedidoId: randomId(), previaToken: r.data.previaToken });
       }
     } catch (e) {
       if (conversaAtual.current === daConversa) setErro(e instanceof Error && e.message ? e.message : t("Não foi possível preparar a análise."));
