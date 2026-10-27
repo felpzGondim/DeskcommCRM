@@ -51,7 +51,7 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
   const [pergunta, setPergunta] = useState("");
   const [carregando, setCarregando] = useState<Acao | AcaoHub | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [pedidoAnalise, setPedidoAnalise] = useState<string | null>(null);
+  const [pedidoAnalise, setPedidoAnalise] = useState<{ pedidoId: string; previaToken: string } | null>(null);
   const conversaAtual = useRef(conversationId);
 
   // Troca de conversa = painel limpo: quem usa o painel passa
@@ -95,7 +95,7 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     }
   }
 
-  async function chamarHub(acao: AcaoHub, pedidoId?: string) {
+  async function chamarHub(acao: AcaoHub) {
     if (carregando || desabilitado) return;
     const daConversa = conversationId;
     setErro(null);
@@ -103,7 +103,8 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     try {
       const r = await apiClient.post<{ data: { resumo: string; sugestao?: string; links?: Array<{ rotulo: string; url: string }> } }>(
         `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
-        acao === "analise" ? { acao, confirmar: true, pedidoId } : { acao },
+        acao === "analise" ? { acao, etapa: "confirmar", confirmar: true,
+          pedidoId: pedidoAnalise?.pedidoId, previaToken: pedidoAnalise?.previaToken } : { acao },
       );
       if (conversaAtual.current !== daConversa) return;
       setTurnos((ts) => [...ts,
@@ -115,6 +116,31 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     } catch (e) {
       if (conversaAtual.current !== daConversa) return;
       setErro(e instanceof Error && e.message ? e.message : t("Não foi possível consultar o Brisa Hub agora."));
+    } finally {
+      if (conversaAtual.current === daConversa) setCarregando(null);
+    }
+  }
+
+  async function prepararAnalise() {
+    if (carregando || desabilitado) return;
+    const daConversa = conversationId;
+    setErro(null);
+    setPedidoAnalise(null);
+    setCarregando("analise");
+    try {
+      const r = await apiClient.post<{ data: { resumo: string; previaToken: string | null; pronto: boolean } }>(
+        `/api/v1/conversations/${daConversa}/painel-agente/acoes`, { acao: "analise", etapa: "preparar" },
+      );
+      if (conversaAtual.current !== daConversa) return;
+      setTurnos((ts) => [...ts,
+        { autor: "atendente", texto: t("Preparar análise de inquilino") },
+        { autor: "ia", texto: r.data.resumo },
+      ]);
+      if (r.data.pronto && r.data.previaToken) {
+        setPedidoAnalise({ pedidoId: crypto.randomUUID(), previaToken: r.data.previaToken });
+      }
+    } catch (e) {
+      if (conversaAtual.current === daConversa) setErro(e instanceof Error && e.message ? e.message : t("Não foi possível preparar a análise."));
     } finally {
       if (conversaAtual.current === daConversa) setCarregando(null);
     }
@@ -180,21 +206,10 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
             ))}
             <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
               disabled={desabilitado || carregando !== null}
-              onClick={() => setPedidoAnalise(crypto.randomUUID())}>
+              onClick={() => void prepararAnalise()}>
               {t(ACOES_HUB.analise.rotulo)}
             </Button>
           </div>
-          {pedidoAnalise && (
-            <div className="rounded-md border border-border p-2 text-xs" role="group" aria-label={t("Confirmar análise")}>
-              <p>{t("Iniciar análise de inquilino vinculado a esta conversa no FC Score+ e Migra? Esta ação será registrada no Brisa Hub.")}</p>
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" disabled={desabilitado || carregando !== null}
-                  onClick={() => void chamarHub("analise", pedidoAnalise)}>{t("Confirmar análise")}</Button>
-                <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>{t("Cancelar")}</Button>
-              </div>
-            </div>
-          )}
-
           {turnos.length > 0 && (
             <ol className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite">
               {turnos.map((turno, i) => (
@@ -229,6 +244,17 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 </li>
               ))}
             </ol>
+          )}
+
+          {pedidoAnalise && (
+            <div className="rounded-md border border-border p-2 text-xs" role="group" aria-label={t("Confirmar análise")}>
+              <p>{t("Confira a prévia acima e os documentos originais. Confirmar cria o pedido de análise no Brisa Hub; a cobrança FC Score+ ainda exige confirmação posterior.")}</p>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" disabled={desabilitado || carregando !== null}
+                  onClick={() => void chamarHub("analise")}>{t("Confirmar análise")}</Button>
+                <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>{t("Cancelar")}</Button>
+              </div>
+            </div>
           )}
 
           {erro && (

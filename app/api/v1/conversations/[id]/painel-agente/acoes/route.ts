@@ -3,6 +3,10 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { abrirPrevia, fontesDaAnalise, hashDasFontes, lerPdfsOriginais, pendenciasDaPrevia, previaSchema, resumoDaPrevia, selarPrevia } from "@/lib/agent-engine/agent/painel-analise-preparo";
+import { prepararAnaliseNoPainel } from "@/lib/agent-engine/agent/painel-do-atendente";
+import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
+import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -14,13 +18,17 @@ import { chamarFerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
 import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 const corpo = z.discriminatedUnion("acao", [
   z.object({ acao: z.enum(["boletos", "contrato", "ficha"]) }).strict(),
-  z.object({ acao: z.literal("analise"), confirmar: z.literal(true), pedidoId: z.string().uuid() }).strict(),
+  z.object({ acao: z.literal("analise"), etapa: z.enum(["preparar", "confirmar"]),
+    confirmar: z.literal(true).optional(), pedidoId: z.string().uuid().optional(), previaToken: z.string().max(30000).optional() }).strict()
+    .refine((v) => v.etapa === "preparar" ? !v.confirmar && !v.pedidoId && !v.previaToken
+      : v.confirmar === true && !!v.pedidoId && !!v.previaToken),
 ]);
 
 export async function POST(req: NextRequest, ctx: Ctx) {
@@ -61,6 +69,48 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     resourceId: id, requestId, metadata: { sucesso, replay },
   });
 
+  let previaConfirmada: ReturnType<typeof abrirPrevia> = null;
+  if (pedido.acao === "analise") {
+    const { data: linhas, error: erroFontes } = await db.from("messages")
+      .select("direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at")
+      .eq("organization_id", orgId).eq("conversation_id", id)
+      .order("sent_at", { ascending: false }).limit(201);
+    if (erroFontes) return fail("internal_error", t("Não foi possível ler a conversa para análise."), 500, { requestId });
+    if ((linhas?.length ?? 0) > 200) return fail("validation_error", t("Esta conversa é extensa demais para uma análise segura de uma vez. Revise o caso com a equipe."), 422, { requestId });
+    const originais = await lerPdfsOriginais((linhas ?? []) as Record<string, unknown>[], orgId, id);
+    const fontes = fontesDaAnalise(originais);
+    const hash = hashDasFontes(fontes);
+    const escopo = `${orgId}:${id}:${auth.user.id}`;
+    if (pedido.etapa === "preparar") {
+      try {
+        const blocoFontes = fontes.map((f) => `[${f.id}] ${f.direcao} ${f.tipo} ${f.nome} ${f.legivel ? f.texto : "(sem texto documental legível)"}`).join("\n");
+        if (blocoFontes.length > 60000) {
+          registrar(false);
+          return fail("validation_error", t("Há documentos demais para conferir de uma vez. Revise os anexos desta conversa."), 422, { requestId });
+        }
+        const deps = requestTurnDeps();
+        const resposta = await prepararAnaliseNoPainel(getRequestPool(), deps.llmCfg, {
+          tenantId: orgId, contactId: contato.id,
+          fontes: blocoFontes,
+        }, { registry: deps.registry, log: deps.log });
+        const previa = previaSchema.parse(JSON.parse(resposta.texto));
+        const pendencias = pendenciasDaPrevia(previa, fontes);
+        const resumo = resumoDaPrevia(previa, pendencias);
+        const previaToken = pendencias.length === 0
+          ? selarPrevia({ previa, hash, expira: Date.now() + 30 * 60_000 }, env.INTERNAL_SECRET, escopo) : null;
+        registrar(true);
+        return ok({ resumo, previaToken, pronto: !!previaToken }, { requestId });
+      } catch {
+        registrar(false);
+        return fail("hub_contract_error", t("Não foi possível preparar uma prévia confiável. Confira os documentos e tente novamente."), 422, { requestId });
+      }
+    }
+    previaConfirmada = abrirPrevia(pedido.previaToken ?? "", env.INTERNAL_SECRET, escopo);
+    if (!previaConfirmada || previaConfirmada.hash !== hash || pendenciasDaPrevia(previaConfirmada.previa, fontes).length) {
+      return fail("idempotency_conflict", t("A conversa mudou ou a prévia expirou. Refaça a leitura antes de confirmar."), 409, { requestId });
+    }
+  }
+
   const montado = await carregarServidorMcpExterno(createAdminClient(), orgId, {
     contatoDoTurno: contato.id, conversaDoTurno: id, noAtendimento: true,
   });
@@ -70,22 +120,32 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (!montado || !ferramenta || (pedido.acao !== "analise" && !leituraPermitida(pedido.acao, ferramenta)) ||
     (pedido.acao === "contrato" && ferramenta.name === "buscar_contrato" && ferramentaInquilino?.somenteLeitura !== true) ||
     (pedido.acao === "analise" &&
-    (!ferramenta.inputSchema?.properties?.pedido_id || !ferramenta.inputSchema.properties.conversa_id))) {
+    (!ferramenta.inputSchema?.properties?.pedido_id || !ferramenta.inputSchema.properties.conversa_id ||
+      !ferramenta.inputSchema.properties.candidato || !ferramenta.inputSchema.properties.imovel ||
+      !ferramenta.inputSchema.properties.renda))) {
     registrar(false);
     return fail("tool_unavailable", t(`${ACOES_HUB[pedido.acao].rotulo}: ferramenta não disponível no Brisa Hub. Peça à administração para conferir a integração MCP.`), 422, { requestId });
   }
   try {
     if (pedido.acao === "analise") {
+      const previa = previaConfirmada!.previa;
+      const pedidoId = pedido.pedidoId!;
       const recibo = await comIdempotencia({
         db, organizationId: orgId, endpoint: `/api/v1/conversations/${id}/painel-agente/acoes/analise`,
         exigirReserva: true,
-        chave: pedido.pedidoId, corpo: { conversationId: id, acao: "analise", pedidoId: pedido.pedidoId },
+        chave: pedidoId, corpo: { conversationId: id, acao: "analise", pedidoId, hash: previaConfirmada!.hash },
         executar: async () => {
           const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name,
-            { pedido_id: pedido.pedidoId, conversa_id: id }, { cabecalhos: montado.cabecalhos });
-          // A resposta livre do Hub pode conter dados pessoais: só mostramos um status fixo.
-          void r;
-          return { resposta: { resumo: "Pedido de análise enviado ao Brisa Hub (FC Score+ e Migra). Consulte o andamento no Hub." }, status: 200 };
+            { pedido_id: pedidoId, conversa_id: id, organization_id: orgId,
+              candidato: { nome: previa.candidato.nome.valor, cpf: previa.candidato.cpf.valor,
+                email: previa.candidato.email.valor, telefone: contato.phone_number },
+              imovel: { codigo_fc: previa.imovel.codigo_fc.valor, logradouro: previa.imovel.logradouro.valor,
+                apartamento: previa.imovel.apartamento.valor, aluguel: previa.imovel.aluguel.valor },
+              renda: { mensal: previa.renda.mensal.valor } }, { cabecalhos: montado.cabecalhos });
+          if (!r.dados || typeof r.dados !== "object" || !["aceito", "ja_existia"].includes((r.dados as Record<string, unknown>).resultado as string)) {
+            throw new Error("analysis_not_accepted");
+          }
+          return { resposta: { resumo: "Análise iniciada no Brisa Hub. A cobrança da FC Score+ exige uma confirmação posterior no Hub." }, status: 200 };
         },
       });
       if (recibo.tipo === "conflito") return fail("idempotency_conflict", t("Este pedido já foi usado com outros dados."), 409, { requestId });

@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   role: vi.fn(), support: vi.fn(), rate: vi.fn(), client: vi.fn(), admin: vi.fn(),
   load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(), ultimaMensagem: vi.fn(), linhasFicha: vi.fn(),
+  preparar: vi.fn(), deps: vi.fn(), pool: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -14,6 +15,10 @@ vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({ carregarServidorMcpExter
 vi.mock("@/lib/mcp/servidor-externo/chamada", () => ({ chamarFerramentaRemota: mocks.call }));
 vi.mock("@/lib/api/idempotency", () => ({ comIdempotencia: mocks.idem }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
+vi.mock("@/lib/agent-engine/agent/painel-do-atendente", () => ({ prepararAnaliseNoPainel: mocks.preparar }));
+vi.mock("@/lib/agent-engine/agent/request-deps", () => ({ requestTurnDeps: mocks.deps }));
+vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: mocks.pool }));
+vi.mock("@/lib/env", () => ({ env: { INTERNAL_SECRET: "segredo-de-teste-para-a-previa" } }));
 
 import { POST } from "@/app/api/v1/conversations/[id]/painel-agente/acoes/route";
 
@@ -31,10 +36,20 @@ describe("rota das ações do painel", () => {
     mocks.rate.mockResolvedValue({ allowed: true });
     mocks.ultimaMensagem.mockReturnValue({ body: "123", sent_at: new Date().toISOString() });
     mocks.linhasFicha.mockReturnValue([]);
+    mocks.deps.mockReturnValue({ llmCfg: {}, registry: {}, log: {} });
+    mocks.preparar.mockResolvedValue({ texto: JSON.stringify({
+      candidato: { nome: { valor: "Maria", fonte: "M1", trecho: "Maria" }, cpf: { valor: "52998224725", fonte: "M1", trecho: "52998224725" },
+        email: { valor: "maria@example.com", fonte: "M1", trecho: "maria@example.com" } },
+      imovel: { codigo_fc: { valor: "APT10", fonte: "M1", trecho: "APT10" }, logradouro: { valor: null, fonte: null, trecho: null },
+        apartamento: { valor: null, fonte: null, trecho: null }, aluguel: { valor: 1200, fonte: "M1", trecho: "1200" } },
+      renda: { mensal: { valor: 4000, fonte: "M2", trecho: "4000" }, documentos: [
+        { fonte: "M2", tipo: "holerite", periodo: "10/2026", resumo: "Renda líquida", valor_comprovado: 4000 },
+      ] }, pendencias: [],
+    }) });
     const from = (table: string) => {
       const q = {
         select: () => q, eq: () => q, is: () => q, order: () => q,
-        limit: (n: number) => table === "messages" && n === 60
+        limit: (n: number) => table === "messages" && (n === 60 || n === 201)
           ? Promise.resolve({ data: mocks.linhasFicha(), error: null }) : q,
         maybeSingle: async () => ({ data: table === "conversations"
           ? { id: "conversa-1", contact_id: "contato-1" }
@@ -48,7 +63,9 @@ describe("rota das ações do painel", () => {
     mocks.admin.mockReturnValue({});
     mocks.load.mockResolvedValue({ servidor: { endpoint: "https://hub.test/mcp", chave: "secret" },
       cabecalhos: { "X-Deskcomm-Contato-Id": "contato-1" },
-      ferramentas: [{ name: "segunda_via_boleto", somenteLeitura: true }, { name: "brisa_hub_analise", inputSchema: { properties: { pedido_id: {}, conversa_id: {} } } }],
+      ferramentas: [{ name: "segunda_via_boleto", somenteLeitura: true }, { name: "brisa_hub_analise", inputSchema: { properties: {
+        pedido_id: {}, conversa_id: {}, candidato: {}, imovel: {}, renda: {},
+      } } }],
     });
     mocks.call.mockResolvedValue({ dados: { boletos: [] }, texto: "" });
   });
@@ -102,19 +119,47 @@ describe("rota das ações do painel", () => {
   });
 
   it("reserva análise por conversa e pedido e respeita replay", async () => {
+    mocks.linhasFicha.mockReturnValue([
+      { type: "document", body: "", media_derived_status: "ready", media_derived_text: "holerite renda liquida 4000", original_completo: true },
+      { type: "text", body: "Maria 52998224725 maria@example.com APT10 aluguel 1200", media_derived_status: null },
+    ]);
+    const preparo = await POST(req({ acao: "analise", etapa: "preparar" }), ctx);
+    expect(preparo.status).toBe(200);
+    const corpoPreparo = await preparo.json();
+    const previaToken = corpoPreparo.data.previaToken;
+    expect(previaToken).toEqual(expect.any(String));
+    mocks.call.mockResolvedValue({ dados: { resultado: "aceito" }, texto: "" });
     mocks.idem.mockImplementation(async (v: { executar: () => Promise<{ resposta: unknown; status: number }>; endpoint: string; chave: string }) => {
       expect(v.endpoint).toContain("conversa-1");
       expect(v.chave).toBe(pedidoId);
       const feito = await v.executar();
       return { tipo: "executou", ...feito };
     });
-    const r = await POST(req({ acao: "analise", confirmar: true, pedidoId }), ctx);
+    const r = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId, previaToken }), ctx);
     expect(r.status).toBe(200);
-    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "brisa_hub_analise", { pedido_id: pedidoId, conversa_id: "conversa-1" }, expect.anything());
+    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "brisa_hub_analise", expect.objectContaining({
+      pedido_id: pedidoId, conversa_id: "conversa-1", candidato: { nome: "Maria", cpf: "52998224725",
+        email: "maria@example.com", telefone: "+5511999999999" },
+    }), expect.anything());
     mocks.call.mockClear();
     mocks.idem.mockResolvedValue({ tipo: "replay", resposta: { resumo: "Pedido de análise enviado." }, status: 200 });
-    const repetido = await POST(req({ acao: "analise", confirmar: true, pedidoId }), ctx);
+    const repetido = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId, previaToken }), ctx);
     expect(repetido.status).toBe(200);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it("invalida a confirmação se a conversa mudou após a prévia", async () => {
+    mocks.linhasFicha.mockReturnValue([
+      { type: "document", media_derived_status: "ready", media_derived_text: "holerite 4000", original_completo: true },
+      { type: "text", body: "Maria 52998224725 maria@example.com APT10 1200" },
+    ]);
+    const preparo = await POST(req({ acao: "analise", etapa: "preparar" }), ctx);
+    const token = (await preparo.json()).data.previaToken;
+    expect(token).toEqual(expect.any(String));
+    mocks.linhasFicha.mockReturnValue([{ type: "text", body: "Novo documento enviado" }]);
+    const confirmacao = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true,
+      pedidoId, previaToken: token }), ctx);
+    expect(confirmacao.status).toBe(409);
     expect(mocks.call).not.toHaveBeenCalled();
   });
 
