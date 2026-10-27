@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   role: vi.fn(), support: vi.fn(), rate: vi.fn(), client: vi.fn(), admin: vi.fn(),
-  load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(), ultimaMensagem: vi.fn(),
+  load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(), ultimaMensagem: vi.fn(), linhasFicha: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -30,9 +30,12 @@ describe("rota das ações do painel", () => {
     mocks.role.mockResolvedValue({ ok: true, user: { id: "user-1", idioma: "pt-BR" }, org: { orgId: "org-1" } });
     mocks.rate.mockResolvedValue({ allowed: true });
     mocks.ultimaMensagem.mockReturnValue({ body: "123", sent_at: new Date().toISOString() });
+    mocks.linhasFicha.mockReturnValue([]);
     const from = (table: string) => {
       const q = {
-        select: () => q, eq: () => q, is: () => q, order: () => q, limit: () => q,
+        select: () => q, eq: () => q, is: () => q, order: () => q,
+        limit: (n: number) => table === "messages" && n === 60
+          ? Promise.resolve({ data: mocks.linhasFicha(), error: null }) : q,
         maybeSingle: async () => ({ data: table === "conversations"
           ? { id: "conversa-1", contact_id: "contato-1" }
           : table === "contacts"
@@ -84,6 +87,18 @@ describe("rota das ações do painel", () => {
     expect(r.status).toBe(200);
     expect(mocks.call.mock.calls.map((call: unknown[]) => call[1])).toEqual(["buscar_contrato", "buscar_inquilino"]);
     expect(JSON.stringify(await r.json())).toContain("Rua A");
+  });
+
+  it("envia somente a ficha efêmera da conversa ao Hub", async () => {
+    mocks.load.mockResolvedValue({ servidor: {}, cabecalhos: {}, ferramentas: [{ name: "buscar_cadastro", somenteLeitura: true }] });
+    mocks.linhasFicha.mockReturnValue([{ type: "document", body: "Identidade", metadata: { media_filename: "rg.pdf", media_url: "https://privado.test" }, media_mime: "application/pdf" }]);
+    mocks.call.mockResolvedValue({ dados: { documentos_faltantes: ["comprovante de renda"] }, texto: "" });
+    const r = await POST(req({ acao: "ficha" }), ctx);
+    expect(r.status).toBe(200);
+    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "buscar_cadastro", {
+      ficha: { anexos: [{ nome: "rg.pdf", mime: "application/pdf", legenda: "Identidade" }] },
+    }, expect.anything());
+    expect(JSON.stringify(await r.json())).toContain("holerite, CTPS ou extrato bancário");
   });
 
   it("reserva análise por conversa e pedido e respeita replay", async () => {

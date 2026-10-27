@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apresentarResultado, ferramentaDaAcao, leituraPermitida, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { apresentarResultado, ferramentaDaAcao, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 
 describe("mapeamento do painel para o Brisa Hub", () => {
   it("usa só ferramenta anunciada e aceita o nome alternativo", () => {
@@ -62,5 +62,23 @@ describe("mapeamento do painel para o Brisa Hub", () => {
     } });
     expect(r?.sugestao).toContain("comprovante de renda");
     expect(r?.sugestao).not.toMatch(/Ana|99999999/);
+  });
+
+  it("monta JSON temporário apenas com pistas dos anexos recebidos", () => {
+    const ficha = montarFichaTemporaria([
+      { type: "document", body: "Meu RG", media_mime: "image/png", metadata: { media_filename: "rg.png", media_url: "https://secreto.test" } },
+      { type: "text", body: "CPF 12345678900" },
+      { type: "image", body: "extrato bancário", media_mime: "image/jpeg", metadata: { media_filename: "foto.jpg" }, revoked_at: "2026-10-27" },
+    ]);
+    expect(ficha).toEqual({ anexos: [{ nome: "rg.png", mime: "image/png", legenda: "Meu RG" }] });
+    expect(JSON.stringify(ficha)).not.toMatch(/12345678900|secreto/);
+  });
+
+  it("mostra o dia real de vencimento sem confundir com o fim do contrato", () => {
+    const r = apresentarResultado("contrato", { texto: "", dados: {
+      resultado: "ok", contrato: { imovel: "Rua A", valor: "R$ 1.200,50", dia_vencimento: "10", situacao: "ativo" },
+      inquilino_situacao: "ativo",
+    } });
+    expect(r?.resumo).toContain("Vencimento: dia 10");
   });
 });

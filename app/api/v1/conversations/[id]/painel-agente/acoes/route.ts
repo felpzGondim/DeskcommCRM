@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { comIdempotencia } from "@/lib/api/idempotency";
 import { fail, ok } from "@/lib/api/wrappers";
@@ -114,6 +114,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }, { requestId });
       }
       argumentos = { tres_primeiros_digitos_cpf: cpf3 };
+    }
+    if (pedido.acao === "ficha") {
+      const { data: linhas, error: erroFicha } = await db.from("messages")
+        .select("type,body,media_mime,metadata,revoked_at")
+        .eq("organization_id", orgId)
+        .eq("conversation_id", id)
+        .eq("direction", "inbound")
+        .order("sent_at", { ascending: false })
+        .limit(60);
+      if (erroFicha) throw new Error("message_read_failed");
+      argumentos = { ficha: montarFichaTemporaria((linhas ?? []) as Record<string, unknown>[]) };
     }
     const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, argumentos, { cabecalhos: montado.cabecalhos });
     if (pedido.acao === "contrato" && ferramentaInquilino) {
