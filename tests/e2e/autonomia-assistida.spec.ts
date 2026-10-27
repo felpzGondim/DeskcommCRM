@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import pg from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { test, expect, type Page, type TestInfo, type Locator } from "./helpers/test";
+import { botaoDeSugestaoAssistida } from "./helpers/sugestao-assistida";
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 import { createApprovedReplyHandler } from "../../lib/agent-engine/agent/approved-reply";
 import { seedPlatformPlaybook } from "../../lib/agent-engine/agent/playbook-seed";
@@ -217,11 +218,10 @@ const panel = (page: Page) => page.locator('section[aria-label="Assistência do 
  *
  * Sem rascunho, o bloco não é montado e quem oferece a sugestão é o botão de
  * ícone do compositor; com rascunho, é o botão de texto do bloco. Nunca os dois
- * ao mesmo tempo — por isso um localizador de página serve para os dois estados,
- * e é ele que o `generate` usa em vez de entrar pelo painel.
+ * ao mesmo tempo. O localizador cobre essas duas superfícies e exclui o painel
+ * interno, cujo botão homônimo não chama /draft-reply.
  */
-const botaoSugerir = (page: Page) =>
-  page.getByRole("button", { name: "Sugerir resposta", exact: true });
+const botaoSugerir = botaoDeSugestaoAssistida;
 async function generate(page: Page) {
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/draft-reply") && r.request().method() === "POST",

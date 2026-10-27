@@ -97,13 +97,13 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
     const r = rodar([LIMITE, LIMITE, { texto: "Started supabase local development setup.", falha: false }]);
     expect(r.status, r.saida).toBe(0);
     expect(r.chamadas).toEqual([
-      "@ghcr.io start -x studio,postgres-meta",
+      "@docker.io start -x studio,postgres-meta",
       "stop --no-backup",
       "sleep 20",
-      "@public.ecr.aws start -x studio,postgres-meta",
+      "@ghcr.io start -x studio,postgres-meta",
       "stop --no-backup",
       "sleep 60",
-      "@docker.io start -x studio,postgres-meta",
+      "@public.ecr.aws start -x studio,postgres-meta",
     ]);
     expect(r.saida).toContain("::warning");
   });
@@ -113,7 +113,7 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
       { texto: "failed to bind host port for 0.0.0.0:54322: address already in use", falha: true },
     ]);
     expect(r.status, r.saida).toBe(1);
-    expect(r.chamadas).toEqual(["@ghcr.io start -x studio,postgres-meta"]);
+    expect(r.chamadas).toEqual(["@docker.io start -x studio,postgres-meta"]);
     expect(r.saida).toContain("::error");
   });
 
@@ -121,10 +121,10 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
     const r = rodar([LIMITE]);
     expect(r.status, r.saida).toBe(1);
     expect(r.chamadas.filter((c) => c.startsWith("@")).map((c) => c.split(" ")[0])).toEqual([
+      "@docker.io",
       "@ghcr.io",
       "@public.ecr.aws",
       "@docker.io",
-      "@ghcr.io",
     ]);
     expect(r.chamadas.filter((c) => c.startsWith("sleep"))).toEqual(["sleep 20", "sleep 60", "sleep 120"]);
     expect(r.saida).toContain("::error title=supabase start falhou 4 vezes");
