@@ -62,6 +62,9 @@ assert_not_contains() { if grep -qF -- "$2" <<<"$1"; then falha "$3" "não esper
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+# Os números de PR desta suíte pertencem aos repositórios descartáveis.
+# A ref do workflow real (por exemplo PR #7) não pode identificar o PR da fixture.
+unset GITHUB_REF
 # ── isolamento do git: nada aqui escreve fora de "$TMP" ─────────────────────────────
 # Um `git -C "$dir" config user.*` grava onde o git RESOLVER o repositório, e não
 # necessariamente em "$dir": um GIT_DIR herdado (rodar de dentro de um hook, de um
