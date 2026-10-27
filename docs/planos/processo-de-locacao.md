@@ -1,10 +1,10 @@
 # Plano: processo de locação (Inbox → análise → contrato)
 
-**Status:** rascunho para o Felipe validar. **Nenhuma linha de produto foi alterada neste PR.**
+**Status:** rascunho — o Felipe já respondeu parte da §8; **ainda não validou o plano inteiro nem autorizou implementar.** Nenhuma linha de produto foi alterada neste PR.
 **Âncora medida:** `origin/main` do fork `felpzGondim/DeskcommCRM` em `905b1027c` (tag `v1.88.0-felpz.5`, 27/10/2026).
-**Destino proposto:** fork da Brisa (não sobe para o DeskcommCRM original). As peças do painel já existentes continuam como consumidor opcional do servidor MCP externo.
+**Destino (confirmado, Q15):** só este fork. Tabelas novas **não** sobem para `melgarafael/DeskcommCRM`. As peças do painel já existentes continuam como consumidor opcional do servidor MCP externo.
 
-Este arquivo é a trilha para a próxima sessão de implementação. Depois que o Felipe responder as perguntas da §8, a implementação começa pela Fase 1 — e só pela Fase 1.
+Este arquivo é a trilha para a próxima sessão. Implementação só depois do “pode ir à Fase 1”.
 
 ---
 
@@ -20,7 +20,7 @@ Hoje o atendente já tem, na coluna direita da conversa (Inbox), um **Painel do 
 | 4 | Ficha cadastral / pedir documentos | Olha **nome e legenda** dos anexos e sugere o que falta | Frágil: não lê o arquivo |
 | 5 | Iniciar análise de inquilino | Lê a conversa, monta uma prévia, e só depois pede o Hub | Não lê foto; PDF escaneado falha; conversa longa trava; não guarda nada |
 | 6 | Gerar contrato | Formulário manual → prévia → confirmação → cria locação **ATIVA** no SuperLógica | Código no CRM **existe** (PR #8). Nunca foi testado de ponta a ponta. O Hub precisa estar no ar com a permissão certa |
-| 7 | Chamado de manutenção | — | **Não existe** |
+| 7 | Chamado de manutenção | — | **Fora deste plano** (Q11). Não implementar nas Fases 1–5 |
 
 O que dói no dia a dia, na ordem em que vamos tratar:
 
@@ -35,18 +35,20 @@ O que este plano constrói, em fases que dá para parar e validar:
 |---|---|---|
 | **1 — Ligar o que já existe** | Gerar um contrato de *teste* de ponta a ponta, com checklist | Felipe + Hub (outro bot) + verificação no CRM |
 | **2 — Ler os anexos** | Foto, PDF escaneado e PDF com senha entram na análise; conversa longa não trava | Este repo (CRM) + Hub/analise (arquivos no job) |
-| **3 — Processo de locação** | Uma ficha por contato + imóvel, reaproveitada no contrato; link `superlogica_pessoa_id` no contato | Este repo (banco + API + tela) |
+| **3 — Processo de locação** | Uma ficha por imóvel, com N participantes (locatário/fiador/solidário) e o WhatsApp só como interlocutor; reaproveitada no contrato | Este repo (banco + API + tela) |
 | **3b — Documentos organizados** | Pasta por processo no Storage; ao fechar contrato, arquivo no Drive da Brisa; o que não vira contrato some em 90 dias | Este repo (Storage + poda) + **n8n na VPS** (Drive e backup) |
 | **4 — Painel de análise** | Quatro botões: Analisar renda, Analisar FC, Analisar seguro-fiança, Gerar relatório. Pré-preenchidos, editáveis, com andamento do job | Este repo (tela) + Hub (jobs e confirmação cobrada) |
-| **5 — Contrato pré-preenchido** | Gerar contrato nasce da ficha aprovada; no sucesso, grava os IDs do SuperLógica | Este repo + Hub (já cria a locação) |
+| **5 — Contrato pré-preenchido** | Gerar contrato **sempre disponível** (formulário vazio continua); se houver processo, pré-preenche. Aprovação do Felipe é manual e obrigatória. No sucesso, grava os IDs | Este repo + Hub (já cria a locação) |
 
 **Regras que não mudam em fase nenhuma:**
 
 - SuperLógica é a verdade. O CRM **não copia** contrato, boleto nem cadastro — só guarda um número de ligação (`id_pessoa_pes`, `id_contrato`) e o que o atendente conferiu neste processo.
 - Toda escrita no SuperLógica e toda mensagem ao cliente exigem **clique explícito** do atendente. A IA nunca envia e nunca grava locação sozinha.
+- **Aprovação do processo é só do Felipe**, à mão, mesmo se renda/FC/seguro/relatório tiverem “ok”. Análise nenhuma aprova nem cria contrato.
+- **Gerar contrato nunca some.** Sem processo, o formulário vazio de hoje segue válido. Com processo, só pré-preenche.
 - Tudo versionado, com documento de decisão, para outra IA continuar sem adivinhar.
 
-**O que este PR pede de você:** ler a §1 e a §8 (perguntas abertas), marcar sim/não/escolha, e só então autorizar a Fase 1.
+**O que ainda falta para implementar:** as perguntas 1 e 2 da §8 (URL do Hub / PR #22) estão em verificação à parte; o restante da §8 ainda aberto; e o “pode ir à Fase 1”.
 
 ---
 
@@ -144,7 +146,7 @@ O que o CRM **exige** do Hub (contrato em `painel-acoes-hub.ts` + `painel-contra
 
 ### 2.7 Botão 7 (chamado de manutenção)
 
-Não há ferramenta, rota nem botão. Fora do escopo das Fases 1–5, a menos que o Felipe peça para encaixar. A §8 pergunta se entra depois da Fase 5 ou em paralelo.
+Não há ferramenta, rota nem botão. **Fora deste plano** (Q11, 27/10/2026). Não desenhar, não reservar fase, não abrir issue daqui.
 
 ---
 
@@ -161,9 +163,10 @@ Não há ferramenta, rota nem botão. Fora do escopo das Fases 1–5, a menos qu
                                 │ cookie de sessão; org da sessão
                     CRM (este repo)
                     ┌───────────┴─────────────────────────────┐
-                    │ processo de locação (Postgres + RLS)    │
+                    │ processo + N participantes (Postgres)   │
                     │ documentos (Storage privado)            │
-                    │ contacts.superlogica_pessoa_id (link)   │
+                    │ link SuperLógica no participante        │
+                    │ (atalho opcional no contato)            │
                     │ MCP externo + HTTP /contrato            │
                     └─────┬───────────────────┬───────────────┘
                           │                   │ evento "contrato criado"
@@ -191,9 +194,10 @@ Fluxo feliz depois das cinco fases:
 1. Cliente manda documentos no WhatsApp. O CRM classifica e guarda no processo (Fase 3b).
 2. Atendente abre **Análise da ficha** (Fase 4). A IA pré-preenche renda / FC / seguro a partir da conversa **e** dos arquivos. Atendente edita e salva.
 3. Passos pagos (FC Score+, eventualmente outros) pedem um segundo clique. O painel mostra o andamento do job no Hub.
-4. Relatório agrupado é conferido e marcado como aprovado no processo.
-5. **Gerar contrato** abre já preenchido (Fase 5). Atendente confere a prévia do Hub e confirma. SuperLógica cria a locação ATIVA.
-6. CRM grava `superlogica_pessoa_id` no contato e o `id_contrato` no processo. Emite evento. n8n arquiva a pasta no Drive e no disco. Processo que **não** virou contrato some do Storage e do banco após 90 dias.
+4. Relatório agrupado é conferido e salvo. Isso **não** aprova o processo.
+5. O Felipe aprova à mão (status `aprovado`), quando quiser. Sem essa marca o contrato ainda pode ser gerado — a aprovação não é trava do botão.
+6. **Gerar contrato** está sempre no painel. Se existe processo, pré-preenche locatários/fiadores/solidários e o imóvel; se não existe, o formulário vazio de hoje. Atendente (ou o Felipe) confere a prévia do Hub e confirma. SuperLógica cria a locação ATIVA. Nada disso roda sozinho.
+7. CRM grava `id_contrato` no processo e `superlogica_pessoa_id` em **cada participante** que o Hub devolver. Se o interlocutor do WhatsApp também for participante, o atalho no `contacts` pode receber o mesmo id. Emite evento. n8n arquiva. Processo que **não** virou contrato some após 90 dias.
 
 Laço de retorno (Sistema Vivo, invariante 7): se a criação falhar, a mesma prévia retoma o mesmo pedido (já existe). Se a análise cobrada falhar, o job do Hub fica visível no painel e o processo não avança de status. Se o n8n falhar o arquivo, o processo **não** é podado (status `contrato_criado` + `arquivo_drive` pendente) e a Central ganha um aviso.
 
@@ -203,7 +207,20 @@ Laço de retorno (Sistema Vivo, invariante 7): se a criação falhar, a mesma pr
 
 Nada disto entra antes da Fase 1 estar verde na VPS. A numeração `NNNN` livre na `main` deste fork, hoje, é **0762** em diante — na hora de implementar, rodar `pnpm checar:colisao-de-migration` de novo. Tripla obrigatória: arquivo em `supabase/migrations/` com `-- manifest:` + apêndice idempotente no `supabase/baseline.sql`. **Não** editar `MANIFEST.md`.
 
-### 4.1 Coluna no contato (sem tabela extra)
+### 4.1 Quem é quem (decisão Q3, 27/10/2026)
+
+Cada pessoa física é **uma** pessoa no SuperLógica. Casal compartilhando o mesmo WhatsApp **não é o caso comum**. O caso comum que o modelo tem de aguentar é outro: **quem fala no WhatsApp não é necessariamente quem entra no contrato** (filha conversa; pai ou mãe é o locatário).
+
+Por isso o processo tem dois papéis distintos:
+
+| Papel no CRM | O que é | Precisa ser contato? | Precisa ter `id_pessoa_pes`? |
+|---|---|---|---|
+| **Interlocutor** | Quem está na conversa do Inbox | Sim — é o `contacts` da conversa | Só se essa pessoa também for participante do contrato |
+| **Participante** | Quem entra (ou pode entrar) no contrato: locatário, fiador, solidário | Opcional | Opcional até o Hub devolver o id |
+
+Não basta um `superlogica_pessoa_id` no contato da conversa: o interlocutor pode **não** ser locatário. A fonte da verdade dos vínculos é a tabela de participantes (§4.3). A coluna no contato (§4.2) fica só como **atalho** quando o interlocutor também é participante e já tem id.
+
+### 4.2 Atalho no contato (não substitui o participante)
 
 ```sql
 -- em public.contacts
@@ -211,42 +228,34 @@ alter table public.contacts
   add column if not exists superlogica_pessoa_id text;
 
 comment on column public.contacts.superlogica_pessoa_id is
-  'id_pessoa_pes no SuperLógica. Só o identificador; o cadastro mora no ERP.';
+  'Atalho: id_pessoa_pes deste interlocutor quando ELE também é pessoa no SuperLógica. O cadastro mora no ERP; o contrato lista N pessoas em locacao_processo_participantes.';
 ```
 
-Por que **não** uma tabela `contact_superlogica_pessoas`:
+Índice: `(organization_id, superlogica_pessoa_id)` onde o valor não é nulo. Unique **por organização** (um `id_pessoa_pes` ↔ um contato), porque uma pessoa = uma linha no SuperLógica e casal no mesmo número não é o fluxo. Quem não é o interlocutor **não** ganha linha em `contacts` só para guardar o id — mora no participante.
 
-- Um WhatsApp da Brisa é, no fluxo comum, **uma** pessoa no SuperLógica.
-- Locatário extra e fiador **não precisam** ser contato do CRM: vivem no processo (§4.2).
-- Tabela de ligação só se justificaria se o mesmo contato tivesse vários `id_pessoa_pes` estáveis (casal no mesmo número, procurador). Isso é pergunta 8.3. Se a resposta for “casal no mesmo WhatsApp é comum”, aí sim uma tabela filha `contact_id + superlogica_pessoa_id + papel` — não agora.
-
-Índice: `(organization_id, superlogica_pessoa_id)` onde o valor não é nulo. Sem unique global: o mesmo id de pessoa pode, em teoria, aparecer em outra organização deste fork? Na Brisa há uma org só; ainda assim o índice leva `organization_id` por doutrina. Unique **por organização** faz sentido (um `id_pessoa_pes` ↔ um contato). Se o Felipe confirmar um-para-um, a unique entra.
-
-LGPD: a cascata `fn_lgpd_cascade_redact_contact` (e a varredura diária) **zera** esta coluna no mesmo passo que zera `cpf_encrypted`. O export do titular inclui o id (é dado pessoal de ligação).
+LGPD: a cascata zera esta coluna no mesmo passo que zera `cpf_encrypted`. O export do titular inclui o id. Anonimizar o interlocutor **não** apaga o processo se ainda houver outros participantes: redige o atalho e o `interlocutor_contact_id` vira nulo / marca anonimizada; os outros participantes seguem até a poda ou a anonimização deles. Detalhe na hora da migration (não inventar agora).
 
 Não gravar nome, CPF, endereço nem contrato do SuperLógica nesta coluna.
 
-### 4.2 Entidade `locacao_processos`
+### 4.3 Entidade `locacao_processos` + participantes
 
-Uma linha = um processo de locação = **um contato + um imóvel**. Candidatos extras e fiadores são JSON conferido pelo atendente, não cópia do ERP.
+Uma linha de processo = **um interlocutor (conversa) + um imóvel**. As pessoas do contrato são linhas filhas.
 
 ```text
 public.locacao_processos
   id                         uuid pk
   organization_id            uuid not null → organizations on delete cascade
-  contact_id                 uuid not null → contacts on delete restrict
+  interlocutor_contact_id    uuid not null → contacts on delete restrict
   conversation_id            uuid null → conversations on delete set null
 
   -- imóvel (chave de negócio; SuperLógica continua a fonte)
   imovel_codigo_fc           text null
   imovel_endereco            text null          -- o que o atendente conferiu
   imovel_identidade          text not null      -- canônico: codigo_fc ou endereço normalizado
-                                                -- unique (organization_id, contact_id, imovel_identidade)
+                                                -- unique (organization_id, interlocutor_contact_id, imovel_identidade)
 
   status                     text not null      -- ver vocabulário abaixo
   -- dados conferidos (não são o ERP)
-  candidatos                 jsonb not null default '[]'
-  fiadores                   jsonb not null default '[]'
   renda                      jsonb not null default '{}'
   resultado_fc               jsonb not null default '{}'
   cotacao_seguro             jsonb not null default '{}'
@@ -256,38 +265,54 @@ public.locacao_processos
   arquivo_drive_url          text null          -- preenchido pelo n8n
   arquivo_vps_path           text null
 
+  -- aprovação do Felipe: só ele (ou quem ele delegar na tela).
+  -- Nenhum passo de análise escreve estes campos.
   aprovado_por               uuid null → auth.users
   aprovado_em                timestamptz null
   created_by                 uuid null → auth.users
   created_at                 timestamptz not null default now()
   updated_at                 timestamptz not null default now()
+
+public.locacao_processo_participantes
+  id                         uuid pk
+  organization_id            uuid not null → organizations on delete cascade
+  processo_id                uuid not null → locacao_processos on delete cascade
+  papel                      text not null  -- locatario | fiador | solidario
+  contact_id                 uuid null → contacts on delete set null
+  superlogica_pessoa_id      text null      -- id_pessoa_pes; só o link
+  nome                       text null      -- o que o atendente conferiu
+  email                      text null
+  cpf_mascarado              text null      -- nunca o CPF completo em claro
+  created_at                 timestamptz not null default now()
+  updated_at                 timestamptz not null default now()
+  -- um processo não lista a mesma pessoa duas vezes no mesmo papel
+  unique (processo_id, papel, superlogica_pessoa_id) where superlogica_pessoa_id is not null
 ```
+
+O interlocutor **não** entra sozinho como locatário. Se a filha fala e o pai aluga, o processo aponta para o contato da filha e o pai é um participante `locatario` sem `contact_id` (até alguém ligar). Se a própria interlocutora também for locatária, aí sim há uma linha de participante com o `contact_id` dela.
 
 Vocabulário de `status` (text + CHECK, doutrina do repo):
 
 `rascunho` → `documentos` → `renda_conferida` → `fc_pendente` → `fc_pronta` → `seguro_pendente` → `seguro_pronto` → `relatorio_pronto` → `aprovado` → `contrato_criado` → `arquivado`  
 Saídas laterais: `recusado`, `expirado` (poda).
 
-`candidatos` / `fiadores` (formato, não coluna solta):
+`aprovado` **só** muda quando o Felipe (usuário humano) confirma na tela. Terminar renda/FC/seguro/relatório **não** avança para `aprovado`. `Gerar contrato` **não** exige `aprovado` (Q10).
 
-```json
-[{ "papel": "locatario", "nome": "...", "cpf_mascarado": "***", "email": "...",
-   "superlogica_pessoa_id": null, "contact_id": null }]
-```
-
-CPF completo **não** mora em claro no JSON. Se o contrato precisar do CPF de novo, o atendente confirma na prévia do Hub (o Hub já busca pelo CPF informado no formulário). Alternativa, se o Felipe quiser persistir CPF de fiador que não é contato: usar o mesmo par `cpf_encrypted` + `cpf_hash` numa tabela filha — pergunta 8.4.
+CPF completo **não** mora em claro. Se o contrato precisar do CPF de um participante sem contato, o atendente confirma na prévia do Hub. Guardar CPF cifrado no participante é a pergunta 8.4 (ainda aberta).
 
 DIRC, para não nascer coluna morta:
 
 | Dado | Decisão |
 |---|---|
-| Nome/e-mail do candidato principal | Referência: `contacts` + o que o atendente editou no processo |
-| Cadastro SuperLógica | Referência: `superlogica_pessoa_id` / `superlogica_contrato_id` |
+| Quem fala no WhatsApp | Referência: `interlocutor_contact_id` → `contacts` |
+| Quem entra no contrato | Tabela `locacao_processo_participantes` (N linhas) |
+| Cadastro SuperLógica da pessoa | Referência: `participantes.superlogica_pessoa_id` (+ atalho no contato se for o interlocutor) |
+| Contrato no ERP | Referência: `superlogica_contrato_id` |
 | Boletos, situação do contrato | Calcular: consultar o Hub na hora |
-| Renda / FC / seguro / relatório | Duplicar **o conferido**, com `fonte` e `trecho`, porque o Hub não é ficha e o atendente não pode redigitar |
+| Renda / FC / seguro / relatório | Duplicar **o conferido**, com `fonte` e `trecho` |
 | Bytes do RG | Referência: caminho no Storage |
 
-### 4.3 Documentos do processo
+### 4.4 Documentos do processo
 
 Espelha o padrão já aceito de `crm_lead_attachments` (migration 0731): linha no banco + binário no Storage, caminho imutável, check no próprio path.
 
@@ -299,7 +324,7 @@ public.locacao_processo_documentos
   origem             text not null  -- conversa | upload_atendente | hub
   message_id         uuid null → messages
   file_name, mime_type, file_size
-  storage_path       text not null  -- ver §4.4
+  storage_path       text not null  -- ver §4.5
   classificacao_ia   jsonb          -- { categoria, confianca, modelo, em }
   conferido_por      uuid null
   conferido_em       timestamptz null
@@ -314,7 +339,7 @@ CHECK de caminho (como 0731), para o `service_role` não gravar path de outra or
 
 O briefing pediu `processos/<imovel>/<candidato>/…`. Isso é instável (endereço muda, nome tem acento, casal). O path canônico usa **UUIDs**. A tela e o n8n resolvem o rótulo humano (imóvel, nome) na hora de montar a pasta do Drive.
 
-### 4.4 Storage
+### 4.5 Storage
 
 Bucket **novo e privado** `locacao-processos` — não misturar com `whatsapp-media` (retenção de mídia do canal é outro relógio e outro propósito) nem com `internal-media` (notas e anexos de negócio).
 
@@ -329,16 +354,16 @@ Bucket **novo e privado** `locacao-processos` — não misturar com `whatsapp-me
 
 Cópia, não movimento: apagar de `whatsapp-media` não pode sumir com a prova do processo.
 
-### 4.5 RLS, auditoria, retenção, LGPD
+### 4.6 RLS, auditoria, retenção, LGPD
 
-- RLS: `tenant_isolation_locacao_processos_all` e a irmã dos documentos, via `fn_user_org_ids()`. Leitura `agent+`; escrita `agent+` nas rotas, com `requireSupportWrite` antes do efeito.
+- RLS: `tenant_isolation_locacao_processos_all`, a dos participantes e a dos documentos, via `fn_user_org_ids()`. Leitura `agent+`; escrita `agent+` nas rotas, com `requireSupportWrite` antes do efeito. Aprovação (`aprovado_por` / `aprovado_em`) é mutação explícita — não sai de job nem de passo de análise.
 - Handler com admin client **filtra `organization_id` da sessão**, nunca do body.
 - Mutação bem-sucedida → `audit()` (`locacao.processo_criado`, `locacao.analise_salva`, `locacao.contrato_vinculado`, `locacao.arquivado`, `locacao.expurgado`). Sem CPF, sem bytes, sem resumo da ficha.
 - Poda: função `fn_expurgar_processos_de_locacao_vencidos` (`security definer`, **piso de 90 dias no corpo**, `revoke` de `public` e `anon`). Apaga só status `rascunho` / `documentos` / `recusado` / `expirado` **sem** `superlogica_contrato_id`. Enfileira os paths do Storage. Chamada em lotes pelo cron `data-retention` (padrão das irmãs em `lib/retencao/politica.ts`). Processo `contrato_criado` sem `arquivo_drive_url` **não** é podado — o n8n ainda deve.
-- Cascata LGPD: incluir as duas tabelas + os objetos do bucket em `fn_lgpd_cascade_redact_contact` e no export. Anonimizar o contato anonimiza o processo (nomes viram `Cliente Anonimizado #N`; arquivos saem do Storage).
+- Cascata LGPD: incluir processo, participantes e documentos + os objetos do bucket em `fn_lgpd_cascade_redact_contact` e no export. Anonimizar o **interlocutor** zera o atalho em `contacts` e redige a linha dele se for participante; os outros participantes não somem só porque quem falava no WhatsApp pediu exclusão — cada pessoa é um titular. Nomes viram `Cliente Anonimizado #N`; arquivos da pessoa saem do Storage.
 - Invariante de isolamento (2 orgs) é obrigatório no `pnpm test:db` antes do merge da Fase 3.
 
-### 4.6 O que deliberadamente **não** entra no banco
+### 4.7 O que deliberadamente **não** entra no banco
 
 - Espelho de contratos, boletos, unidades ou pessoas do SuperLógica.
 - Texto completo da conversa (a conversa já existe).
@@ -442,38 +467,41 @@ Checklist, na ordem. Cada passo tem um “pronto quando”:
 
 ---
 
-### Fase 3 — Processo no banco e link SuperLógica
+### Fase 3 — Processo no banco e participantes
 
-**Objetivo:** o atendente não redigita. Existe um processo por contato+imóvel; o contato pode carregar `superlogica_pessoa_id`.
+**Objetivo:** o atendente não redigita. Existe um processo por interlocutor+imóvel, com N participantes; o WhatsApp não precisa ser locatário.
 
 #### 3.A — DeskcommCRM
 
 - Migration + baseline + `-- manifest:` com o modelo da §4 (sem o bucket ainda, se quiser fatiar; o mais barato é 3+3b juntos — pergunta 8.8).
 - Regenerar `lib/database.types.ts` pelo fluxo do repo.
-- API ` /api/v1/locacao/processos` (lista/cria/atualiza) com Zod, `requireRole("agent")`, `requireSupportWrite` em mutação, `organization_id` da sessão, `ok()`/`fail()`, idempotência no POST (`Idempotency-Key`), rate limit do painel.
+- API `/api/v1/locacao/processos` (lista/cria/atualiza) e participantes (CRUD) com Zod, `requireRole("agent")`, `requireSupportWrite` em mutação, `organization_id` da sessão, `ok()`/`fail()`, idempotência no POST (`Idempotency-Key`), rate limit do painel.
+- Rota explícita de **aprovar processo** (só escreve `aprovado_por` / `aprovado_em` / `status=aprovado`). Nenhum outro handler escreve esses campos. Quem pode: o Felipe — na prática `admin` da org até ele pedir outro recorte (não inventar papel novo agora).
 - Entrada em `lib/auth/public-paths.ts` **somente** se a rota aceitar bearer — no início, cookie basta.
-- UI: no Painel, um bloco “Processo desta conversa” (status + imóvel + último salvamento). Criar na primeira análise ou no primeiro “salvar”.
+- UI: no Painel, um bloco “Processo desta conversa” (status + imóvel + lista de participantes + último salvamento). Criar na primeira análise ou no primeiro “salvar”. Dá para acrescentar locatário/fiador/solidário que **não** é o contato da conversa.
 - Cascata LGPD + export + invariante de isolamento.
 - Fragmento `.changes/` (`capacidade_nova`): o operador da VPS passa a ter uma ficha que sobrevive à troca de conversa.
-- Destino: **fork / nicho**. Não abrir PR no `melgarafael/DeskcommCRM`.
+- Destino: **fork / nicho**. Não abrir PR no `melgarafael/DeskcommCRM` (Q15).
 
 #### 3.B — brisa-hub
 
-- Nada obrigatório. Se `consultar_contrato_inquilino` já devolve `id_pessoa_pes`, o CRM pode gravar o link na consulta (ainda é leitura + um update local, com o atendente ciente — pergunta 8.9).
+- Nada obrigatório. Se `consultar_contrato_inquilino` já devolve `id_pessoa_pes`, o CRM pode gravar o link no **participante** correspondente (não no contato, a menos que seja o interlocutor-participante), com o atendente ciente — pergunta 8.9.
 
 #### Aceite da Fase 3
 
 - [ ] Dois tenants: processo da org A invisível na org B (`pnpm test:db`).
-- [ ] Trocar de conversa e voltar: a ficha está lá.
-- [ ] Anonimizar o contato zera `superlogica_pessoa_id` e redige o processo.
-- [ ] Sem `superlogica_pessoa_id` a Inbox continua útil.
+- [ ] Processo com interlocutor ≠ locatário: a filha é o contato da conversa; o pai é participante sem `contact_id`.
+- [ ] Trocar de conversa e voltar: a ficha e os N participantes estão lá.
+- [ ] Anonimizar o interlocutor zera o atalho no contato e não apaga sozinho os outros participantes.
+- [ ] Sem `superlogica_pessoa_id` em ninguém a Inbox continua útil.
+- [ ] Terminar um passo de análise **não** marca `aprovado`.
 - [ ] Nenhuma tabela espelha contrato/boleto.
 
 #### Teste da Fase 3
 
-- Invariantes: RLS, CHECK de status, unique (org, contato, imóvel), cascata LGPD.
-- Unitário das rotas (org no filtro, suporte só leitura, Zod).
-- E2E: criar processo pela tela, recarregar, ver o status.
+- Invariantes: RLS das três tabelas, CHECK de status e de `papel`, unique (org, interlocutor, imóvel), cascata LGPD.
+- Unitário das rotas (org no filtro, suporte só leitura, Zod, aprovação isolada).
+- E2E: criar processo pela tela, acrescentar um locatário que não é o contato, recarregar.
 
 ---
 
@@ -483,7 +511,7 @@ Checklist, na ordem. Cada passo tem um “pronto quando”:
 
 #### 3b.A — DeskcommCRM
 
-- Bucket `locacao-processos` + tabela `locacao_processo_documentos` (§4.3–4.4).
+- Bucket `locacao-processos` + tabela `locacao_processo_documentos` (§4.4–4.5).
 - Classificador: IA do ponto `painel_atendente` (ou `painel_documento`) sugere categoria; o atendente confirma. Sem confirmação, categoria = `outro`.
 - Rota de upload/cópia a partir de `whatsapp-media` (service role, path check).
 - Evento `event_log` tipo `locacao.contrato_arquivar` **depois** de `contrato_criado` com sucesso (Fase 5). Payload: `processo_id`, `organization_id`, `superlogica_contrato_id`, lista de paths. Sem bytes, sem CPF.
@@ -538,7 +566,7 @@ Nada. O Hub não arquiva.
 - Seção nova no Painel (abaixo das ações atuais, ou no lugar do botão único “Iniciar análise”).
 - Cada botão: GET do processo → pré-preenche → atendente edita → salva (Fase 3) → se for passo pago, mostra o checkbox de confirmação → POST ao Hub.
 - Polling (ou leitura sob demanda) do andamento: `pedido_id` já existe. Mostrar `na fila` / `rodando` / `precisa confirmar pagamento` / `pronto` / `falhou`. Não afirmar que a FC terminou só porque o Hub aceitou o job (a decisão atual já proíbe isso).
-- A IA **não** clica no passo pago.
+- A IA **não** clica no passo pago e **não** aprova o processo. “FC pronta” ≠ `aprovado`.
 
 #### 4.B — brisa-hub
 
@@ -553,6 +581,7 @@ Nada. O Hub não arquiva.
 - [ ] Confirmar FC sem checkbox é 400.
 - [ ] Andamento visível; falha visível; retry não duplica (idempotência).
 - [ ] Relatório usa só o que está no processo, não relê a conversa inteira às cegas.
+- [ ] Os quatro “ok” juntos **não** mudam `aprovado_por` / `aprovado_em`.
 
 #### Teste da Fase 4
 
@@ -562,34 +591,39 @@ Nada. O Hub não arquiva.
 
 ---
 
-### Fase 5 — Gerar contrato a partir do processo aprovado
+### Fase 5 — Gerar contrato (sempre disponível; pré-preenche se houver processo)
 
-**Objetivo:** o diálogo atual nasce preenchido. No sucesso, o CRM guarda os links e dispara o arquivo.
+**Objetivo:** o botão de hoje não some. Com processo, o diálogo nasce preenchido. Com ou sem aprovação. No sucesso, o CRM guarda os links e dispara o arquivo. Nada se cria sozinho.
 
 #### 5.A — DeskcommCRM
 
-- `GerarContratoDialog` recebe o processo aprovado e mapeia `candidatos` / `fiadores` / imóvel / aluguel / garantia / seguro para `DadosContrato`. Campos que o Hub exige e o processo não tem ficam vazios, obrigatórios como hoje.
-- Só habilita “Preparar” se `status` ∈ (`aprovado`, `relatorio_pronto`) — ou o Felipe autoriza preparar antes (8.10).
-- No `gravado: true`: UPDATE do processo (`superlogica_contrato_id`, `status=contrato_criado`); UPDATE de `contacts.superlogica_pessoa_id` se o Hub mandar `id_pessoa_pes` (e se o contato ainda não tiver, ou se for o mesmo). Não sobrescrever um id diferente sem o atendente confirmar (casal / pessoa errada).
+- `Gerar contrato` permanece no painel em **qualquer** conversa, com ou sem processo, com ou sem `aprovado` (Q10). O formulário vazio atual continua o caminho válido.
+- Se existe processo nesta conversa/imóvel, o diálogo mapeia `locacao_processo_participantes` (locatário / fiador / solidário) + imóvel + aluguel/garantia/seguro conferidos para `DadosContrato`. Campos que o Hub exige e o processo não tem ficam vazios, obrigatórios como hoje. O atendente edita à vontade.
+- Status `aprovado` **não** habilita nem esconde o botão. É marca humana do Felipe, à parte.
+- Confirmar a locação continua sendo o checkbox + `confirmado: true` de hoje. Análise “ok” não dispara isso.
+- No `gravado: true`: UPDATE do processo (`superlogica_contrato_id`, `status=contrato_criado`); UPDATE de `participantes.superlogica_pessoa_id` para cada id que o Hub devolver; atalho em `contacts.superlogica_pessoa_id` **só** se o interlocutor for um desses participantes. Não sobrescrever um id diferente sem o atendente confirmar.
 - Emite `locacao.contrato_arquivar` para o n8n.
 - Auditoria já existente + a nova, sem PII.
 
 #### 5.B — brisa-hub
 
-- `confirmar` devolve `id_contrato`, `situacao`, `id_pessoa_pes` (lista se houver vários locatários).
+- `confirmar` devolve `id_contrato`, `situacao` e a lista de `id_pessoa_pes` com papel (locatário/fiador/solidário).
 - Continua criando ATIVO, despesas, idempotência.
 
 #### Aceite da Fase 5
 
-- [ ] Abrir Gerar contrato numa conversa com processo aprovado: endereço, aluguel, CPF do locatário já estão lá.
-- [ ] Confirmar grava os dois links e muda o status.
+- [ ] Sem processo: o diálogo vazio abre e prepara como hoje.
+- [ ] Com processo (mesmo `rascunho` ou `relatorio_pronto`, **sem** `aprovado`): o diálogo abre preenchido; dá para editar e preparar.
+- [ ] Com processo em que o interlocutor não é locatário: o formulário lista o pai/mãe (participante) e não assume o contato do WhatsApp como locatário.
+- [ ] Confirmar grava `id_contrato` e os ids das pessoas nos **participantes**.
 - [ ] Segunda confirmação da mesma prévia não cria segundo contrato nem segundo UPDATE conflitante.
-- [ ] Processo de outro contato não pré-preenche.
+- [ ] Nenhum caminho cria locação sem o checkbox.
 
 #### Teste da Fase 5
 
-- Unitário do mapeamento processo → `DadosContrato`.
-- Rota: sucesso grava ids; Hub sem `id_pessoa_pes` não inventa; id diferente pede confirmação.
+- Unitário do mapeamento participantes → `DadosContrato`, inclusive interlocutor ≠ locatário.
+- Unitário: botão visível sem processo e sem `aprovado`.
+- Rota: sucesso grava ids nos participantes; Hub sem `id_pessoa_pes` não inventa; id diferente pede confirmação.
 - Homolog: um contrato de teste, depois o n8n da 3b.
 
 ---
@@ -602,16 +636,16 @@ Fase 1  (operação + Hub)     ── sem isto, o resto é teatro
 Fase 2  (ler anexos)         ── pode começar o desenho no CRM em paralelo
    │                            à publicação do Hub, mas o aceite precisa dos dois
    │
-Fase 3  (processo + link)    ── desbloqueia 3b, 4 e 5
+Fase 3  (processo + N participantes) ── desbloqueia 3b, 4 e 5
    │
    ├─ Fase 3b (Storage + n8n) ── pode ir em paralelo com a 4
    │
    └─ Fase 4 (quatro botões) ── precisa do GET de job no Hub
           │
-        Fase 5 (contrato pré-preenchido + ids)
+        Fase 5 (contrato sempre no painel; pré-preenche se houver processo)
 ```
 
-O botão 7 (manutenção) fica **depois** da Fase 5, salvo resposta da 8.11.
+O botão 7 (manutenção) **não entra** (Q11). Fora da ordem.
 
 Não misturar fases num PR só. Cada fase: branch `cursor/…`, testes daquela fase, fragmento `.changes/` se o operador da VPS perceber, documento de decisão atualizado, PR para o Felipe revisar.
 
@@ -629,31 +663,34 @@ Não misturar fases num PR só. Cada fase: branch `cursor/…`, testes daquela f
 | Cópia de documento × LGPD | Bucket novo cresce; 1 GB do Supabase é o mesmo do WhatsApp | Poda 90 dias; arquivar no Drive tira a pressão; não espelhar o ERP |
 | n8n fora do ar | Contrato existe e a pasta não | Status `contrato_criado` sem arquivo não poda; aviso na Central |
 | Contrato ATIVO demais | Homolog cria locação de verdade | Imóvel/conta de teste; nunca cliente real na Fase 1 |
-| Casal no mesmo WhatsApp | Um `superlogica_pessoa_id` no contato não basta | 8.3; até lá, o segundo locatário vive só no JSON do processo |
-| Subir isso no Deskcomm original | Tabela de locação não serve clínica nem loja | Destino = fork. Núcleo só o consumidor MCP que já está |
+| Interlocutor ≠ locatário | Assumir que o contato do WhatsApp é quem aluga cria contrato no nome da filha | Participantes N; interlocutor é só a porta da conversa (Q3) |
+| Análise “ok” virar aprovação | O Felipe perde o veto | `aprovado_por` só pela rota de aprovação; Gerar contrato não exige esse status (Q10) |
+| Subir isso no Deskcomm original | Tabela de locação não serve clínica nem loja | Destino = fork (Q15). Núcleo só o consumidor MCP que já está |
 | `brisa-hub` inacessível para a IA | Este plano pode ter errado o contrato do Hub | 8.2; o outro bot confirma OpenAPI antes de implementar 2 e 4 |
 
 ---
 
-## 8. Perguntas para o Felipe (responda aqui ou no PR)
+## 8. Perguntas para o Felipe
 
-Resposta curta basta. Sem resposta, a implementação **não inventa**.
+Resposta curta basta. Sem resposta, a implementação **não inventa**. As decididas já foram aplicadas neste documento (modelo §4, Fases 3 e 5, ordem).
 
-1. **URL do contrato.** Se o MCP for `https://hub/brisa/mcp` e o contrato for outro host, autoriza um campo “URL da API de contratos” no cadastro MCP? Ou o Hub garante o mesmo host e o sufixo `/contrato/{etapa}`?
-2. **Estado real do Hub.** O PR #22 (ou sucessor) já está deployado na VPS? O teste de conexão hoje lista quais ferramentas? (Cole a lista.)
-3. **Um WhatsApp, várias pessoas.** Casal ou fiador no mesmo número: um `superlogica_pessoa_id` no contato basta, e os outros ficam só no processo?
-4. **CPF de quem não é contato.** Fiador sem WhatsApp: o CRM guarda CPF cifrado no processo, ou o atendente redigita só na hora do contrato?
-5. **Teto de OCR.** Quantas páginas / quantos MB por PDF escaneado? Proposta: 8 páginas ou 8 MB, o que vier primeiro.
-6. **Conversa longa.** Proposta: até 80 mensagens “úteis” (anexo ou dado cadastral) **ou** 400 brutas, e 60 mil caracteres no bloco. Serve?
-7. **Como o arquivo chega no Hub.** URL assinada (mais simples) ou upload multipart (se o Hub não puder baixar o Storage)?
-8. **Fase 3 e 3b juntas** num PR, ou o banco primeiro e o bucket depois?
-9. **Gravar `superlogica_pessoa_id` já na consulta** de contrato (leitura), ou só depois de **criar** o contrato (Fase 5)?
-10. **Gerar contrato só com processo aprovado**, ou o atendente pode abrir o formulário vazio como hoje, sem processo?
-11. **Chamado de manutenção** (botão 7): depois da Fase 5, em paralelo, ou fora deste plano?
-12. **Pasta do Drive.** Confirma o padrão `Brisa Aluguéis / {endereço ou código do imóvel} / {id do contrato}/`? Quem cria a pasta-mãe se não existir — o n8n?
-13. **Backup na VPS.** Caminho `/var/brisa/arquivo-contratos/{id_contrato}/` serve? Por quanto tempo o disco local guarda, além do Drive?
-14. **Passo pago além da FC.** Seguro-fiança (Migra) também exige o segundo clique, sempre, ou só quando o Hub disser que vai cobrar?
-15. **Destino.** Confirma que tabelas de processo **não** vão para o repositório original (`melgarafael/DeskcommCRM`), só para este fork?
+| # | Pergunta | Estado | Resposta (27/10/2026) |
+|---|---|---|---|
+| 1 | URL do contrato: derivar `…/mcp` → `…/contrato/{etapa}`, ou campo extra no cadastro MCP? | **Aberta — em verificação à parte** | — |
+| 2 | Hub com o PR #22 já está no ar? Quais ferramentas o “Testar conexão” lista? | **Aberta — em verificação à parte** | — |
+| 3 | Um WhatsApp, várias pessoas no contrato? | **Decidida** | Cada pessoa = uma pessoa no SuperLógica; casal no mesmo número não é o caso comum. O contrato pode incluir quem **não** é o contato do WhatsApp (filha fala, pai/mãe aluga). Processo com **N participantes** (locatário / fiador / solidário), cada um opcionalmente ligado a um contato do CRM e a um `superlogica_pessoa_id`. O contato do WhatsApp é só o **interlocutor**. |
+| 4 | CPF de quem não é contato: cifrado no participante, ou redigita na hora do contrato? | Aberta | — |
+| 5 | Teto de OCR: 8 páginas ou 8 MB, o que vier primeiro? | Aberta | — |
+| 6 | Conversa longa: 80 úteis ou 400 brutas + 60 mil caracteres? | Aberta | — |
+| 7 | Arquivo no Hub: URL assinada ou multipart? | Aberta | — |
+| 8 | Fase 3 e 3b juntas num PR? | Aberta | — |
+| 9 | Gravar `id_pessoa_pes` já na consulta, ou só ao criar o contrato? | Aberta | — |
+| 10 | Gerar contrato só com processo aprovado? | **Decidida** | O botão **sempre** existe; o formulário vazio de hoje continua válido. Aprovação é **decisão manual do Felipe, obrigatória como ato dele**, mesmo se todos os passos de análise disserem ok. O processo só pré-preenche quando existe. **Nada auto-aprova nem auto-cria.** |
+| 11 | Chamado de manutenção (botão 7)? | **Decidida** | Depois, **fora deste plano**. |
+| 12 | Pasta do Drive: `Brisa Aluguéis / {imóvel} / {id do contrato}/`, n8n cria a pasta-mãe? | Aberta | — |
+| 13 | Backup VPS em `/var/brisa/arquivo-contratos/{id_contrato}/`? Por quanto tempo? | Aberta | — |
+| 14 | Seguro-fiança também exige segundo clique sempre, ou só quando o Hub for cobrar? | Aberta | — |
+| 15 | Tabelas novas só neste fork? | **Decidida** | Sim. **Não** sobe para `melgarafael/DeskcommCRM`. |
 
 ---
 
@@ -661,7 +698,7 @@ Resposta curta basta. Sem resposta, a implementação **não inventa**.
 
 Antes de escrever código:
 
-1. Ler este arquivo inteiro e as respostas do Felipe na §8 (comentário do PR ou emenda neste arquivo).
+1. Ler este arquivo inteiro. A §8 já traz o que o Felipe decidiu (Q3, Q10, Q11, Q15) e o que ainda está aberto (Q1/Q2 em verificação). Sem o “pode ir à Fase 1”, não escrever produto.
 2. Ler [`docs/decisoes/painel-agente.md`](../decisoes/painel-agente.md) e [`docs/decisoes/painel-acoes-hub.md`](../decisoes/painel-acoes-hub.md). Se a fase mudar comportamento, **emendar** esses dois — não criar uma terceira verdade.
 3. Rodar `bash .agents/skills/deskcomm-contribuir/scripts/quem-sou.sh` e `git fetch origin main`. Branch nova a partir de `origin/main`, nome `cursor/<fase>-5267` (ou o sufixo da sessão).
 4. **Uma fase por PR.** Fase 1 sem schema. Fase 3 com tripla de migration. Não editar migration já aplicada.
@@ -669,7 +706,7 @@ Antes de escrever código:
 6. SuperLógica só via Hub. Sem tabela espelho. Sem mensagem ao cliente sem o atendente clicar em enviar.
 7. Ao fechar a fase: atualizar a tabela da §1 (“Pronto para usar?”), anexar evidência, listar **O que NÃO medi**.
 8. Living System Checklist da peça nova (entrada, saída, audit, tela, porta, anti-morte, laço). Mapa em `docs/architecture/` com ≥2 arestas.
-9. Destino = fork. Não abrir PR upstream.
+9. Destino = fork (Q15). Não abrir PR upstream.
 
 Contrato que o CRM já exige do Hub (não reinventar nomes): `lib/agent-engine/agent/painel-acoes-hub.ts` e `lib/agent-engine/agent/painel-contrato.ts`.
 
@@ -683,6 +720,7 @@ Contrato que o CRM já exige do Hub (não reinventar nomes): `lib/agent-engine/a
 - Cota atual do Storage e do Drive da Brisa.
 - Se o n8n da VPS já tem credencial do Google Drive.
 - Playwright real de FC/Migra (custo, seletor, lock).
-- O botão 7 e qualquer fluxo de manutenção.
+- O botão 7 e qualquer fluxo de manutenção (fora deste plano, Q11).
+- Q1/Q2: URL real do Hub e se o PR #22 já está na VPS — **em verificação à parte**, não assumir.
 
-Fim do rascunho. A implementação espera as respostas da §8 e o “pode ir a Fase 1”.
+Fim do rascunho. A implementação espera o “pode ir à Fase 1”. Q1 e Q2 ainda podem mudar o checklist da Fase 1, não o modelo das Fases 3–5.
