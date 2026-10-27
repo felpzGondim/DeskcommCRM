@@ -18,7 +18,8 @@ vi.mock("@/lib/agent-engine/agent/painel-contrato", async (original) => ({
 
 import { POST } from "@/app/api/v1/conversations/[id]/painel-agente/contrato/route";
 const dados = { imovel: { endereco: "Rua teste" }, locatarios: [{ cpf: "52998224725" }], aluguel: 1200,
-  data_inicio: "2026-12-01", dia_vencimento: 10, tipo: "residencial", indice_reajuste: "IPCA", garantia: "nenhuma" };
+  data_inicio: "2026-12-01", dia_vencimento: 10, tipo: "residencial", indice_reajuste: "IPCA", garantia: "nenhuma",
+  split: false, isencao_multa_meses: 0 };
 const pedido = (body: unknown) => new NextRequest("http://localhost/api/v1/conversations/c1/painel-agente/contrato", {
   method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
 });
@@ -83,6 +84,24 @@ describe("rota de criação da locação", () => {
   it("pendências do Hub impedem emitir token de confirmação", async () => {
     m.call.mockResolvedValueOnce({ pronto: true, preview_id: "ab".repeat(18), resumo: { texto: "Prévia" }, pendencias: ["Falta conta de repasse"] });
     expect(await preparar()).toBeNull();
+  });
+
+  it("pendências em objeto {campo, pergunta} também impedem o token e voltam a pergunta", async () => {
+    m.call.mockResolvedValueOnce({ pronto: true, preview_id: "ab".repeat(18), resumo: { texto: "Prévia" },
+      pendencias: [{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }] });
+    const r = await POST(pedido({ etapa: "preparar", dados }), ctx);
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.data.token).toBeNull();
+    expect(body.data.pendencias).toEqual([{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }]);
+  });
+
+  it("mostra o recado do Hub quando a API de contratos responde 503", async () => {
+    const { ErroApiContrato } = await import("@/lib/agent-engine/agent/painel-contrato");
+    m.call.mockRejectedValueOnce(new ErroApiContrato("hub_contract_unconfigured", "contrato não configurado"));
+    const r = await POST(pedido({ etapa: "preparar", dados }), ctx);
+    expect(r.status).toBe(502);
+    expect((await r.json()).error.message).toBe("contrato não configurado");
   });
 
   it("suporte só leitura, falta de confirmação e conversa inacessível impedem a chamada", async () => {

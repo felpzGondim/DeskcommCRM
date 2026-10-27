@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const saida = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/mcp/servidor-externo/chamada", () => ({ fetchDeSaida: () => saida }));
 
-import { abrirContrato, chamarApiContrato, preparoContratoSchema, resultadoContratoSchema, selarContrato } from "@/lib/agent-engine/agent/painel-contrato";
+import {
+  abrirContrato, chamarApiContrato, codigoErroContrato, dadosContratoSchema, ErroApiContrato,
+  extrairMensagemErroHub, normalizarPendencias, preparoContratoSchema, resultadoContratoSchema,
+  selarContrato, textoDaPendencia,
+} from "@/lib/agent-engine/agent/painel-contrato";
 
 const preview = "ab".repeat(18);
 const segredo = "segredo-para-os-testes";
@@ -42,6 +46,36 @@ describe("locação pelo painel", () => {
       acoes_manuais: ["Pausar pela tela"], divergencias: ["IPTU pendente"] })).toMatchObject({ completo: false, id_contrato: "358" });
   });
 
+  it("aceita pendências como string ou como {campo, pergunta}", () => {
+    expect(normalizarPendencias(["Falta IPTU"])).toEqual([{ campo: "", pergunta: "Falta IPTU" }]);
+    expect(normalizarPendencias([{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }]))
+      .toEqual([{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }]);
+    expect(preparoContratoSchema.parse({
+      pronto: false, pendencias: [{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }],
+      resumo: { texto: "Falta o IPTU." },
+    }).pendencias).toEqual([{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }]);
+    expect(textoDaPendencia({ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }))
+      .toBe("iptu: Qual o valor mensal do IPTU?");
+  });
+
+  it("exige split e isencao_multa_meses no pedido do painel", () => {
+    const base = { imovel: { endereco: "Rua teste" }, locatarios: [{ cpf: "52998224725" }],
+      aluguel: 1200, data_inicio: "2026-12-01", dia_vencimento: 10, tipo: "residencial" as const,
+      indice_reajuste: "IPCA" as const, garantia: "nenhuma" as const };
+    expect(dadosContratoSchema.safeParse(base).success).toBe(false);
+    expect(dadosContratoSchema.parse({ ...base, split: false, isencao_multa_meses: 0 }))
+      .toMatchObject({ split: false, isencao_multa_meses: 0 });
+  });
+
+  it("lê o JSON de erro do Hub e recusa CPF ou token", () => {
+    expect(extrairMensagemErroHub({ message: "contrato não configurado" })).toBe("contrato não configurado");
+    expect(extrairMensagemErroHub({ error: { detail: "chave sem permissão de escrita" } })).toBe("chave sem permissão de escrita");
+    expect(extrairMensagemErroHub({ mensagem: "CPF 52998224725 inválido" })).toBeUndefined();
+    expect(extrairMensagemErroHub({ message: "Bearer dsk_abc123" })).toBeUndefined();
+    expect(codigoErroContrato(503)).toBe("hub_contract_unconfigured");
+    expect(codigoErroContrato(403)).toBe("hub_contract_permission");
+  });
+
   it("usa exclusivamente a origem e credencial cadastradas e não vaza erros remotos", async () => {
     saida.mockResolvedValueOnce({ ok: true, json: async () => ({ pronto: false }) });
     await expect(chamarApiContrato(servidor, "preparar", { aluguel: 1000 })).resolves.toEqual({ pronto: false });
@@ -49,8 +83,17 @@ describe("locação pelo painel", () => {
       headers: expect.objectContaining({ Authorization: "Bearer chave-privada" }), body: '{"aluguel":1000}',
     }));
     saida.mockResolvedValueOnce({ ok: false, status: 401, json: () => { throw new Error("CPF e segredo"); } });
-    await expect(chamarApiContrato(servidor, "confirmar", {})).rejects.toThrow("hub_contract_permission");
-    await expect(chamarApiContrato({ ...servidor, endpoint: "https://hub.example/qualquer" }, "preparar", {})).rejects.toThrow("hub_endpoint_invalid");
-    expect(saida).toHaveBeenCalledTimes(2);
+    await expect(chamarApiContrato(servidor, "confirmar", {})).rejects.toMatchObject({
+      name: "ErroApiContrato", codigo: "hub_contract_permission",
+    });
+    saida.mockResolvedValueOnce({
+      ok: false, status: 503, json: async () => ({ message: "contrato não configurado" }),
+    });
+    await expect(chamarApiContrato(servidor, "preparar", {})).rejects.toEqual(expect.objectContaining({
+      name: "ErroApiContrato", codigo: "hub_contract_unconfigured", detalhe: "contrato não configurado",
+    }));
+    await expect(chamarApiContrato({ ...servidor, endpoint: "https://hub.example/qualquer" }, "preparar", {}))
+      .rejects.toBeInstanceOf(ErroApiContrato);
+    expect(saida).toHaveBeenCalledTimes(3);
   });
 });

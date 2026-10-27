@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { abrirContrato, chamarApiContrato, dadosContratoSchema, preparoContratoSchema, resultadoContratoSchema, selarContrato } from "@/lib/agent-engine/agent/painel-contrato";
+import { abrirContrato, chamarApiContrato, dadosContratoSchema, ErroApiContrato, preparoContratoSchema, resultadoContratoSchema, selarContrato } from "@/lib/agent-engine/agent/painel-contrato";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -76,8 +76,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return ok(resultado, { requestId });
   } catch (e) {
     registrar(false);
-    return fail("hub_unavailable", t(e instanceof Error && e.message === "hub_contract_permission"
+    const erro = e instanceof ErroApiContrato ? e : null;
+    return fail("hub_unavailable", erro?.detalhe ?? t(erro?.codigo === "hub_contract_permission"
       ? "A chave do CRM não está autorizada na API de contratos do Brisa Hub. Peça à administração para habilitar esse acesso."
-      : "Não foi possível concluir a operação no Brisa Hub. Se já confirmou, tente novamente pela mesma prévia para consultar ou retomar o pedido."), 502, { requestId });
+      : erro?.codigo === "hub_contract_unconfigured"
+        ? "O serviço de contratos do Hub não está configurado. Peça à administração para conferir a integração."
+        : "Não foi possível concluir a operação no Brisa Hub. Se já confirmou, tente novamente pela mesma prévia para consultar ou retomar o pedido."), 502, { requestId });
   }
 }

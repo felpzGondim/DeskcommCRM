@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
-import type { DadosContrato, ResultadoContrato } from "@/lib/agent-engine/agent/painel-contrato";
+import { textoDaPendencia, type DadosContrato, type PendenciaContrato, type ResultadoContrato } from "@/lib/agent-engine/agent/painel-contrato";
 import { apiClient } from "@/lib/api/client";
 
-type Previa = { resumo: string; pendencias: string[]; avisos: string[]; token: string | null };
+type Previa = { resumo: string; pendencias: Array<string | PendenciaContrato>; avisos: string[]; token: string | null };
 type Campo = { nome: string; rotulo: string; tipo?: "number" | "date" | "email"; obrigatorio?: boolean };
 
 
@@ -50,11 +50,11 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
         {...(tipo === "number" ? { min: 0, step: "any" } : {})} />
     </label>;
   }
-  function selecao(nome: string, rotulo: string, opcoes: Array<[string, string]>) {
+  function selecao(nome: string, rotulo: string, opcoes: Array<[string, string]>, padrao = "") {
     return <label className="grid gap-1 text-sm">
       <span id={`${campoId}-${nome}`}>{rotulo} *</span>
-      <select aria-labelledby={`${campoId}-${nome}`} name={nome} required defaultValue={valores[nome] ?? ""} className="h-10 rounded-sm border border-border bg-bg px-3 text-text">
-        <option value="" disabled>{t("Selecione")}</option>
+      <select aria-labelledby={`${campoId}-${nome}`} name={nome} required defaultValue={valores[nome] ?? padrao} className="h-10 rounded-sm border border-border bg-bg px-3 text-text">
+        {!padrao && <option value="" disabled>{t("Selecione")}</option>}
         {opcoes.map(([valor, texto]) => <option key={valor} value={valor}>{texto}</option>)}
       </select>
     </label>;
@@ -86,6 +86,8 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
       ...(fiadores ? { fiadores: pessoasDoForm("fiadores", fiadores) } : {}),
       ...Object.fromEntries(["aluguel", "prazo_meses", "dia_vencimento", "caucao_valor", "taxa_adm", "taxa_locacao"]
         .filter((n) => ler(n)).map((n) => [n, Number(ler(n))])),
+      split: ler("split") === "true",
+      isencao_multa_meses: Number(ler("isencao_multa_meses") || "0"),
       ...Object.fromEntries(["data_inicio", "data_fim", "indice_reajuste", "tipo", "garantia", "seguradora_fianca", "apolice", "observacao"]
         .filter((n) => ler(n)).map((n) => [n, ler(n)])),
       ...Object.fromEntries(["iptu", "seguro_fianca"].filter((n) => ler(`${n}.valor_mensal`))
@@ -139,10 +141,12 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
             {campo({ nome: "data_inicio", rotulo: t("Início da locação"), tipo: "date", obrigatorio: true })}
             {campo({ nome: "data_fim", rotulo: t("Fim da locação"), tipo: "date" })}
             {campo({ nome: "prazo_meses", rotulo: t("Prazo em meses"), tipo: "number" })}
+            {campo({ nome: "isencao_multa_meses", rotulo: t("Meses de isenção de multa"), tipo: "number" })}
             {campo({ nome: "dia_vencimento", rotulo: t("Dia de vencimento"), tipo: "number", obrigatorio: true })}
             {selecao("tipo", t("Tipo de locação"), [["residencial", t("Residencial")], ["comercial", t("Comercial")]])}
             {selecao("indice_reajuste", t("Índice de reajuste"), [["IGPM", t("IGP-M")], ["IPCA", t("IPCA")]])}
             {selecao("garantia", t("Garantia"), garantias)}
+            {selecao("split", t("Split (repasse automático)"), [["false", t("Não ligar o split")], ["true", t("Ligar o split")]], "false")}
             {campo({ nome: "caucao_valor", rotulo: t("Valor da caução (R$)"), tipo: "number" })}
             {campo({ nome: "seguradora_fianca", rotulo: t("Seguradora do seguro fiança") })}
             {campo({ nome: "apolice", rotulo: t("Número da apólice") })}
@@ -170,7 +174,7 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
       {previa && !resultado?.gravado && <section aria-label={t("Prévia da locação")} className="space-y-3 rounded-md border border-border p-3">
         <h4 className="font-medium">{t("Prévia da locação")}</h4>
         <p className="whitespace-pre-wrap wrap-anywhere text-sm">{previa.resumo}</p>
-        {[...previa.pendencias, ...previa.avisos].map((p, i) => <p key={i} className="text-sm">{p}</p>)}
+        {[...previa.pendencias.map(textoDaPendencia), ...previa.avisos].map((p, i) => <p key={i} className="text-sm">{p}</p>)}
         {previa.token && <>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" checked={revisado} disabled={ocupado || desabilitado || confirmacaoIniciada}
