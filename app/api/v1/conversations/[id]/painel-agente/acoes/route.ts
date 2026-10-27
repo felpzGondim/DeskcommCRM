@@ -124,7 +124,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       !ferramenta.inputSchema.properties.candidato || !ferramenta.inputSchema.properties.imovel ||
       !ferramenta.inputSchema.properties.renda))) {
     registrar(false);
-    return fail("tool_unavailable", t(`${ACOES_HUB[pedido.acao].rotulo}: ferramenta não disponível no Brisa Hub. Peça à administração para conferir a integração MCP.`), 422, { requestId });
+    return fail("tool_unavailable", t("A ferramenta desta ação não está disponível no Brisa Hub. Peça à administração para conferir a integração MCP."), 422, { requestId });
   }
   try {
     if (pedido.acao === "analise") {
