@@ -12,15 +12,15 @@ const recebido = Buffer.from(raw).subarray(0, tetoDoAgente(agente)).toString("ut
 
 describe("notas da revisão personalizada chegam à tela de atualização", () => {
   it("alcança a revisão anterior dentro do corte real do agente", () => {
-    const faixa = extractChangelogRange(recebido, "v1.88.0-felpz.5", "v1.88.0-felpz.4");
+    const faixa = extractChangelogRange(recebido, "v1.88.0-felpz.6", "v1.88.0-felpz.5");
     expect(faixa.completa).toBe(true);
-    expect(faixa.secoes.map((s) => s.version)).toEqual(["1.88.0-felpz.5"]);
+    expect(faixa.secoes.map((s) => s.version)).toEqual(["1.88.0-felpz.6"]);
   });
 
-  it("mostra o novo botão e a dependência da credencial do Hub", () => {
-    const faixa = extractChangelogRange(recebido, "v1.88.0-felpz.5", "v1.88.0-felpz.4");
-    expect(faixa.secoes[0]?.body).toContain("O botão Gerar contrato");
-    expect(faixa.secoes[0]?.body).toContain("autorizar essa credencial");
-    expect(faixa.secoes[0]?.body).toContain("contrato ativo");
+  it("mostra a pergunta do Hub e o recado quando o serviço recusa", () => {
+    const faixa = extractChangelogRange(recebido, "v1.88.0-felpz.6", "v1.88.0-felpz.5");
+    expect(faixa.secoes[0]?.body).toContain("pergunta do Hub");
+    expect(faixa.secoes[0]?.body).toContain("recado");
+    expect(faixa.secoes[0]?.body).toContain("/contrato/preparar");
   });
 });
