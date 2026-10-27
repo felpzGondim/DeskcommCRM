@@ -1822,7 +1822,11 @@ jobs:
           mv supabase/migrations /tmp/migrations-off
           mkdir -p supabase/migrations
           esperas=(0 20 60 120)
-          registros=(ghcr.io public.ecr.aws ghcr.io public.ecr.aws)
+          # No PR #8 ambos os espelhos atingiram a cota mesmo com login.
+          # O CLI 2.117.0 também suporta docker.io e preserva os nomes originais
+          # (kong, axllent/mailpit, postgrest/postgrest e supabase/*).
+          # As sete referências foram conferidas por manifest em 27/10/2026.
+          registros=(ghcr.io public.ecr.aws docker.io ghcr.io)
           for tentativa in 1 2 3 4; do
             espera=${esperas[$((tentativa - 1))]}
             registro=${registros[$((tentativa - 1))]}
@@ -1849,7 +1853,7 @@ jobs:
               exit 1
             fi
           done
-          echo "::error title=supabase start falhou 4 vezes baixando imagens::ghcr.io e public.ecr.aws recusaram o pull nas 4 tentativas (esperas de 20s, 60s e 120s). É limite de taxa ou rede do registro, não o PR — rerode a parte."
+          echo "::error title=supabase start falhou 4 vezes baixando imagens::ghcr.io, public.ecr.aws e docker.io recusaram o pull nas 4 tentativas (esperas de 20s, 60s e 120s). Confira os erros de cada registro nas anotações antes de tentar novamente."
           exit 1
 
       # O baseline é um dump `--schema-only`: ele USA os tipos das extensões
