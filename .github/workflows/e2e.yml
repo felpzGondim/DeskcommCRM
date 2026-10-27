@@ -1820,6 +1820,16 @@ jobs:
             if SUPABASE_INTERNAL_IMAGE_REGISTRY="$registro" supabase start -x studio,postgres-meta 2>&1 | tee /tmp/supabase-start.log; then
               exit 0
             fi
+            # O erro exato também fica nas anotações consultáveis pela API.
+            # Logs/artefatos podem estar indisponíveis; não diagnosticar todo pull
+            # recusado como limite de taxa sem mostrar qual imagem falhou.
+            while IFS= read -r detalhe; do
+              [ -n "$detalhe" ] || continue
+              detalhe=$(printf '%s' "$detalhe" | sed -E 's#https?://[^[:space:]"]+#[URL]#g' | cut -c1-600)
+              detalhe=${detalhe//%/%25}
+              detalhe=${detalhe//$'\r'/%0D}
+              echo "::warning title=Supabase: erro da tentativa ${tentativa} em ${registro}::${detalhe}"
+            done < <(grep -E 'toomanyrequests|failed to pull docker image|error pulling image|Error response from daemon|TLS handshake timeout|i/o timeout|connection reset by peer' /tmp/supabase-start.log | tail -4 || true)
             if ! grep -qE 'toomanyrequests|failed to pull docker image|error pulling image|TLS handshake timeout|i/o timeout|connection reset by peer' /tmp/supabase-start.log; then
               echo "::error title=supabase start falhou (não é o registro)::a saída acima não tem erro de pull nem de rede, então não há nova tentativa"
               exit 1
@@ -2443,6 +2453,15 @@ jobs:
           timeout -k 30 --signal=TERM "${FOLGA}s" pnpm exec playwright test --workers=1 $LISTA --reporter=list 2>&1 | tee "$SAIDA"
           CODIGO=${PIPESTATUS[0]}
           set -e
+          if [ "$CODIGO" -ne 0 ]; then
+            # Nomes de specs e títulos, sem anexar valores de requests ou o
+            # conteúdo de mensagens. Mantém a falha original da suíte.
+            while IFS= read -r caso; do
+              caso=${caso//%/%25}
+              caso=${caso//$'\r'/%0D}
+              echo "::warning title=Caso de e2e com falha na parte ${PARTE}::${caso}"
+            done < <(sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g' "$SAIDA" | grep -E '^[[:space:]]*[0-9]+\)[[:space:]]+\[[^]]+\].*tests/e2e/' | head -12 || true)
+          fi
           echo "SAIDA_DA_SUITE=${SAIDA}" >> "$GITHUB_ENV"
           SUITE=$(( $(date -u +%s) - INICIO_SUITE ))
           {

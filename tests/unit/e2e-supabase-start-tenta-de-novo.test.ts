@@ -129,4 +129,14 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
     expect(r.chamadas.filter((c) => c.startsWith("sleep"))).toEqual(["sleep 20", "sleep 60", "sleep 120"]);
     expect(r.saida).toContain("::error title=supabase start falhou 4 vezes");
   });
+
+  it("publica a imagem e o motivo nas anotações, sem URLs de autenticação e sem mascarar a falha", () => {
+    const r = rodar([{ texto: 'Error response from daemon: failed to pull docker image ghcr.io/supabase/gotrue:v2.196.0: Get "https://registro.example/token?secret=nao-publicar": forbidden', falha: true }]);
+    expect(r.status).toBe(1);
+    const anotacoes = r.saida.split("\n").filter((l) => l.startsWith("::warning title=Supabase: erro"));
+    expect(anotacoes).toHaveLength(4);
+    expect(anotacoes[0]).toContain("ghcr.io/supabase/gotrue:v2.196.0");
+    expect(anotacoes[0]).toContain("forbidden");
+    expect(anotacoes.join("\n")).not.toContain("nao-publicar");
+  });
 });
