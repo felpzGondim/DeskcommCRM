@@ -9,8 +9,8 @@
 |---|---|
 | Qual IA responde | A escolhida em **IA › Provedores → "IA do painel do atendente"** (ponto `painel_atendente`). Na Brisa: Gemini. |
 | Quem vê | Todo atendente (`agent` ou acima). Suporte em modo só leitura vê os botões desabilitados. |
-| O que aparece | Resumir conversa, Sugerir resposta, pergunta livre e quatro ações do Brisa Hub (ver `docs/decisoes/painel-acoes-hub.md`). |
-| Cadastro e manutenção de contrato | Adiados (parte futura). |
+| O que aparece | Resumir conversa, Sugerir resposta, pergunta livre, consultas do Brisa Hub e Gerar contrato (ver `docs/decisoes/painel-acoes-hub.md`). |
+| Cadastro de contrato | Gerar contrato prepara a locação no SuperLógica e exige revisão do resumo antes de confirmar. Manutenção de contratos existentes continua fora deste painel. |
 
 ## Regras que não podem quebrar
 

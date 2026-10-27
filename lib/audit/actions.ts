@@ -929,6 +929,8 @@ export const AUDIT_ACTIONS = [
   "ai.painel_atendente.contrato",
   "ai.painel_atendente.ficha",
   "ai.painel_atendente.analise",
+  "ai.painel_atendente.contrato_preparado",
+  "ai.painel_atendente.contrato_confirmado",
   /**
    * O aviso de caso no WhatsApp da equipe (migration 0292).
    *

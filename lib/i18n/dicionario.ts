@@ -33,12 +33,14 @@
  */
 import type { Idioma } from "./idiomas";
 import { TEXTOS_AGENDA_CONFIGURACAO } from "./agenda-configuracao";
+import { TEXTOS_CONTRATO_LOCACAO } from "./contrato-locacao";
 import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 
 /** `pt-BR` não aparece: é a chave. Só o que DIFERE precisa de linha. */
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  ...TEXTOS_CONTRATO_LOCACAO,
   "Não foi possível consultar o Brisa Hub agora.": { es: "No fue posible consultar Brisa Hub ahora." },
   "Preparar análise de inquilino": { es: "Preparar análisis del inquilino" },
   "Não foi possível preparar a análise.": { es: "No fue posible preparar el análisis." },

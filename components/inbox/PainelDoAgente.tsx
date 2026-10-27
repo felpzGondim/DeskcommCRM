@@ -6,7 +6,8 @@
  * Regras que esta tela não pode quebrar:
  *  · Nunca envia nada ao cliente. "Usar como resposta" só preenche a caixa de
  *    texto (Composer); quem envia é a pessoa.
- *  · Ações do Hub são mostradas a todos os atendentes; a análise exige confirmação.
+ *  · Ações do Hub são mostradas a todos os atendentes; análise e criação de
+ *    contrato exigem confirmação.
  *  · O histórico do painel é só da tela: troca de conversa = painel limpo.
  *  · Qual IA responde é escolhido em IA › Provedores, ponto
  *    "IA do painel do atendente" (`painel_atendente`).
@@ -23,6 +24,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { randomId } from "@/lib/random-id";
 import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { GerarContratoDialog } from "./GerarContratoDialog";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
 
@@ -198,6 +200,8 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
             </Button>
           </div>
           <div className="flex flex-wrap gap-2" aria-label={t("Ações do Brisa Hub")}>
+            <GerarContratoDialog key={conversationId} conversationId={conversationId}
+              desabilitado={desabilitado || carregando !== null} />
             {(["boletos", "contrato", "ficha"] as const).map((acao) => (
               <Button key={acao} size="sm" variant="outline" className="h-7 px-2 text-xs"
                 disabled={desabilitado || carregando !== null}
