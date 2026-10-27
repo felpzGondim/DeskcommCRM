@@ -1,0 +1,50 @@
+# Brisa Hub (fase 2b) - aprovado pelo Felipe em 2026-10-18 13h23 (Brasilia).
+# Publica SÓ /mcp (exige Bearer no próprio serviço) e /health. Resto: 404.
+# Reverter: apagar este arquivo e rodar caddy validate + caddy reload.
+brisa-hub.srv2017601.hstgr.cloud {
+	log {
+		output file /data/logs/brisa-hub-access.log {
+			roll_size 10MiB
+			roll_keep 10
+		}
+		format filter {
+			wrap json
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+			request>headers>X-Deskcomm-Contato-Telefone delete
+			request>headers>X-Deskcomm-Contato-Id delete
+		}
+	}
+	request_body {
+		max_size 64KB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	route {
+		@health {
+			method GET HEAD
+			path /health
+		}
+		reverse_proxy @health brisa-hub:8080
+		@mcp path /mcp
+		reverse_proxy @mcp brisa-hub:8080
+		@contrato_get {
+			method GET
+			path /contrato/schema /contrato/openapi.json
+		}
+		reverse_proxy @contrato_get brisa-hub:8080
+		@contrato_post {
+			method POST
+			path /contrato/preparar /contrato/confirmar
+		}
+		reverse_proxy @contrato_post brisa-hub:8080
+		respond 404
+	}
+}

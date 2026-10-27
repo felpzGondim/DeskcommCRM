@@ -198,8 +198,9 @@ __pycache__/
 # Não versiona por uma razão medida: o update.sh troca de versão com
 # `git checkout <tag>`, e um arquivo local alterado faz a atualização parar em
 # "parece haver mudanças locais que divergem" — é o mesmo sintoma da issue,
-# reaberto por outro caminho. A única exceção é o placeholder comentado, que é
-# o que mantém a pasta presente no clone novo (sem pasta, o bind mount do
-# compose não tem de onde nascer).
+# reaberto por outro caminho. Exceções explícitas: o placeholder comentado,
+# que mantém a pasta no clone novo (sem pasta, o bind mount do compose não
+# tem de onde nascer), e o site do Brisa Hub desta instalação.
 caddy-sites/*
 !caddy-sites/README.caddy
+!caddy-sites/brisa-hub.caddy

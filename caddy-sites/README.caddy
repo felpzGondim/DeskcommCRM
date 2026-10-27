@@ -56,3 +56,8 @@
 # Este diretório vale para as DUAS variantes (normal e single-server): os dois
 # Caddyfiles importam o mesmo caminho e os dois composes montam esta mesma
 # pasta.
+#
+# Brisa Hub (brisa-hub.caddy) — cópia ao vivo da VPS, versionada de propósito.
+# Publica: /mcp, /health, GET /contrato/schema|openapi.json,
+# POST /contrato/preparar|confirmar. Resto: 404.
+# Backup anterior na VPS: /root/backups/brisa-hub.caddy.20261027-224857
