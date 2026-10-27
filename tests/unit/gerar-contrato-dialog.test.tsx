@@ -30,7 +30,7 @@ describe("Gerar contrato", () => {
     await screen.findByText(previa.data.resumo);
     expect(post).toHaveBeenCalledWith("/api/v1/conversations/conversa/painel-agente/contrato", {
       etapa: "preparar", dados: expect.objectContaining({ aluguel: 1200, indice_reajuste: "IPCA",
-        locatarios: [{ cpf: "52998224725", dados: {} }] }),
+        locatarios: [{ cpf: "52998224725", dados: {} }], split: false, isencao_multa_meses: 0 }),
     }, expect.anything());
     const confirmar = screen.getByRole("button", { name: "Confirmar criação da locação" });
     expect(confirmar).toBeDisabled();
@@ -76,6 +76,15 @@ describe("Gerar contrato", () => {
     abrirEPreencher();
     fireEvent.click(screen.getByRole("button", { name: "Preparar locação" }));
     await screen.findByText("Falta endereço");
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("mostra a pergunta da pendência quando o Hub devolve objeto", async () => {
+    post.mockResolvedValueOnce({ data: { ...previa.data, token: null,
+      pendencias: [{ campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" }] } });
+    abrirEPreencher();
+    fireEvent.click(screen.getByRole("button", { name: "Preparar locação" }));
+    await screen.findByText("iptu: Qual o valor mensal do IPTU?");
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

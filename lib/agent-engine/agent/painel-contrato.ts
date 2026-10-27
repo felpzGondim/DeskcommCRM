@@ -2,6 +2,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
+import { sanitizarTextoDoLead } from "@/lib/escalacao/sanitizar-texto-do-lead";
 import { fetchDeSaida } from "@/lib/mcp/servidor-externo/chamada";
 import type { ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
 
@@ -30,15 +31,40 @@ export const dadosContratoSchema = z.object({
   observacao: z.string().trim().max(2000).optional(),
   iptu: z.object({ valor_mensal: dinheiro }).strict().optional(),
   seguro_fianca: z.object({ valor_mensal: dinheiro }).strict().optional(),
+  // Hub PR #23 / contrato-api.md: o painel precisa enviar estes dois.
+  // `split` é o repasse PJBank (PR #17/#18); `isencao_multa_meses` é inteiro ≥ 0.
+  split: z.boolean(),
+  isencao_multa_meses: z.number().int().min(0).max(120),
 }).strict();
 export type DadosContrato = z.infer<typeof dadosContratoSchema>;
+
+export type PendenciaContrato = { campo: string; pergunta: string };
+const pendenciaBruta = z.union([
+  z.string().trim().min(1).max(4000),
+  z.object({
+    campo: z.string().trim().max(200).optional(),
+    pergunta: z.string().trim().min(1).max(4000),
+  }).strict(),
+]);
+export function normalizarPendencia(valor: z.infer<typeof pendenciaBruta>): PendenciaContrato {
+  if (typeof valor === "string") return { campo: "", pergunta: valor };
+  return { campo: valor.campo ?? "", pergunta: valor.pergunta };
+}
+export function normalizarPendencias(lista: readonly z.infer<typeof pendenciaBruta>[]): PendenciaContrato[] {
+  return lista.map(normalizarPendencia);
+}
+export function textoDaPendencia(p: string | PendenciaContrato): string {
+  if (typeof p === "string") return p;
+  return p.campo ? `${p.campo}: ${p.pergunta}` : p.pergunta;
+}
 
 const lista = z.array(z.string().max(4000)).max(100);
 export const preparoContratoSchema = z.object({
   pronto: z.boolean(), preview_id: z.string().regex(/^[0-9a-f]{36}$/).optional(),
   validade_s: z.number().positive().optional(),
   resumo: z.object({ texto: z.string().min(1).max(40000) }),
-  pendencias: lista, avisos: lista.optional().default([]),
+  pendencias: z.array(pendenciaBruta).max(100).transform(normalizarPendencias),
+  avisos: lista.optional().default([]),
 }).refine((v) => !v.pronto || !!v.preview_id);
 export const resultadoContratoSchema = z.object({
   gravado: z.boolean(), completo: z.boolean().optional(),
@@ -68,18 +94,69 @@ export function abrirContrato(token: string, segredo: string, escopo: string) {
   } catch { return null; }
 }
 
+export type CodigoErroContrato =
+  | "hub_endpoint_invalid"
+  | "hub_contract_permission"
+  | "hub_contract_unconfigured"
+  | "hub_contract_failed";
+
+/** Erro do Hub com recado sanitizado — CPF, token e URL não passam. */
+export class ErroApiContrato extends Error {
+  constructor(readonly codigo: CodigoErroContrato, readonly detalhe?: string) {
+    super(codigo);
+    this.name = "ErroApiContrato";
+  }
+}
+
+const SEGREDO_NO_TEXTO = /\b\d{11}\b|Bearer\s+\S+|dsk_[A-Za-z0-9]+/i;
+
+function textoBrutoDoErroHub(corpo: unknown): string | null {
+  if (typeof corpo === "string") {
+    const t = corpo.trim();
+    if (!t) return null;
+    if (t.startsWith("{") || t.startsWith("[")) {
+      try { return textoBrutoDoErroHub(JSON.parse(t)); } catch { return t; }
+    }
+    return t;
+  }
+  if (!corpo || typeof corpo !== "object") return null;
+  const o = corpo as Record<string, unknown>;
+  const error = o.error && typeof o.error === "object" && !Array.isArray(o.error)
+    ? o.error as Record<string, unknown> : null;
+  for (const c of [o.mensagem, o.message, o.detail, o.erro, o.msg, error?.mensagem, error?.message, error?.detail]) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+/** Lê o JSON de erro do Hub e devolve só a frase segura para a tela. */
+export function extrairMensagemErroHub(corpo: unknown): string | undefined {
+  const bruto = textoBrutoDoErroHub(corpo);
+  if (!bruto || SEGREDO_NO_TEXTO.test(bruto)) return undefined;
+  return sanitizarTextoDoLead(bruto, 280) ?? undefined;
+}
+
+export function codigoErroContrato(status: number): Exclude<CodigoErroContrato, "hub_endpoint_invalid"> {
+  if (status === 401 || status === 403) return "hub_contract_permission";
+  if (status === 503) return "hub_contract_unconfigured";
+  return "hub_contract_failed";
+}
+
 /** Mesma origem e credencial do cadastro MCP; a API do Hub revalida a permissão de escrita. */
 export async function chamarApiContrato(servidor: ServidorMcpExterno, etapa: "preparar" | "confirmar", dados: unknown) {
   const url = new URL(servidor.endpoint);
-  if (!/\/mcp\/?$/.test(url.pathname)) throw new Error("hub_endpoint_invalid");
+  if (!/\/mcp\/?$/.test(url.pathname)) throw new ErroApiContrato("hub_endpoint_invalid");
+  // Canônico do painel (brisa-hub PR #23, docs/contrato-api.md): mesmo host do /mcp.
+  // /contratos/preparar-criacao é outra API (plugin SuperLógica), não esta.
   url.pathname = url.pathname.replace(/\/mcp\/?$/, `/contrato/${etapa}`);
   const resposta = await fetchDeSaida(servidor.endpoint)(url.href, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${servidor.chave}` },
     body: JSON.stringify(dados), signal: AbortSignal.timeout(90_000), redirect: "error",
   });
   if (!resposta.ok) {
-    // Nunca repassar erros remotos, que podem incluir CPF ou credenciais.
-    throw new Error(resposta.status === 401 || resposta.status === 403 ? "hub_contract_permission" : "hub_contract_failed");
+    let corpo: unknown = null;
+    try { corpo = await resposta.json(); } catch { /* corpo vazio ou não-JSON */ }
+    throw new ErroApiContrato(codigoErroContrato(resposta.status), extrairMensagemErroHub(corpo));
   }
   return resposta.json() as Promise<unknown>;
 }
