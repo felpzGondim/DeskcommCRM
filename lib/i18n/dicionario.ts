@@ -39,6 +39,17 @@ import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Não foi possível consultar o Brisa Hub agora.": { es: "No fue posible consultar Brisa Hub ahora." },
+  "Preparar análise de inquilino": { es: "Preparar análisis del inquilino" },
+  "Não foi possível preparar a análise.": { es: "No fue posible preparar el análisis." },
+  "Ações do Brisa Hub": { es: "Acciones de Brisa Hub" },
+  "Confirmar análise": { es: "Confirmar análisis" },
+  "Confira a prévia acima e os documentos originais. Confirmar cria o pedido de análise no Brisa Hub; a cobrança FC Score+ ainda exige confirmação posterior.": {
+    es: "Revisa la vista previa y los documentos originales. Confirmar crea la solicitud de análisis en Brisa Hub; el cobro de FC Score+ aún requiere una confirmación posterior.",
+  },
+  "A ferramenta desta ação não está disponível no Brisa Hub. Peça à administração para conferir a integração MCP.": {
+    es: "La herramienta de esta acción no está disponible en Brisa Hub. Pide a la administración que revise la integración MCP.",
+  },
   // Encaminhar mensagem (#2835) — botão na bolha do chat e o diálogo de destino.
   "Encaminhar": { es: "Reenviar" },
   "Encaminhar mensagem": { es: "Reenviar mensaje" },

@@ -115,7 +115,7 @@ async function cabecalhosDoContato(
   if (error || typeof contato?.id !== "string" || contato.id !== contatoId) {
     logger.warn("contato do turno nao resolvido — servidor MCP externo fica fora deste turno", {
       organization_id: organizationId,
-      ...(error ? { error: error.message } : {}),
+      ...(error ? { falhaDeLeitura: true } : {}),
     });
     return null;
   }
@@ -167,7 +167,7 @@ export async function carregarServidorMcpExterno(
   if (error) {
     logger.warn("nao foi possivel ler o registro do servidor MCP externo", {
       organization_id: organizationId,
-      error: error.message,
+      falhaDeLeitura: true,
     });
     return null;
   }
@@ -211,11 +211,12 @@ export async function carregarServidorMcpExterno(
     return contato && cabecalhos
       ? { servidor, ferramentas, contato, cabecalhos }
       : { servidor, ferramentas };
-  } catch (err) {
+  } catch {
     logger.warn("servidor MCP externo registrado nao respondeu — turno segue sem as ferramentas dele", {
       organization_id: organizationId,
       endpoint: hostDoEndpoint(endpoint),
-      error: err instanceof Error ? err.message : String(err),
+      // Respostas de terceiros podem conter PII ou o próprio segredo.
+      falhaDeConexao: true,
     });
     return null;
   }

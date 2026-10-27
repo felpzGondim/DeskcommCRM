@@ -49,5 +49,42 @@ describe("Painel do agente (UI)", () => {
   it("só leitura desabilita os botões", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
+  });
+
+  it("análise exige confirmação antes de chamar a rota", async () => {
+    postMock.mockResolvedValueOnce({ data: { resumo: "Renda preliminar: R$ 4.000,00", previaToken: "token", pronto: true } })
+      .mockResolvedValueOnce({ data: { resumo: "Pedido de análise enviado." } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar análise de inquilino" }));
+    await screen.findByText("Renda preliminar: R$ 4.000,00");
+    expect(postMock).toHaveBeenCalledWith("/api/v1/conversations/c1/painel-agente/acoes", { acao: "analise", etapa: "preparar" });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar análise" }));
+    await screen.findByText("Pedido de análise enviado.");
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente/acoes",
+      expect.objectContaining({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId: expect.any(String), previaToken: "token" }),
+    );
+  });
+
+  it("pedido de documentos só preenche o Composer", async () => {
+    postMock.mockResolvedValue({ data: { resumo: "Pendentes", sugestao: "Envie o RG, por favor." } });
+    const preencher = vi.fn();
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={preencher} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ficha cadastral / pedir documentos" }));
+    await screen.findByText("Envie o RG, por favor.");
+    fireEvent.click(screen.getByRole("button", { name: "Usar como resposta" }));
+    expect(preencher).toHaveBeenCalledWith("Envie o RG, por favor.");
+    expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mostra link seguro da segunda via na consulta de boletos", async () => {
+    postMock.mockResolvedValue({ data: { resumo: "1. Em aberto · 2026-11-05 · R$ 123.00", links: [
+      { rotulo: "Abrir 2ª via do boleto 1", url: "https://boletos.exemplo/1" },
+    ] } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Buscar boletos" }));
+    const link = await screen.findByRole("link", { name: "Abrir 2ª via do boleto 1" });
+    expect(link).toHaveAttribute("href", "https://boletos.exemplo/1");
   });
 });
