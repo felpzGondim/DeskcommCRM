@@ -216,6 +216,9 @@ jobs:
   # `tests/unit/e2e-parte-4-fala-com-os-servicos-do-runner.test.ts` reprova.
   e2e-parte:
     needs: [e2e-alcance]
+    permissions:
+      contents: read
+      packages: read
     # Head superado não pede vaga no grupo (#2449): quem decide isso é o passo
     # inicial do `e2e-alcance`, que compara o `head.sha` do evento com o head
     # atual do PR. Pulando aqui (antes de o job existir para o Actions), o run
@@ -1743,6 +1746,17 @@ jobs:
         # O teto do preâmbulo mora aqui porque passo de composite action não
         # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.
         timeout-minutes: 5
+
+      # Os pulls anônimos das sete partes atingiram o limite de tráfego do
+      # GHCR e do espelho ECR no PR #8. O CLI lê as credenciais do Docker
+      # (utils/docker.go, loadRegistryAuth); usar o token efêmero do job em
+      # modo somente leitura, sem segredos novos nem permissão de publicação.
+      - name: Autenticar downloads do Supabase no GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Versão EXATA, e nunca `latest`: é o CLI que escolhe qual stack o e2e
       # sobe (PostgREST, GoTrue, Storage, Realtime) e o e2e exercita exatamente
