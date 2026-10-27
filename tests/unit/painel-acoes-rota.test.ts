@@ -167,6 +167,8 @@ describe("rota das ações do painel", () => {
     mocks.load.mockResolvedValue({ servidor: {}, ferramentas: [] });
     const r = await POST(req({ acao: "boletos" }), ctx);
     expect(r.status).toBe(422);
-    expect(JSON.stringify(await r.json())).toContain("ferramenta não disponível");
+    const resposta = await r.json();
+    expect(resposta.error.code).toBe("tool_unavailable");
+    expect(resposta.error.message).toContain("não está disponível no Brisa Hub");
   });
 });
