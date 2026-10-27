@@ -10,8 +10,8 @@
  * `timeout`, `sudo` e `pnpm` falsos no PATH. O `timeout` falso devolve 124
  * (estourou) ou 0 conforme o roteiro, e registra o que lhe pediram para rodar.
  */
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -43,6 +43,12 @@ function rodar(passo: string, roteiro: number[]) {
   dirs.push(raiz);
   const bin = path.join(raiz, "bin");
   mkdirSync(bin);
+  // Não herdar /usr/bin: o ffmpeg já instalado faria o script pular a instalação
+  // que este teste precisa exercitar. Expor somente os utilitários do roteiro.
+  for (const comando of ["bash", "head", "sed", "chmod", "mkdir", "grep"]) {
+    const real = execFileSync("bash", ["-c", 'command -v "$1"', "resolver", comando], { encoding: "utf-8" }).trim();
+    symlinkSync(real, path.join(bin, comando));
+  }
   const log = path.join(raiz, "chamadas.log");
   writeFileSync(path.join(raiz, "roteiro"), roteiro.join("\n") + "\n");
   const falso = (nome: string, corpo: string) => {
@@ -60,7 +66,7 @@ exit "$rc"`,
   falso("sudo", `echo "sudo $*" >> "${log}"`);
   const r = spawnSync("bash", ["-e", "-c", scriptDoPasso(passo)], {
     // PATH mínimo: um ffmpeg da máquina de quem roda o teste pularia o laço.
-    env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, HOME: raiz },
+    env: { ...process.env, PATH: bin, HOME: raiz },
     encoding: "utf-8",
   });
   return {

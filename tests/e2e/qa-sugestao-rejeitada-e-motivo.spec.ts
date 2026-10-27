@@ -26,6 +26,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { expect, test, type Page } from "./helpers/test";
+import { botaoDeSugestaoAssistida } from "./helpers/sugestao-assistida";
 
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 import { seedPlatformPlaybook } from "../../lib/agent-engine/agent/playbook-seed";
@@ -191,11 +192,10 @@ const painel = (page: Page) => page.locator('section[aria-label="Assistência do
 /**
  * O MESMO gesto nas duas superfícies (issue #3027): sem rascunho, o bloco não é
  * montado e quem oferece a sugestão é o botão de ícone do compositor; com
- * rascunho, é o botão de texto do bloco. Nunca os dois — daí um localizador de
- * página servir aos dois estados.
+ * rascunho, é o botão de texto do bloco. O localizador cobre essas duas
+ * superfícies sem confundir com o botão homônimo do painel interno.
  */
-const botaoSugerir = (page: Page) =>
-  page.getByRole("button", { name: "Sugerir resposta", exact: true });
+const botaoSugerir = botaoDeSugestaoAssistida;
 
 test.afterAll(async () => {
   for (const org of orgs) {

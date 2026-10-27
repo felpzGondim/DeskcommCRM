@@ -50,6 +50,15 @@ describe("Painel do agente (UI)", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Gerar contrato" })).toBeDisabled();
+  });
+
+  it("oferece Gerar contrato no painel e abre a preparação sem gravar", () => {
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Gerar contrato" }));
+    expect(screen.getByRole("dialog", { name: "Gerar contrato no SuperLógica" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Preparar locação" })).toBeVisible();
+    expect(postMock).not.toHaveBeenCalled();
   });
 
   it("análise exige confirmação antes de chamar a rota", async () => {

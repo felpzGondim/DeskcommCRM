@@ -1,5 +1,17 @@
 # Ações do painel do agente via Brisa Hub
 
+## Gerar contrato no SuperLógica
+
+O botão **Gerar contrato** abre um formulário interno para imóvel, locatários, fiadores, aluguel, datas, reajuste, garantia, taxas e despesas. O atendente informa os dados; esta ação não extrai automaticamente a ficha da conversa. Campos opcionais em branco preservam os padrões do Hub, que aparecem no resumo para conferência.
+
+A rota autenticada `painel-agente/contrato` exige `agent+`, bloqueia suporte só leitura e resolve conversa e contato pela organização da sessão. Usa a origem e a credencial do MCP cadastrado para chamar a API publicada do mesmo Hub: `POST /contrato/preparar` e `POST /contrato/confirmar`. O serviço do Hub precisa aceitar a credencial do CRM em `CONTRATO_KEYS_SHA256` e ter o proxy `BRISA_HUB_CONTRATO_URL` configurado. O segredo não chega ao navegador. Sem acesso, a tela explica a dependência; esta mudança não habilita credenciais em produção.
+
+Preparar não grava a locação. O painel mostra `resumo.texto` completo, avisos e pendências. Só uma prévia pronta e sem pendências recebe token assinado, vinculado a organização, conversa, usuário e servidor/credencial, com validade limitada à do Hub e a 30 minutos. A confirmação explícita envia `preview_id`, `confirmado: true` e a mesma chave idempotente em todas as tentativas daquela prévia ao recibo persistente do Hub. Alterar campos invalida a prévia; após iniciar a confirmação, o formulário fica bloqueado para permitir retomar o mesmo pedido sem criar outro. Trocar de conversa remonta o componente. Dados e prévia ficam só na tela.
+
+A criação no SuperLógica nasce **ativa**. O resultado mostra o ID, a situação retornada, pendências de despesas, divergências e ações manuais (como pausar e ligar split). Não gera PDF nem envia mensagens ao cliente. Auditoria: `ai.painel_atendente.contrato_preparado` e `ai.painel_atendente.contrato_confirmado`, sem CPF, dados cadastrais ou resumo. A IA de texto conhece o botão e explica que `/contrato` não executa comandos.
+
+Destino: núcleo, completando o consumidor opcional do Hub já distribuído. A Inbox continua útil sem a integração. Entrada: botão no `PainelDoAgente`; saída: prévia e resultado no `GerarContratoDialog`; efeito externo: API de contratos do Hub; auditoria: `api_audit_log`. Falhas aparecem na tela e permitem retomar a mesma confirmação. O cadastro MCP da organização é a porta de configuração. Sem tabela ou migration nova.
+
 Para a ficha, o CRM monta um JSON temporário com nome, MIME e legenda dos anexos recebidos nas 60 mensagens mais recentes da conversa, até 30 anexos. Não inclui caminhos, URLs, identificadores de anexo ou textos de mensagens sem anexo; não é gravado como ficha. O Hub identifica somente **documento de identidade** e **comprovante de renda** (holerite, CTPS ou extrato bancário). Nome ou legenda são pistas, não validação documental: a UI exige conferência humana antes de usar o texto sugerido. Um anexo genérico não comprova nenhuma categoria. A ferramenta está no PR `felpzGondim/brisa-hub#22`; ainda precisa ser publicada no serviço para aparecer no teste de conexão.
 
 ## Análise em duas etapas

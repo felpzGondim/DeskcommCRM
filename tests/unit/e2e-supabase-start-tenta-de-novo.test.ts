@@ -97,13 +97,13 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
     const r = rodar([LIMITE, LIMITE, { texto: "Started supabase local development setup.", falha: false }]);
     expect(r.status, r.saida).toBe(0);
     expect(r.chamadas).toEqual([
-      "@ghcr.io start -x studio,postgres-meta",
+      "@docker.io start -x studio,postgres-meta",
       "stop --no-backup",
       "sleep 20",
-      "@public.ecr.aws start -x studio,postgres-meta",
+      "@ghcr.io start -x studio,postgres-meta",
       "stop --no-backup",
       "sleep 60",
-      "@ghcr.io start -x studio,postgres-meta",
+      "@public.ecr.aws start -x studio,postgres-meta",
     ]);
     expect(r.saida).toContain("::warning");
   });
@@ -113,7 +113,7 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
       { texto: "failed to bind host port for 0.0.0.0:54322: address already in use", falha: true },
     ]);
     expect(r.status, r.saida).toBe(1);
-    expect(r.chamadas).toEqual(["@ghcr.io start -x studio,postgres-meta"]);
+    expect(r.chamadas).toEqual(["@docker.io start -x studio,postgres-meta"]);
     expect(r.saida).toContain("::error");
   });
 
@@ -121,12 +121,22 @@ describe("e2e.yml — supabase start resiste ao limite do registro", () => {
     const r = rodar([LIMITE]);
     expect(r.status, r.saida).toBe(1);
     expect(r.chamadas.filter((c) => c.startsWith("@")).map((c) => c.split(" ")[0])).toEqual([
+      "@docker.io",
       "@ghcr.io",
       "@public.ecr.aws",
-      "@ghcr.io",
-      "@public.ecr.aws",
+      "@docker.io",
     ]);
     expect(r.chamadas.filter((c) => c.startsWith("sleep"))).toEqual(["sleep 20", "sleep 60", "sleep 120"]);
     expect(r.saida).toContain("::error title=supabase start falhou 4 vezes");
+  });
+
+  it("publica a imagem e o motivo nas anotações, sem URLs de autenticação e sem mascarar a falha", () => {
+    const r = rodar([{ texto: 'Error response from daemon: failed to pull docker image ghcr.io/supabase/gotrue:v2.196.0: Get "https://registro.example/token?secret=nao-publicar": forbidden', falha: true }]);
+    expect(r.status).toBe(1);
+    const anotacoes = r.saida.split("\n").filter((l) => l.startsWith("::warning title=Supabase: erro"));
+    expect(anotacoes).toHaveLength(4);
+    expect(anotacoes[0]).toContain("ghcr.io/supabase/gotrue:v2.196.0");
+    expect(anotacoes[0]).toContain("forbidden");
+    expect(anotacoes.join("\n")).not.toContain("nao-publicar");
   });
 });

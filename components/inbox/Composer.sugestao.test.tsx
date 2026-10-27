@@ -24,7 +24,7 @@
  * irrelevantes do compositor são placeholders.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -84,6 +84,7 @@ vi.mock("@/lib/notifications/mentions", () => ({
 vi.mock("@/lib/messaging/contact-card", () => ({ resolveSharedContact: vi.fn() }));
 
 import { Composer } from "./Composer";
+import { PainelDoAgente } from "./PainelDoAgente";
 
 /** Um rascunho como o servidor devolve — só os campos que a tela lê. */
 const rascunho = (extra: Record<string, unknown> = {}) => ({
@@ -101,11 +102,12 @@ function comRascunhos(drafts: unknown[]) {
   deps.get.mockResolvedValue({ data: { drafts } });
 }
 
-function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
+function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}, comPainelInterno = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <Composer conversationId="conv-1" contactName="Rafael" {...props} />
+      {comPainelInterno && <PainelDoAgente conversationId="conv-1" />}
     </QueryClientProvider>,
   );
 }
@@ -122,6 +124,21 @@ beforeEach(() => {
 });
 
 describe("a faixa da assistência só existe com rascunho (issue #3027)", () => {
+  it("o painel interno tem um botão homônimo; a assistência continua criando pelo endpoint de rascunho", async () => {
+    for (const comRascunho of [false, true]) {
+      comRascunhos(comRascunho ? [rascunho()] : []);
+      deps.post.mockReset().mockResolvedValue({ data: { draft: "texto gerado" } });
+      const tela = renderComposer({}, true);
+      if (comRascunho) await screen.findByText("Sugestão para revisar");
+      expect(screen.getAllByRole("button", { name: "Sugerir resposta" })).toHaveLength(2);
+      const superficie = comRascunho ? screen.getByLabelText("Assistência do agente") : screen.getByTestId("modos-do-composer");
+      await userEvent.click(within(superficie).getByRole("button", { name: "Sugerir resposta" }));
+      await waitFor(() => expect(deps.post).toHaveBeenCalledWith("/api/v1/conversations/conv-1/draft-reply", {}));
+      expect(deps.post).toHaveBeenCalledTimes(1);
+      tela.unmount();
+    }
+  });
+
   it("⭐ sem rascunho: o bloco NÃO é montado e sobra UM botão de ícone", async () => {
     comRascunhos([]);
     renderComposer();
