@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.12] — 2026-10-28
+
+### Adicionado
+
+- **FC Score+ no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.fc` (desligada). Ligada e com renda confirmada, o processo ganha Analisar FC (salvamento grátis; a IA pode disparar) e Confirmar cobrança da FC (vai gastar créditos, sem preço na tela; só o atendente clica). Reaproveita um FC da mesma pessoa nos últimos 90 dias. Fiador só entra se um atendente pedir. Se o Hub ainda não anunciar as ferramentas novas, o botão avisa e não dispara a análise antiga. Nada vai ao cliente. Rollback: desligar a chave.
+
 ## [1.88.0-felpz.11] — 2026-10-28
 
 ### Adicionado

@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "FC Score+ no Painel (PR 4.3)",
+    "subtitle": "Chave off; dois cliques; L salva grátis; S confirma créditos; reuso 90 dias; laudo base64",
+    "output": "painel-analise-fc.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "inbox", "label": "Inbox" },
+    { "id": "servidor", "label": "Servidor" },
+    { "id": "hub", "label": "Hub" },
+    { "id": "registro", "label": "Registro" }
+  ],
+  "mainPath": ["botao", "chave", "trava", "reuso", "lista", "salvar", "confirmar", "laudo"],
+  "nodes": [
+    {
+      "id": "botao",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Analisar FC e Confirmar cobrança (vai gastar créditos) no processo"
+    },
+    {
+      "id": "pergunta",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "/pergunta: analisar_fc e status_fc (L); confirmar_cobranca_fc só proposta"
+    },
+    {
+      "id": "config",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Configurações › Locação: locacao.analise.fc off"
+    },
+    {
+      "id": "chave",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "analiseLigada: processos + analise.fc"
+    },
+    {
+      "id": "trava",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "exigirRendaConfirmada; fiador/solidário só com origem botao"
+    },
+    {
+      "id": "rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente/fc: agent+, org, rate limit, requireSupportWrite"
+    },
+    {
+      "id": "executar",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "executarFerramenta: mesmo caminho do botão e do loop; S recusa origem agente"
+    },
+    {
+      "id": "reuso",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "fcReaproveitavel 90 dias; andamento vence; sem Hub; sem copiar laudo"
+    },
+    {
+      "id": "lista",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Lista fechada H1/H2 + confirmar_cobranca_fc_analise; senão ferramenta inexistente"
+    },
+    {
+      "id": "pedido",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "locacao_analises_fc: pedido_id por ação; 23505 reusa o em andamento"
+    },
+    {
+      "id": "salvar",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "iniciar_analise_inquilino acao=fc_salvar; trio org+conversa+pedido_id"
+    },
+    {
+      "id": "status",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "status_analise_inquilino: fc.score, fc.risco, id_fc, reconfirmacao, laudo_disponivel"
+    },
+    {
+      "id": "confirmar",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "confirmar_cobranca_fc_analise confirmado=true; ja_cobrado / cobranca_incerta"
+    },
+    {
+      "id": "laudo",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "baixar_resultado_analise tipo=laudo; base64 até 2 MB"
+    },
+    {
+      "id": "arquivo",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "laudo_fc origem hub_fc; arquivos off = score sem PDF"
+    },
+    {
+      "id": "audit",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "api_audit_log: analise_fc_aberta / analise_fc_cobrada, sem PII nem base64"
+    },
+    {
+      "id": "legado",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Botão antigo some com seguro E fc ligados (9a)"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "config", "to": "chave", "label": "admin liga; ausente = off" },
+    { "id": "e2", "from": "chave", "to": "botao", "label": "off: o botão não aparece" },
+    { "id": "e3", "from": "chave", "to": "pergunta", "label": "off: some do ToolSet" },
+    { "id": "e4", "from": "botao", "to": "rota", "label": "clique do atendente" },
+    { "id": "e5", "from": "pergunta", "to": "executar", "label": "L executa o salvamento grátis; S só propõe" },
+    { "id": "e6", "from": "rota", "to": "executar", "label": "origem botao" },
+    { "id": "e7", "from": "executar", "to": "trava", "label": "sem renda confirmada, recusa" },
+    { "id": "e8", "from": "trava", "to": "reuso", "label": "cpf_hash da pessoa; andamento primeiro" },
+    { "id": "e9", "from": "reuso", "to": "pedido", "label": "reaproveitada sem Hub" },
+    { "id": "e10", "from": "reuso", "to": "lista", "label": "sem reuso: confere H1/H2 antes do INSERT" },
+    { "id": "e11", "from": "lista", "to": "pedido", "label": "pedido_id novo; 23505 reusa o em curso" },
+    { "id": "e12", "from": "pedido", "to": "salvar", "label": "acao fc_salvar, nunca seguro" },
+    { "id": "e13", "from": "salvar", "to": "status", "label": "poll 15s em solicitada/cobrando" },
+    { "id": "e14", "from": "botao", "to": "confirmar", "label": "segundo clique humano, sem preço" },
+    { "id": "e15", "from": "executar", "to": "confirmar", "label": "origem agente recusa; nada dispara" },
+    { "id": "e16", "from": "confirmar", "to": "status", "label": "aceito/ja_cobrado acompanha; incerta não repete" },
+    { "id": "e17", "from": "status", "to": "laudo", "label": "laudo_disponivel e sem documento_id" },
+    { "id": "e18", "from": "laudo", "to": "arquivo", "label": "falha do laudo não derruba o score" },
+    { "id": "e19", "from": "rota", "to": "audit", "label": "mutação com efeito" },
+    { "id": "e20", "from": "chave", "to": "legado", "label": "9a: esconde o antigo só com as duas chaves" },
+    { "id": "e21", "from": "status", "to": "botao", "label": "score, risco, ID-FC; aviso de cobrança incerta" }
+  ]
+}

@@ -36,7 +36,12 @@ describe("registro único do painel", () => {
   });
 
   it("C e S existem no registro mas o loop do modelo não as coloca no ToolSet", () => {
-    expect(NOMES_C_OU_S.sort()).toEqual(["confirmar_contrato", "confirmar_renda", "iniciar_analise"]);
+    expect(NOMES_C_OU_S.sort()).toEqual([
+      "confirmar_cobranca_fc",
+      "confirmar_contrato",
+      "confirmar_renda",
+      "iniciar_analise",
+    ]);
     const noLoop = nomesNoToolsetDoLoop();
     expect(noLoop).toContain("propor_acao");
     expect(noLoop).toContain("buscar_boletos");
@@ -45,6 +50,8 @@ describe("registro único do painel", () => {
     expect(noLoop).not.toContain("confirmar_renda");
     expect(noLoop).not.toContain("analisar_renda");
     expect(noLoop).not.toContain("analisar_seguro");
+    expect(noLoop).not.toContain("analisar_fc");
+    expect(noLoop).not.toContain("confirmar_cobranca_fc");
     for (const nome of NOMES_C_OU_S) expect(noLoop).not.toContain(nome);
   });
 
@@ -67,6 +74,19 @@ describe("registro único do painel", () => {
     expect(ligada).toContain("analisar_seguro");
     expect(ligada).toContain("status_seguro");
     expect(ligada).not.toContain("iniciar_analise");
+    expect(ligada).not.toContain("analisar_fc");
+  });
+
+  it("chave locacao.analise.fc desligada: analisar_fc some; ligada: L entra no ToolSet, confirmar não", () => {
+    expect(nomesNoToolsetDoLoop({})).not.toContain("analisar_fc");
+    expect(nomesNoToolsetDoLoop({})).not.toContain("status_fc");
+    const ligada = nomesNoToolsetDoLoop({
+      locacao: { processos_habilitado: true, analise: { fc: true } },
+    });
+    expect(ligada).toContain("analisar_fc");
+    expect(ligada).toContain("status_fc");
+    expect(ligada).not.toContain("confirmar_cobranca_fc");
+    expect(ligada).not.toContain("analisar_seguro");
   });
 
   it("o loop recusa executar C/S mesmo se alguém chamar a porta com origem agente", async () => {
@@ -79,6 +99,12 @@ describe("registro único do painel", () => {
     const s = await executarFerramenta("confirmar_contrato", ctxAgente, { token: "abc" });
     expect(s.ok).toBe(false);
     expect(s.texto).toMatch(/exige clique/);
+    const fc = await executarFerramenta("confirmar_cobranca_fc", {
+      ...ctxAgente,
+      settings: { locacao: { processos_habilitado: true, analise: { fc: true } } },
+    }, {});
+    expect(fc.ok).toBe(false);
+    expect(fc.texto).toMatch(/exige clique/);
   });
 
   it("confirmar_renda só com clique; chave desligada recusa analisar_renda sem chamar modelo", async () => {
@@ -111,6 +137,13 @@ describe("registro único do painel", () => {
     expect(ferramentaDoPainel("analisar_seguro")?.nivel).toBe("L");
     expect(ferramentaDoPainel("status_seguro")?.nivel).toBe("L");
     expect(ferramentaDoPainel("analisar_seguro")?.exigeChaveAnalise).toBe("seguro");
+    expect(ferramentaDoPainel("analisar_fc")?.acaoDoBotao).toBe("analisar_fc");
+    expect(ferramentaDoPainel("status_fc")?.acaoDoBotao).toBe("status_fc");
+    expect(ferramentaDoPainel("confirmar_cobranca_fc")?.acaoDoBotao).toBe("confirmar_cobranca_fc");
+    expect(ferramentaDoPainel("analisar_fc")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("status_fc")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("confirmar_cobranca_fc")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("analisar_fc")?.exigeChaveAnalise).toBe("fc");
     const seguroRota = readFileSync(
       "app/api/v1/conversations/[id]/painel-agente/seguro/route.ts",
       "utf8",
@@ -119,6 +152,15 @@ describe("registro único do painel", () => {
     expect(seguroRota).toContain('origem: "botao"');
     expect(seguroRota).not.toMatch(/["']Contratar["']/);
     expect(seguroRota).not.toMatch(/acao:\s*"fc_salvar"/);
+    const fcRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/fc/route.ts",
+      "utf8",
+    );
+    expect(fcRota).toContain('executarFerramenta(ferramenta');
+    expect(fcRota).toContain('origem: "botao"');
+    expect(fcRota).toContain("confirmar_cobranca_fc");
+    expect(fcRota).not.toMatch(/valor_exibido/);
+    expect(fcRota).not.toMatch(/R\$/);
     const rendaRota = readFileSync(
       "app/api/v1/conversations/[id]/painel-agente/renda/route.ts",
       "utf8",

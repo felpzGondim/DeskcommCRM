@@ -9,6 +9,7 @@ import { chaveEndereco, codigoFc, type PartesDoEndereco } from "@/lib/locacao/en
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { ehStatusFinal, transicaoPermitida, type StatusDoProcesso } from "@/lib/locacao/status";
 import type {
+  EstadoDaAnaliseFc,
   EstadoDaAnaliseSeguro,
   MotivoDeCancelamento,
   OrigemDaAnalise,
@@ -256,6 +257,33 @@ export async function listarParticipantes(
   return (data ?? []).map(asRec);
 }
 
+/** Hash incluso: só no servidor da análise FC. Nunca vai para a tela. */
+export async function listarParticipantesParaFc(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<Record<string, unknown>[]> {
+  const { data } = await tabelaLocacao(admin, "locacao_processo_participantes")
+    .select("id,papel,principal,cpf_hash,cpf_mascarado,removido_em")
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .is("removido_em", null);
+  return (data ?? []).map(asRec);
+}
+
+export async function lerParticipanteDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+  participanteId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_processo_participantes")
+    .select("id,papel,principal,cpf_hash,cpf_mascarado,removido_em")
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .eq("id", participanteId).maybeSingle();
+  if (!data || asRec(data).removido_em) return null;
+  return asRec(data);
+}
+
 export async function adicionarParticipante(
   admin: SupabaseClient,
   input: {
@@ -355,16 +383,65 @@ export async function gravarFichaDoProcesso(
   return versao;
 }
 
+const COLUNAS_FC =
+  "id,processo_id,participante_id,cpf_hash,pedido_id,hub_job_id,estado,origem,documento_id,resultado,erro_codigo,hub_estado,reaproveitou_de,autorizado_por,autorizado_em,concluida_em,ficha_versao";
+
+export async function lerAnaliseFcEmAndamento(
+  admin: SupabaseClient,
+  orgId: string,
+  cpfHash: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_fc")
+    .select(COLUNAS_FC)
+    .eq("organization_id", orgId).eq("cpf_hash", cpfHash)
+    .in("estado", ["solicitada", "aguardando_cobranca", "cobrando"])
+    .maybeSingle();
+  return data ? asRec(data) : null;
+}
+
 export async function fcEmAndamento(
   admin: SupabaseClient,
   orgId: string,
   cpfHash: string,
 ): Promise<boolean> {
+  return !!(await lerAnaliseFcEmAndamento(admin, orgId, cpfHash));
+}
+
+export async function lerAnaliseFc(
+  admin: SupabaseClient,
+  orgId: string,
+  pedidoId: string,
+): Promise<Record<string, unknown> | null> {
   const { data } = await tabelaLocacao(admin, "locacao_analises_fc")
-    .select("id").eq("organization_id", orgId).eq("cpf_hash", cpfHash)
-    .in("estado", ["solicitada", "aguardando_cobranca", "cobrando"])
-    .maybeSingle();
-  return !!data;
+    .select(COLUNAS_FC)
+    .eq("organization_id", orgId).eq("pedido_id", pedidoId).maybeSingle();
+  return data ? asRec(data) : null;
+}
+
+export async function lerAnaliseFcMaisRecenteDoParticipante(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+  participanteId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_fc")
+    .select(COLUNAS_FC)
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .eq("participante_id", participanteId)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data ? asRec(data) : null;
+}
+
+export async function lerAnaliseFcMaisRecenteDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_fc")
+    .select(COLUNAS_FC)
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data ? asRec(data) : null;
 }
 
 export async function fcReaproveitavel(
@@ -403,6 +480,11 @@ export async function abrirAnaliseFc(
     autorizado_em: new Date().toISOString(),
     concluida_em: input.reaproveitouDe ? new Date().toISOString() : null,
   });
+  if (error?.code === "23505" && input.cpfHash && !input.reaproveitouDe) {
+    const corrida = await lerAnaliseFcEmAndamento(admin, input.orgId, input.cpfHash);
+    const reuso = typeof corrida?.pedido_id === "string" ? corrida.pedido_id : "";
+    if (reuso) return reuso;
+  }
   if (error) throw new LocacaoErro("analise_fc_gravacao", "analise_fc");
   await gravarEvento(admin, {
     orgId: input.orgId, processoId: input.processoId, tipo: "analise_fc",
@@ -410,6 +492,76 @@ export async function abrirAnaliseFc(
     detalhe: { pedido_id: pedidoId, reaproveitada: !!input.reaproveitouDe },
   });
   return pedidoId;
+}
+
+export async function marcarEstadoAnaliseFc(
+  admin: SupabaseClient,
+  input: {
+    orgId: string; pedidoId: string;
+    estado: EstadoDaAnaliseFc;
+    hubJobId?: string | null;
+    hubEstado?: string | null;
+    resultado?: Record<string, unknown> | null;
+    documentoId?: string | null;
+    erroCodigo?: string | null;
+    autorizadoPor?: string | null;
+  },
+): Promise<void> {
+  const patch: Record<string, unknown> = { estado: input.estado };
+  if (input.hubJobId !== undefined) patch.hub_job_id = input.hubJobId;
+  if (input.hubEstado !== undefined) patch.hub_estado = input.hubEstado;
+  if (input.resultado !== undefined) patch.resultado = input.resultado;
+  if (input.documentoId !== undefined) patch.documento_id = input.documentoId;
+  if (input.erroCodigo !== undefined) patch.erro_codigo = input.erroCodigo;
+  if (input.autorizadoPor !== undefined) {
+    patch.autorizado_por = input.autorizadoPor;
+    patch.autorizado_em = new Date().toISOString();
+  }
+  if (input.estado === "concluida" || input.estado === "reaproveitada") {
+    patch.concluida_em = new Date().toISOString();
+  }
+  const { error } = await tabelaLocacao(admin, "locacao_analises_fc")
+    .update(patch).eq("organization_id", input.orgId).eq("pedido_id", input.pedidoId);
+  if (error) throw new LocacaoErro("analise_fc_estado", "analise_fc");
+}
+
+export async function guardarLaudoFc(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    processoId: string;
+    userId: string;
+    participanteId?: string | null;
+    bytes: Buffer;
+    mime: string;
+    ext: "pdf" | "png" | "jpg" | "webp";
+  },
+): Promise<string> {
+  const docId = randomUUID();
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
+  const md5 = createHash("md5").update(input.bytes).digest("hex");
+  const path = `${input.orgId}/processos/${input.processoId}/laudo_fc/${docId}.${input.ext}`;
+  const { error: upErr } = await admin.storage.from("locacao-processos").upload(path, input.bytes, {
+    contentType: input.mime,
+    upsert: false,
+  });
+  if (upErr) throw new LocacaoErro("analise_fc_laudo", "analise_fc");
+  const { error } = await tabelaLocacao(admin, "locacao_processo_documentos").insert({
+    id: docId,
+    organization_id: input.orgId,
+    processo_id: input.processoId,
+    participante_id: input.participanteId ?? null,
+    categoria: "laudo_fc",
+    origem: "hub_fc",
+    storage_path: path,
+    mime: input.mime,
+    tamanho_bytes: input.bytes.length,
+    sha256,
+    md5,
+    created_by: input.userId,
+  });
+  if (error) throw new LocacaoErro("analise_fc_laudo", "analise_fc");
+  return docId;
 }
 
 const COLUNAS_SEGURO =

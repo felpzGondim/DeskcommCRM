@@ -54,10 +54,10 @@ export const NOMES_HUB_IMOVEL = ["buscar_imoveis", "buscar_imovel"] as const;
 export const NOMES_HUB_PESSOAS = ["buscar_pessoas", "buscar_inquilino"] as const;
 
 /**
- * Lista fechada das ferramentas H1/H2 (Fase 4). Só estes nomes são chamados
- * para cotação/status/print. Com a chave do Hub desligada elas não entram no
- * `tools/list` — trate como inexistentes, sem disparar o caminho antigo
- * (Migra+FC juntas, sem campo `acao`).
+ * Lista fechada das ferramentas H1/H2 (Fase 4) e da confirmação da FC (4.3).
+ * Só estes nomes são chamados para cotação/status/print/laudo/cobrança. Com a
+ * chave do Hub desligada elas não entram no `tools/list` — trate como
+ * inexistentes, sem disparar o caminho antigo (Migra+FC juntas, sem campo `acao`).
  */
 export const NOMES_INICIAR_ANALISE_INQUILINO = [
   "iniciar_analise_inquilino",
@@ -66,10 +66,12 @@ export const NOMES_INICIAR_ANALISE_INQUILINO = [
 ] as const;
 export const NOME_STATUS_ANALISE_INQUILINO = "status_analise_inquilino";
 export const NOME_BAIXAR_RESULTADO_ANALISE = "baixar_resultado_analise";
+export const NOME_CONFIRMAR_COBRANCA_FC = "confirmar_cobranca_fc_analise";
 export const LISTA_FECHADA_HUB_ANALISE = [
   ...NOMES_INICIAR_ANALISE_INQUILINO,
   NOME_STATUS_ANALISE_INQUILINO,
   NOME_BAIXAR_RESULTADO_ANALISE,
+  NOME_CONFIRMAR_COBRANCA_FC,
 ] as const;
 export const ACOES_INICIAR_ANALISE = ["seguro", "fc_salvar"] as const;
 export type AcaoIniciarAnalise = (typeof ACOES_INICIAR_ANALISE)[number];
@@ -176,6 +178,48 @@ export async function exigirFerramentasDeSeguro(ctx: ContextoDaFerramenta): Prom
   }
 }
 
+/** SALVAR grátis: iniciar com `acao` + status. Sem a ferramenta de cobrança. */
+export async function exigirFerramentasDeFcSalvar(ctx: ContextoDaFerramenta): Promise<void> {
+  await exigirFerramentasDeSeguro(ctx);
+}
+
+/** Clique pago: a ferramenta de confirmação tem que existir e anunciar `confirmado`. */
+export async function exigirFerramentasDeFcCobranca(ctx: ContextoDaFerramenta): Promise<void> {
+  const montado = await carregarHub(ctx);
+  if (!montado) throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  const ferramenta = ferramentaNaListaFechada(montado.ferramentas, [NOME_CONFIRMAR_COBRANCA_FC]);
+  if (!ferramenta || !schemaTemCampo(ferramenta, "pedido_id") || !schemaTemCampo(ferramenta, "confirmado")) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+}
+
+export async function chamarConfirmarCobrancaFc(
+  ctx: ContextoDaFerramenta,
+  argumentos: {
+    pedido_id: string;
+    confirmado: true;
+    confirmado_por: string;
+    valor_exibido?: string;
+  },
+): Promise<Record<string, unknown>> {
+  const montado = await carregarHub(ctx);
+  const ferramenta = montado
+    ? ferramentaNaListaFechada(montado.ferramentas, [NOME_CONFIRMAR_COBRANCA_FC])
+    : null;
+  if (!montado || !ferramenta || !schemaTemCampo(ferramenta, "pedido_id") || !schemaTemCampo(ferramenta, "confirmado")) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  const payload: Record<string, unknown> = {
+    pedido_id: argumentos.pedido_id,
+    confirmado: true,
+    confirmado_por: argumentos.confirmado_por,
+  };
+  if (argumentos.valor_exibido && schemaTemCampo(ferramenta, "valor_exibido")) {
+    payload.valor_exibido = argumentos.valor_exibido;
+  }
+  return chamarNaListaFechada(ctx, ferramenta, payload);
+}
+
 export async function chamarIniciarAnaliseInquilino(
   ctx: ContextoDaFerramenta,
   argumentos: Record<string, unknown> & { acao: AcaoIniciarAnalise; pedido_id: string },
@@ -194,7 +238,10 @@ export async function chamarIniciarAnaliseInquilino(
     if (resultado === "indisponivel" || resultado === "indisponível") {
       throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
     }
-    throw new FalhaDoHub("hub_contract_error", "O Brisa Hub não aceitou a cotação de seguro-fiança.");
+    const recusa = argumentos.acao === "fc_salvar"
+      ? "O Brisa Hub não aceitou o salvamento da FC."
+      : "O Brisa Hub não aceitou a cotação de seguro-fiança.";
+    throw new FalhaDoHub("hub_contract_error", recusa);
   }
   return dados;
 }

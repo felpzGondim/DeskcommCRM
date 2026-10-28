@@ -1345,6 +1345,7 @@ export const AUDIT_ACTIONS = [
   "locacao.conversa_ligada",
   "locacao.ficha_gravada",
   "locacao.analise_fc_aberta",
+  "locacao.analise_fc_cobrada",
   "locacao.analise_seguro_aberta",
   "locacao.renda_confirmada",
   "locacao.relatorio_rascunho",

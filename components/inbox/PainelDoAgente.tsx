@@ -424,6 +424,11 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                       {t("Use Analisar renda no processo para conferir e confirmar. A IA não confirma sozinha.")}
                     </p>
                   )}
+                  {p.ferramenta === "confirmar_cobranca_fc" && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {t("Use Confirmar cobrança da FC no processo. Vai gastar créditos. A IA não confirma sozinha.")}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
