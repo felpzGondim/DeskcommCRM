@@ -5,7 +5,12 @@
  */
 import type { TranscriptionProvider } from "@/lib/messaging/media/transcription";
 
-const MAX_DERIVED_CHARS = 8000;
+/** Teto da derivação universal (WhatsApp / inbox). O painel não alarga isto. */
+export const MAX_DERIVED_CHARS = 8000;
+
+export function textoDerivadoTruncado(texto: string | null | undefined): boolean {
+  return typeof texto === "string" && texto.length >= MAX_DERIVED_CHARS;
+}
 
 export interface DeriveDeps {
   transcriber: TranscriptionProvider;

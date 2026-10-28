@@ -15,42 +15,170 @@
   ],
   "mainPath": ["pergunta", "rota", "chave", "loop", "executar"],
   "nodes": [
-    { "id": "pergunta", "lane": "inbox", "col": 1, "type": "frontend", "label": "PainelDoAgente: campo /pergunta, Continuar, Usar como resposta" },
-    { "id": "botoes", "lane": "inbox", "col": 1, "type": "frontend", "label": "Botões: atalho barato, origem botao" },
-    { "id": "polling", "lane": "inbox", "col": 1, "type": "frontend", "label": "Polling GET consulta_id a cada 400 ms" },
-    { "id": "config_ui", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: ligar ferramentas" },
-    { "id": "composer", "lane": "inbox", "col": 1, "type": "frontend", "label": "Composer: sugestão; atendente envia" },
-    { "id": "rota", "lane": "servidor", "col": 2, "type": "route", "label": "painel-agente: POST pergunta e GET andamento" },
-    { "id": "rota_botao", "lane": "servidor", "col": 2, "type": "route", "label": "acoes/contrato/ficha: wrappers finos" },
-    { "id": "chave", "lane": "config", "col": 3, "type": "config", "label": "painel_agente.ferramentas_habilitado (off)" },
-    { "id": "loop", "lane": "servidor", "col": 2, "type": "process", "label": "Loop: ToolSet L + propor_acao; tetos 6/10" },
-    { "id": "executar", "lane": "servidor", "col": 2, "type": "process", "label": "executarFerramenta: porta única L/C/S" },
-    { "id": "query_log", "lane": "registro", "col": 4, "type": "database", "label": "agent_panel_query_log: texto, etapa, custo, RLS" },
-    { "id": "lgpd", "lane": "registro", "col": 4, "type": "database", "label": "Gatilho INVOKER: redige no is_anonymized" },
-    { "id": "retencao", "lane": "registro", "col": 4, "type": "process", "label": "fn_expurgar_consultas_do_painel_vencidas: 1 ano" },
-    { "id": "audit", "lane": "registro", "col": 4, "type": "database", "label": "api_audit_log: ação sem pergunta/resposta" }
+    {
+      "id": "pergunta",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "PainelDoAgente: campo /pergunta, Continuar, Usar como resposta"
+    },
+    {
+      "id": "botoes",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Botões: atalho barato, origem botao"
+    },
+    {
+      "id": "polling",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Polling GET consulta_id a cada 1 s; 180 s ainda processando"
+    },
+    {
+      "id": "after",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "after(): consulta segue depois do 202"
+    },
+    {
+      "id": "config_ui",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Configurações › Locação: ligar ferramentas"
+    },
+    {
+      "id": "composer",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Composer: sugestão; atendente envia"
+    },
+    {
+      "id": "rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente: POST pergunta e GET andamento"
+    },
+    {
+      "id": "rota_botao",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "acoes/contrato/ficha: wrappers finos"
+    },
+    {
+      "id": "chave",
+      "lane": "config",
+      "col": 3,
+      "type": "config",
+      "label": "painel_agente.ferramentas_habilitado (off)"
+    },
+    {
+      "id": "loop",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Loop: ToolSet L + propor_acao; tetos 6/10"
+    },
+    {
+      "id": "executar",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "executarFerramenta: porta única L/C/S"
+    },
+    {
+      "id": "query_log",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "agent_panel_query_log: texto, etapa, custo, RLS"
+    },
+    {
+      "id": "lgpd",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "Gatilho INVOKER: redige no is_anonymized"
+    },
+    {
+      "id": "retencao",
+      "lane": "registro",
+      "col": 4,
+      "type": "process",
+      "label": "fn_expurgar_consultas_do_painel_vencidas: 1 ano"
+    },
+    {
+      "id": "audit",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "api_audit_log: ação sem pergunta/resposta"
+    }
   ],
   "edges": [
-    { "id": "e1", "from": "pergunta", "to": "rota", "label": "POST com consulta_id" },
+    { "id": "e1", "from": "pergunta", "to": "rota", "label": "POST 202 com consulta_id" },
+    { "id": "e22", "from": "rota", "to": "after", "label": "agenda sem cookies; admin filtra org" },
+    { "id": "e23", "from": "after", "to": "loop", "label": "responderComFerramentas" },
     { "id": "e2", "from": "rota", "to": "chave", "label": "lê settings da organização" },
-    { "id": "e3", "from": "chave", "to": "loop", "label": "ligada: tools; desligada: system antigo" },
+    {
+      "id": "e3",
+      "from": "chave",
+      "to": "loop",
+      "label": "ligada: tools; desligada: system antigo"
+    },
     { "id": "e4", "from": "loop", "to": "executar", "label": "L com origem agente" },
     { "id": "e5", "from": "botoes", "to": "rota_botao", "label": "atalho sem modelo" },
     { "id": "e6", "from": "rota_botao", "to": "executar", "label": "mesma entrada, origem botao" },
     { "id": "e7", "from": "executar", "to": "query_log", "label": "etapa_atual a cada ferramenta" },
-    { "id": "e8", "from": "query_log", "to": "polling", "label": "GET etapa e status" },
+    {
+      "id": "e8",
+      "from": "query_log",
+      "to": "polling",
+      "label": "GET etapa, status, resposta; interrompida na leitura"
+    },
     { "id": "e9", "from": "polling", "to": "pergunta", "label": "mostra o passo atual" },
-    { "id": "e10", "from": "pergunta", "to": "composer", "label": "Usar como resposta preenche; não envia" },
-    { "id": "e11", "from": "config_ui", "to": "chave", "label": "PATCH admin, desligado por padrão" },
+    {
+      "id": "e10",
+      "from": "pergunta",
+      "to": "composer",
+      "label": "Usar como resposta preenche; não envia"
+    },
+    {
+      "id": "e11",
+      "from": "config_ui",
+      "to": "chave",
+      "label": "PATCH admin, desligado por padrão"
+    },
     { "id": "e12", "from": "chave", "to": "config_ui", "label": "GET mostra o estado" },
     { "id": "e13", "from": "query_log", "to": "lgpd", "label": "FK contact_id; redige texto" },
     { "id": "e14", "from": "lgpd", "to": "query_log", "label": "pergunta/resposta (anonimizado)" },
     { "id": "e15", "from": "retencao", "to": "query_log", "label": "apaga linhas com 1 ano" },
     { "id": "e16", "from": "rota", "to": "audit", "label": "ação, parou_por, sem PII" },
-    { "id": "e17", "from": "loop", "to": "pergunta", "label": "propostas C/S viram cartão de clique" },
+    {
+      "id": "e17",
+      "from": "loop",
+      "to": "pergunta",
+      "label": "propostas C/S viram cartão de clique"
+    },
     { "id": "e18", "from": "executar", "to": "rota", "label": "resultado mascarado" },
     { "id": "e19", "from": "rota", "to": "query_log", "label": "abre e fecha a consulta" },
-    { "id": "e20", "from": "audit", "to": "retencao", "label": "cron audita só quando houve efeito" },
-    { "id": "e21", "from": "botoes", "to": "composer", "label": "sugestão da ficha também só preenche" }
+    {
+      "id": "e20",
+      "from": "audit",
+      "to": "retencao",
+      "label": "cron audita só quando houve efeito"
+    },
+    {
+      "id": "e21",
+      "from": "botoes",
+      "to": "composer",
+      "label": "sugestão da ficha também só preenche"
+    }
   ]
 }

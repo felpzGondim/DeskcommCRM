@@ -14,6 +14,7 @@ import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
+import { comAvisoSeTruncado, derivadoEstaTruncado } from "@/lib/painel/texto-derivado";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
 const JANELA_PADRAO = 60;
@@ -37,11 +38,17 @@ export async function lerFalasDaConversa(
   return ((linhas ?? []) as Record<string, unknown>[])
     .filter((m) => !m.revoked_at)
     .reverse()
-    .map((m) => ({
-      direcao: m.direction === "inbound" ? "inbound" : "outbound",
-      texto: String(m.body ?? m.media_derived_text ?? ""),
-      em: (m.sent_at as string | null) ?? null,
-    }));
+    .map((m) => {
+      const derivado = typeof m.media_derived_text === "string" ? m.media_derived_text : "";
+      const corpo = typeof m.body === "string" ? m.body : "";
+      const truncado = !corpo && derivadoEstaTruncado(derivado);
+      const texto = comAvisoSeTruncado(corpo || derivado, truncado);
+      return {
+        direcao: m.direction === "inbound" ? "inbound" : "outbound",
+        texto,
+        em: (m.sent_at as string | null) ?? null,
+      };
+    });
 }
 
 export async function lerConversaDoPainel(
@@ -55,7 +62,8 @@ export async function lerConversaDoPainel(
     .eq("organization_id", ctx.orgId)
     .eq("id", ctx.contactId)
     .maybeSingle();
-  const primeiroNome = (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
+  const primeiroNome =
+    (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
   const bloco = montarBlocoDaConversa(falas, primeiroNome);
   return { ok: true, texto: mascararPessoaNoTexto(bloco) };
 }
@@ -76,7 +84,8 @@ export async function resumirOuSugerir(
     .eq("organization_id", ctx.orgId)
     .eq("id", ctx.contactId)
     .maybeSingle();
-  const primeiroNome = (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
+  const primeiroNome =
+    (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
   const mensagens = montarMensagensDoPainel({
     blocoDaConversa: montarBlocoDaConversa(falas, primeiroNome),
     historico,

@@ -12,9 +12,14 @@ describe("tetoDeSaida", () => {
     expect(tetoDeSaida(1000, undefined)).toBe(1000);
   });
 
-  it("a chamada só aperta, nunca alarga", () => {
+  it("sem teto da organização, a chamada pode alargar o padrão", () => {
     expect(tetoDeSaida(undefined, 256)).toBe(256);
-    expect(tetoDeSaida(undefined, 9000)).toBe(TETO_DE_SAIDA_PADRAO);
+    expect(tetoDeSaida(undefined, 9000)).toBe(9000);
+    expect(tetoDeSaida(16000, 9000)).toBe(9000);
+  });
+
+  it("o teto da organização vence a chamada, para mais ou para menos", () => {
+    expect(tetoDeSaida(2000, 9000)).toBe(2000);
     expect(tetoDeSaida(16000, 9000)).toBe(9000);
   });
 });
