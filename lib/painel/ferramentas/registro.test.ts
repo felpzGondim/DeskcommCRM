@@ -41,6 +41,9 @@ describe("registro único do painel", () => {
       "confirmar_contrato",
       "confirmar_renda",
       "iniciar_analise",
+      "registrar_manual_fc",
+      "registrar_manual_seguro",
+      "revelar_cpf_manual",
     ]);
     const noLoop = nomesNoToolsetDoLoop();
     expect(noLoop).toContain("propor_acao");
@@ -87,6 +90,18 @@ describe("registro único do painel", () => {
     expect(ligada).toContain("status_fc");
     expect(ligada).not.toContain("confirmar_cobranca_fc");
     expect(ligada).not.toContain("analisar_seguro");
+  });
+
+  it("chave locacao.analise.manual desligada: preparar_manual some; ligada: L entra, S não", () => {
+    expect(nomesNoToolsetDoLoop({})).not.toContain("preparar_manual");
+    expect(nomesNoToolsetDoLoop({})).not.toContain("revelar_cpf_manual");
+    const ligada = nomesNoToolsetDoLoop({
+      locacao: { processos_habilitado: true, analise: { manual: true } },
+    });
+    expect(ligada).toContain("preparar_manual");
+    expect(ligada).not.toContain("revelar_cpf_manual");
+    expect(ligada).not.toContain("registrar_manual_fc");
+    expect(ligada).not.toContain("registrar_manual_seguro");
   });
 
   it("o loop recusa executar C/S mesmo se alguém chamar a porta com origem agente", async () => {
@@ -144,6 +159,11 @@ describe("registro único do painel", () => {
     expect(ferramentaDoPainel("status_fc")?.nivel).toBe("L");
     expect(ferramentaDoPainel("confirmar_cobranca_fc")?.nivel).toBe("S");
     expect(ferramentaDoPainel("analisar_fc")?.exigeChaveAnalise).toBe("fc");
+    expect(ferramentaDoPainel("preparar_manual")?.acaoDoBotao).toBe("preparar_manual");
+    expect(ferramentaDoPainel("revelar_cpf_manual")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("registrar_manual_fc")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("registrar_manual_seguro")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("preparar_manual")?.exigeChaveAnalise).toBe("manual");
     const seguroRota = readFileSync(
       "app/api/v1/conversations/[id]/painel-agente/seguro/route.ts",
       "utf8",
@@ -168,6 +188,15 @@ describe("registro único do painel", () => {
     expect(rendaRota).toContain('executarFerramenta("analisar_renda"');
     expect(rendaRota).toContain('executarFerramenta("confirmar_renda"');
     expect(rendaRota).toContain('origem: "botao"');
+    const manualRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/manual/route.ts",
+      "utf8",
+    );
+    expect(manualRota).toContain('executarFerramenta(ferramenta');
+    expect(manualRota).toContain('origem: "botao"');
+    expect(manualRota).toContain("revelar_cpf");
+    expect(manualRota).not.toMatch(/confirmar-cobranca-fc|valor_exibido|R\$/);
+    expect(manualRota).not.toMatch(/["']Contratar["']/);
     const acoes = appApiAcoes();
     expect(acoes).toContain("executarFerramenta");
     expect(acoes).toMatch(/boletos:\s*"buscar_boletos"/);

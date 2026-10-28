@@ -879,6 +879,16 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "é o serviço da conta ChatGPT que o operador abre para conectar a assinatura. O produto não faz requests para este host; a consulta do catálogo e a inferência SIWC usam a API pública oficial em api.openai.com.",
   },
+  "cliente.fcanalise.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "painel da FC Score+ que o atendente abre no manual assistido (PR 4.4) quando o robô do Hub cai. O produto não chama este host — o Hub é que fala com a FC; o link só aponta o mesmo site que o robô usaria. Trocar pelo domínio do revendedor não abriria a análise.",
+  },
+  "migra.app.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "painel da Migra (Multi Cálculo PF Residencial) que o atendente abre no manual assistido (PR 4.4) quando o robô do Hub cai. O produto não chama este host; o link só aponta o mesmo site da cotação. Trocar pelo domínio do revendedor não abriria a cotação.",
+  },
   // ── Web Push: o serviço de push do navegador, destino do envio ──
   "fcm.googleapis.com": {
     categoria: "FORNECEDOR",

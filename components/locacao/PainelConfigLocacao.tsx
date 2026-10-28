@@ -128,6 +128,17 @@ export function PainelConfigLocacao() {
             })} />
           {t("Ligar FC Score+ (desligada por padrão)")}
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={estado.locacao.analise?.manual === true}
+            disabled={salvando || !estado.locacao.processos_habilitado}
+            onChange={(e) => void gravar({
+              locacao: {
+                ...estado.locacao,
+                analise: { ...estado.locacao.analise, manual: e.target.checked },
+              },
+            })} />
+          {t("Ligar manual assistido (desligado por padrão)")}
+        </label>
       </fieldset>
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">{t("Painel do agente")}</legend>

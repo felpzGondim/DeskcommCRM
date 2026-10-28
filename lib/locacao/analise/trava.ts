@@ -1,6 +1,6 @@
 /**
  * Trava dos botões 2 e 3 (seguro/FC): sem renda confirmada, recusam.
- * Os PRs 4.2 e 4.3 chamam `exigirRendaConfirmada` antes de qualquer efeito.
+ * Os PRs 4.2, 4.3 e 4.4 chamam `exigirRendaConfirmada` antes de qualquer efeito.
  */
 import type { ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
