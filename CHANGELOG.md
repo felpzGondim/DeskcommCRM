@@ -8,11 +8,13 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
-## [1.88.0-felpz.10] — não publicada
+## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado
 
-- **Locação (desligada)** `DESKCOMM_GOOGLE_SA_JSON` e `DESKCOMM_DRIVE_ID`; o código nunca apaga.
+- **Processo de locação, vínculo Superlógica e arquivos do processo (desligados por padrão)** Em Configurações › Locação entram três chaves: processos, arquivos e cópia para o Google Drive. No Painel, Abrir processo cria um registro com as pessoas da conversa (papel contato) e o imóvel. Só quem está na lista de aprovadores (ou o dono da instalação) aprova; qualquer atendente reprova com motivo. Processo parado fecha em 30 dias. A cópia para o Drive lê `DESKCOMM_GOOGLE_SA_JSON` e `DESKCOMM_DRIVE_ID` — vazio, o cron não faz nada; o código nunca apaga arquivo no Drive. Rollback: desligar as chaves; as tabelas ficam. (#20)
+
+- **O campo de pergunta do Painel do agente pode consultar as mesmas ações dos botões (desligado por padrão)** Em Configurações › Locação há uma chave nova: ferramentas no campo de pergunta. Nasce desligada — o campo continua só conversando, como hoje. Ligada, a pergunta livre consulta conversa, anexo, boletos, contrato, ficha e processo pelas mesmas funções dos botões; análise paga e confirmar contrato só acontecem se o atendente clicar. No limite, a IA diz o que já apurou e oferece Continuar. “Usar como resposta” só preenche a caixa. Rollback: desligar a chave; a tabela de registro fica. (#21)
 
 ## [1.88.0-felpz.9] — 2026-10-28
 
