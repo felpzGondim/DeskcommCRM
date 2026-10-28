@@ -189,6 +189,9 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // `{org}/processos/{processo}/{categoria}/{docId}.{ext}` — dois UUID + categoria
   // do vocabulário + extensão da allowlist. Sem nome, CPF ou telefone.
   { arquivo: "app/api/v1/locacao/processos/[id]/documentos/route.ts", fronteira: "storage.chave-de-objeto" },
+  // Print da Migra (4.2) e laudo da FC (4.3): o mesmo molde da rota acima,
+  // categorias `cotacao_seguro` / `laudo_fc`. Sem nome, CPF ou telefone.
+  { arquivo: "lib/locacao/repositorio.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/upload/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/route.ts", fronteira: "storage.chave-de-objeto" },
   // O PDF da proposta comercial (#1832): `<org>/<proposta>.pdf`, dois uuids.
