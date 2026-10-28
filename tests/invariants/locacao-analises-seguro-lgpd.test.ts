@@ -4,7 +4,8 @@ import { sql } from "./gov-helpers";
 
 /**
  * 0770: virar is_anonymized (e apagar o contato) zera cotação, FC e rascunho
- * do relatório do locatário. Gatilho INVOKER em contacts, não a função única.
+ * do relatório do locatário. Gatilho DEFINER em contacts (EXECUTE revogado de
+ * authenticated), não a função única.
  * Sem dado pessoal real: ids e textos desta suíte são de teste.
  */
 const org = randomUUID();
@@ -30,6 +31,8 @@ beforeAll(() => {
     insert into auth.users (id, email) values ('${user}', 'loc-lgpd@invariant.test');
     insert into organizations (id, slug, legal_name, display_name)
       values ('${org}', '${org}', 'Locacao LGPD', 'Locacao LGPD');
+    insert into user_organizations (user_id, organization_id, role, accepted_at)
+      values ('${user}', '${org}', 'admin', now());
     insert into channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
       values ('${sess}', '${org}', '${sess}', '\\x00');
     insert into contacts (id, organization_id, display_name)
@@ -64,6 +67,19 @@ describe("locacao analises: cascata LGPD", () => {
     ).toBe("trg_locacao_limpar_contato_excluido");
   });
 
+  it("a função é DEFINER e authenticated não tem EXECUTE", () => {
+    expect(
+      sql(`select p.prosecdef::text
+                || '|' || has_function_privilege('anon', p.oid, 'EXECUTE')::text
+                || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::text
+                || '|' || has_function_privilege('service_role', p.oid, 'EXECUTE')::text
+           from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public'
+            and p.proname = 'fn_locacao_limpar_contato_anonimizado';`),
+    ).toBe("t|f|f|t");
+  });
+
   it("anonimizar o locatário zera cotação, FC e rascunho só daquele processo", () => {
     sql(`update public.contacts set is_anonymized = true, anonymized_at = now() where id = '${alvo}';`);
     expect(
@@ -85,7 +101,9 @@ describe("locacao analises: cascata LGPD", () => {
   });
 
   it("apagar um contato só-conversa não zera a cotação do locatário", () => {
-    sql(`delete from public.contacts where id = '${extra}';`);
+    sql(`set role authenticated;
+         select set_config('request.jwt.claims', '{"sub":"${user}"}', false);
+         delete from public.contacts where id = '${extra}';`);
     expect(
       sql(`select resultado->>'seguradora' from locacao_analises_seguro where pedido_id = '${pedidoVizinho}';`),
     ).toBe("tokio");

@@ -153,7 +153,8 @@ describe("locacao processos: RLS e escrita", () => {
           and routine_name in (
             'fn_expurgar_processos_de_locacao_vencidos',
             'fn_expurgar_revisoes_de_vinculo_vencidas',
-            'fn_encerrar_processos_de_locacao_parados'
+            'fn_encerrar_processos_de_locacao_parados',
+            'fn_locacao_limpar_contato_anonimizado'
           )
           and privilege_type = 'EXECUTE'
           and grantee in ('anon','authenticated','PUBLIC');`),

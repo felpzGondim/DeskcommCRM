@@ -24,6 +24,29 @@ describe("acesso mínimo da análise (4.0, sem tela)", () => {
     expect(src).not.toMatch(/analise.*true/i);
     expect(src).not.toContain("fc_preco");
     expect(src).toContain("trg_locacao_limpar_contato_excluido");
+    const i = src.lastIndexOf(
+      "create or replace function public.fn_locacao_limpar_contato_anonimizado",
+    );
+    expect(i).toBeGreaterThan(0);
+    const cabeca = src.slice(i, i + 600);
+    expect(cabeca).toMatch(/security definer/);
+    expect(cabeca).not.toMatch(/security invoker/);
+    expect(src).toContain(
+      "revoke all on function public.fn_locacao_limpar_contato_anonimizado() from public, anon, authenticated",
+    );
+  });
+
+  it("o apêndice do baseline instala a mesma DEFINER antes da varredura de anon", () => {
+    const baseline = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");
+    const i = baseline.lastIndexOf(
+      "create or replace function public.fn_locacao_limpar_contato_anonimizado",
+    );
+    const varredura = baseline.indexOf("-- ---- VARREDURA anon:");
+    expect(i).toBeGreaterThan(0);
+    expect(i).toBeLessThan(varredura);
+    const cabeca = baseline.slice(i, i + 600);
+    expect(cabeca).toMatch(/security definer/);
+    expect(cabeca).not.toMatch(/security invoker/);
   });
 
   it("settings recusa preço e aceita as cinco chaves desligadas", () => {

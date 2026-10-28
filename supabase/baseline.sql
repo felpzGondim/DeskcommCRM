@@ -61089,11 +61089,18 @@ revoke execute on function public.fn_expurgar_processos_de_locacao_vencidos(int,
 grant execute on function public.fn_expurgar_processos_de_locacao_vencidos(int, int) to service_role;
 
 -- LGPD: anonimização (virada de is_anonymized) e exclusão do contato.
--- INVOKER. Não edita fn_lgpd_cascade_redact_contact.
+-- SECURITY DEFINER, search_path travado. Não edita fn_lgpd_cascade_redact_contact.
+-- Por quê DEFINER: authenticated só tem SELECT nas tabelas de locação (escrita é
+-- service_role). O DELETE do contato — direto ou via fn_apagar_contato_com_historico,
+-- que é INVOKER — dispara este gatilho BEFORE DELETE com o papel da sessão.
+-- INVOKER aqui era 42501 em locacao_processo_participantes. O gatilho (PG 11+)
+-- não exige EXECUTE; revoke de public/anon/authenticated permanece. Quem dispara
+-- o DELETE já passou pela RLS de contacts; o corpo filtra organization_id e
+-- contact_id da linha OLD/NEW.
 create or replace function public.fn_locacao_limpar_contato_anonimizado()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public, pg_temp
 as $$
 declare

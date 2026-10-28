@@ -83,7 +83,7 @@ const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
   locacao_processo_participantes:
     "0763: nome_exibicao, cpf_encrypted e cpf_mascarado do participante. " +
     "⚠️ JÁ ESTÁ PROTEGIDA: o gatilho trg_locacao_limpar_contato_anonimizado " +
-    "(fn_locacao_limpar_contato_anonimizado, INVOKER na virada de is_anonymized, 0767) " +
+    "(fn_locacao_limpar_contato_anonimizado, DEFINER na virada de is_anonymized e no DELETE, 0770) " +
     "zera nome e CPF. A entrada existe só porque ESTE instrumento lê " +
     "fn_lgpd_cascade_redact_contact + fn_reply_redact, não este gatilho — a mesma " +
     "razão de crm_tasks e lead_notes. Sai no dia em que tabelasNaCascata() derivar " +

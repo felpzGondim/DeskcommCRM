@@ -30,8 +30,15 @@ continua com o índice por `cpf_hash` em andamento (anti-cobrança dupla).
 ## Decisão LGPD por tabela tocada
 
 A cascata canônica (`fn_lgpd_cascade_redact_contact`) **não** ganha passo
-novo — o mesmo desenho da 0767: gatilho INVOKER em `contacts`. Quem cobre
-é `fn_locacao_limpar_contato_anonimizado`, nos dois caminhos:
+novo — o mesmo desenho da 0767: gatilho em `contacts`, sem editar a função
+única. Quem cobre é `fn_locacao_limpar_contato_anonimizado`, **SECURITY DEFINER**
+com `search_path` travado e `EXECUTE` revogado de `public`/`anon`/`authenticated`
+(o gatilho do Postgres 11+ não pede EXECUTE). A 0767 era INVOKER e só
+disparava na virada de `is_anonymized` (caminho do service role). A 0770
+acrescenta `BEFORE DELETE`; o DELETE do contato — direto ou via
+`fn_apagar_contato_com_historico`, que é INVOKER — chega como `authenticated`,
+e esse papel só tem SELECT nas tabelas de locação. INVOKER no DELETE era
+`42501` em `locacao_processo_participantes`. Os dois caminhos:
 
 - **Anonimização:** `AFTER UPDATE OF is_anonymized` (`trg_locacao_limpar_contato_anonimizado`).
 - **Exclusão:** `BEFORE DELETE` (`trg_locacao_limpar_contato_excluido`).
