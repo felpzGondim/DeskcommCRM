@@ -1,6 +1,8 @@
 # Proposta: encurtar a espera entre PR verde e imagem publicada
 
-**Status:** análise. Nenhum workflow foi alterado.
+**Status:** análise. §§2.1 e 2.2 aprovados pelo dono em 28/10/2026 12:56 e
+implementados — ver [`release-do-fork.md`](./release-do-fork.md). O restante
+deste texto não mudou workflow nenhum.
 **Pedido:** dono, 28/10/2026 — a espera entre o PR e a imagem.
 **Âmbito:** fork `felpzGondim/DeskcommCRM`. Sem deploy, sem VPS, sem ligar chave.
 **Medido em:** 28/10/2026, API `repos/felpzGondim/DeskcommCRM/actions/runs` e `.../jobs`.

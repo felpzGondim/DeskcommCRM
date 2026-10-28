@@ -252,6 +252,10 @@ e era o arquivo que fazia todo PR com migration conflitar no GitHub. Nunca edite
 aplicada; corrija com uma nova.
 Função nova em `public` precisa de `revoke execute ... from public, anon` **e** `grant` — são
 duas origens de `EXECUTE`.
+**Um PR de banco por vez.** Dois PRs abertos com migration colidem no `NNNN`, no timestamp e
+no apêndice do `baseline.sql` — o segundo mergeia duplicata com o `verify` verde, porque cada
+um mediu a `main` do dia em que rodou. Neste fork, não abrir o segundo PR de schema enquanto
+o primeiro estiver aberto. Quem mede o universo: `pnpm checar:colisao-de-migration`.
 ⚠️ E **não leia o baseline com `grep` no arquivo inteiro**: ele é dump + apêndice, a mesma
 função aparece várias vezes, e quem vale é a **última**. Pergunte ao banco depois de aplicar
 (`pg_get_functiondef`) ou ancore no último `create or replace` (`rfind`, nunca `find`).
@@ -552,6 +556,20 @@ pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superl
 `DESKCOMM_GOOGLE_SA_JSON` (JSON inteiro da conta de serviço) e `DESKCOMM_DRIVE_ID`
 (Drive compartilhado Aluguéis). A chave antiga ficou exposta e será revogada; não a
 use. O código nunca apaga no Drive. Rollback: desligar as chaves; as tabelas ficam.
+
+## Release deste fork
+
+O `release.yml` oficial está desligado aqui. A revisão `vX.Y.Z-felpz.N` data o
+[`CHANGELOG.md`](CHANGELOG.md) **no PR da feature** (`## [X.Y.Z-felpz.N] — AAAA-MM-DD`)
+e a tag anotada nasce no **merge commit dessa feature** — sem PR extra só para datar.
+Depois do merge: `git tag -a vX.Y.Z-felpz.N -m "…" <sha-do-merge> && git push origin vX.Y.Z-felpz.N`.
+O push da tag dispara `publish-image.yml`; se a main já publicou o manifesto
+`sha-<esse commit>` com amd64 e arm64 nas quatro imagens, worker/scheduler/voz
+são retag (`docker buildx imagetools create`) e o **app reconstrói** para
+gravar `APP_VERSION` com o número da release; senão constrói as quatro como
+hoje. Lei:
+[`docs/deploy-fork.md`](docs/deploy-fork.md) e
+[`docs/decisoes/release-do-fork.md`](docs/decisoes/release-do-fork.md).
 
 ## Critério de conclusão
 

@@ -284,7 +284,7 @@ describe("a release chega à página de changelog da LP", () => {
     // As revisões deste fork vão ao seu atualizador, não à LP oficial. Só
     // aceitamos esse formato enquanto o fluxo oficial estiver explicitamente
     // desabilitado para o fork e existir a publicação separada das suas imagens.
-    const CABECALHO_FORK = /^## \[\d+\.\d+\.\d+-felpz\.\d+\]\s*[—–-]\s*(?:\d{4}-\d{2}-\d{2}|não publicada)\s*$/;
+    const CABECALHO_FORK = /^## \[\d+\.\d+\.\d+-felpz\.\d+\]\s*[—–-]\s*\d{4}-\d{2}-\d{2}\s*$/;
     if (cabecalhos.some((l) => CABECALHO_FORK.test(l))) {
       expect(release).toContain("github.repository != 'felpzGondim/DeskcommCRM'");
       const publicacao = readFileSync(join(RAIZ, ".github/workflows/publish-image.yml"), "utf8");
