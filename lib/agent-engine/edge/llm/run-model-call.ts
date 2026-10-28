@@ -213,7 +213,9 @@ const paramsSchema = z
 export const TETO_DE_SAIDA_PADRAO = 4096;
 
 export function tetoDeSaida(daOrganizacao: number | undefined, daChamada: number | undefined): number {
-  const base = daOrganizacao ?? TETO_DE_SAIDA_PADRAO;
+  // Sem teto da organização, a chamada pode alargar o padrão (relatório preliminar
+  // pede 16384). Com teto da organização, ele continua o teto — a chamada só aperta.
+  const base = daOrganizacao ?? Math.max(TETO_DE_SAIDA_PADRAO, daChamada ?? 0);
   return daChamada === undefined ? base : Math.min(base, daChamada);
 }
 
@@ -262,7 +264,10 @@ export interface RunModelCallInput {
    * reescrever na etapa seguinte, e parar ali entregava rascunho vazio.
    */
   pararQuando?: () => boolean;
-  /** Teto por chamada auxiliar; nunca aumenta o limite configurado pela organização. */
+  /**
+   * Teto por chamada auxiliar. Sem teto da organização, pode alargar o padrão
+   * (4096). Com teto da organização, só aperta — nunca o aumenta.
+   */
   maxOutputTokens?: number;
   /**
    * Raciocínio pedido NESTA chamada, na opção portátil do AI SDK (`reasoning`).

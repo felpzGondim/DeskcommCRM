@@ -14,6 +14,16 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Base da análise de inquilino no processo (desligada)** O processo de locação passa a ter um registro de cotação de seguro-fiança (pedido, job, estado, resultado), tipos de evento renda e relatório, e chaves `locacao.analise.{renda,seguro,fc,relatorio,manual}` — todas desligadas. Sem preço da FC no banco. A confirmação da cobrança continua avisando que vai gastar créditos, sem valor na tela. Rollback: desligar as chaves; as tabelas ficam.
 
+### Corrigido
+
+- **O relatório preliminar deixa de falhar quando a IA corta a resposta no teto de 4096 tokens** Sem limite da organização, a chamada do relatório pode pedir até 16384 tokens de saída. Se a IA ainda cortar, o painel diz que a resposta ficou incompleta — não culpa os documentos. JSON inválido tem recado próprio. Quem já instalou não precisa fazer nada.
+
+- **A pergunta do Painel não cai mais no erro de 30 segundos** O servidor aceita a pergunta (202) e continua no fundo; a tela consulta o andamento a cada segundo. Depois de 3 minutos, mostra “Ainda processando…” em vez de erro. Resumir e sugerir seguem iguais, com espera maior. Quem já instalou não precisa fazer nada.
+
+- **O painel deixa de tratar extrato cortado em 8000 caracteres como ausência de crédito** A derivação do WhatsApp continua no teto de 8000. No relatório, na análise e nas ferramentas do painel, texto exatamente nesse teto vem marcado para a IA não concluir que não há depósitos. PDF da análise/relatório já reabre o original. Quem já instalou não precisa fazer nada.
+
+- **A pergunta do Painel reabre o PDF original quando o texto derivado corta em 8000** Anexo e conversa usam os mesmos limites da análise (30 páginas, teto de caracteres, senha vira pendência). Se a reabertura falhar, vale o recorte com o aviso. Foto no teto só leva o aviso. O WhatsApp não muda. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado

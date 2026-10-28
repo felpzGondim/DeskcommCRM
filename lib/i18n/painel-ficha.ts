@@ -6,38 +6,50 @@ export const TEXTOS_PAINEL_FICHA = {
   "Relatório preliminar": { es: "Informe preliminar" },
   "Ficha de dados": { es: "Ficha de datos" },
   "Histórico da ficha": { es: "Historial de la ficha" },
-  "Pessoas": { es: "Personas" },
-  "Inquilino": { es: "Inquilino" },
-  "Solidário": { es: "Solidario" },
+  Pessoas: { es: "Personas" },
+  Inquilino: { es: "Inquilino" },
+  Solidário: { es: "Solidario" },
   "Contato (só conversa)": { es: "Contacto (solo conversa)" },
-  "Principal": { es: "Principal" },
-  "Celular": { es: "Celular" },
+  Principal: { es: "Principal" },
+  Celular: { es: "Celular" },
   "E-mail": { es: "Correo" },
-  "Nascimento": { es: "Nacimiento" },
-  "Empregador": { es: "Empleador" },
-  "Imóvel": { es: "Inmueble" },
+  Nascimento: { es: "Nacimiento" },
+  Empregador: { es: "Empleador" },
+  Imóvel: { es: "Inmueble" },
   "Aluguel (R$)": { es: "Alquiler (R$)" },
   "Renda mensal (R$)": { es: "Renta mensual (R$)" },
   "Renda proposta para a FC (R$)": { es: "Renta propuesta para FC (R$)" },
   "Documentos encontrados": { es: "Documentos encontrados" },
   "Documentos faltantes": { es: "Documentos faltantes" },
-  "Pendências": { es: "Pendencias" },
+  Pendências: { es: "Pendencias" },
   "Adicionar pessoa": { es: "Añadir persona" },
   "Código FC": { es: "Código FC" },
-  "Versão": { es: "Versión" },
+  Versão: { es: "Versión" },
   "Gerada pela IA": { es: "Generada por la IA" },
   "Corrigida pelo atendente": { es: "Corregida por el agente" },
   "Campos alterados": { es: "Campos modificados" },
   "Ver como estava": { es: "Ver cómo estaba" },
   "Voltar à versão atual": { es: "Volver a la versión actual" },
-  "Não foi possível gerar o relatório preliminar.": { es: "No fue posible generar el informe preliminar." },
+  "Não foi possível gerar o relatório preliminar.": {
+    es: "No fue posible generar el informe preliminar.",
+  },
   "Não foi possível gerar o relatório preliminar. Confira os documentos e tente novamente.": {
     es: "No fue posible generar el informe preliminar. Revisa los documentos e inténtalo de nuevo.",
   },
+  "Não foi possível gerar o relatório preliminar. A resposta da IA ficou incompleta. Tente de novo.":
+    {
+      es: "No fue posible generar el informe preliminar. La respuesta de la IA quedó incompleta. Inténtalo de nuevo.",
+    },
+  "Não foi possível gerar o relatório preliminar. A resposta da IA veio em formato inválido. Tente de novo.":
+    {
+      es: "No fue posible generar el informe preliminar. La respuesta de la IA vino en formato inválido. Inténtalo de nuevo.",
+    },
   "Não foi possível ler a conversa para o relatório preliminar.": {
     es: "No fue posible leer la conversación para el informe preliminar.",
   },
-  "Não foi possível salvar a ficha preliminar.": { es: "No fue posible guardar la ficha preliminar." },
+  "Não foi possível salvar a ficha preliminar.": {
+    es: "No fue posible guardar la ficha preliminar.",
+  },
   "Outra pessoa alterou a ficha. Recarregue e salve de novo.": {
     es: "Otra persona cambió la ficha. Recarga y guarda de nuevo.",
   },
@@ -45,14 +57,17 @@ export const TEXTOS_PAINEL_FICHA = {
     es: "Otra persona cambió la ficha. Recarga y genera de nuevo.",
   },
   "Ficha salva.": { es: "Ficha guardada." },
-  "A ficha preliminar alimenta a análise, a FC e o contrato. Confira o celular do inquilino — não use o número de quem só conversa.": {
-    es: "La ficha preliminar alimenta el análisis, FC y el contrato. Revise el celular del inquilino: no use el número de quien solo conversa.",
-  },
+  "A ficha preliminar alimenta a análise, a FC e o contrato. Confira o celular do inquilino — não use o número de quem só conversa.":
+    {
+      es: "La ficha preliminar alimenta el análisis, FC y el contrato. Revise el celular del inquilino: no use el número de quien solo conversa.",
+    },
   "Informe o celular do inquilino principal na ficha preliminar antes de iniciar a análise.": {
     es: "Indica el celular del inquilino principal en la ficha preliminar antes de iniciar el análisis.",
   },
-  "O contato desta conversa não está disponível.": { es: "El contacto de esta conversación no está disponible." },
+  "O contato desta conversa não está disponível.": {
+    es: "El contacto de esta conversación no está disponible.",
+  },
   "Não foi possível ler a ficha preliminar.": { es: "No fue posible leer la ficha preliminar." },
-  "Papel": { es: "Rol" },
-  "Nome": { es: "Nombre" },
+  Papel: { es: "Rol" },
+  Nome: { es: "Nombre" },
 };

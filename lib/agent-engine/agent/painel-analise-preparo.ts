@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { isValidCpf } from "@/lib/legal/perfil-do-pais";
 import { LIMITES_ANEXOS_PADRAO, TETO_TOKEN_PREVIA, ehDescricaoGenericaDeMidia, textoCombinadoDaMensagem } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import { MAX_DERIVED_CHARS } from "@/lib/messaging/media/derive";
+import { comAvisoSeTruncado, derivadoEstaTruncado } from "@/lib/painel/texto-derivado";
 import { scrubMessage } from "@/lib/sentry/scrub";
 
 export { lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
@@ -39,12 +41,13 @@ export function fontesDaAnalise(linhas: readonly Record<string, unknown>[]): Fon
     const derivado = m.media_derived_status === "ready" && typeof m.media_derived_text === "string"
       ? m.media_derived_text : "";
     const corpo = typeof m.body === "string" ? m.body : "";
-    const textoFonte = textoCombinadoDaMensagem(corpo, derivado);
+    const truncado = derivadoEstaTruncado(derivado, m.original_completo === true);
+    const textoFonte = comAvisoSeTruncado(textoCombinadoDaMensagem(corpo, derivado), truncado);
     const documental = m.leitura_documental === true && !!derivado && !ehDescricaoGenericaDeMidia(derivado);
     const teto = LIMITES_ANEXOS_PADRAO.chars_por_arquivo;
     return { id: `M${i + 1}`, direcao, tipo, nome, texto: textoFonte.slice(0, teto),
       legivel: (tipo === "text" && textoFonte.length <= teto) ||
-        (tipo === "audio" && !!derivado && derivado.length < 8000) ||
+        (tipo === "audio" && !!derivado && derivado.length < MAX_DERIVED_CHARS) ||
         (tipo === "document" && direcao === "cliente" && m.original_completo === true && textoFonte.length <= teto) ||
         (tipo === "image" && direcao === "cliente" && documental && textoFonte.length <= teto) };
   });

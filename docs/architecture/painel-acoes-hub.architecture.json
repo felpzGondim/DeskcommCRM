@@ -15,37 +15,180 @@
   ],
   "mainPath": ["botoes", "rota", "mcp", "hub"],
   "nodes": [
-    { "id": "botoes", "lane": "inbox", "col": 1, "type": "frontend", "label": "PainelDoAgente: ações e confirmação" },
-    { "id": "rota", "lane": "servidor", "col": 2, "type": "route", "label": "painel-agente/acoes: agent+, org, rate limit" },
-    { "id": "mcp", "lane": "integracao", "col": 3, "type": "process", "label": "Cliente MCP externo: tools/list e tools/call" },
-    { "id": "hub", "lane": "integracao", "col": 4, "type": "external", "label": "Brisa Hub: boletos, contrato, ficha e análise" },
-    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e sucesso, sem PII" },
-    { "id": "recibo", "lane": "registro", "col": 3, "type": "database", "label": "idempotency_keys: conversa + pedido" },
-    { "id": "composer", "lane": "inbox", "col": 1, "type": "frontend", "label": "Composer: texto sugerido para revisão humana" },
-    { "id": "anexos", "lane": "servidor", "col": 2, "type": "process", "label": "Leitura documental: PDF, OCR/visão e senha" },
-    { "id": "visao", "lane": "integracao", "col": 3, "type": "external", "label": "Ponto visao_de_imagem (Gemini do painel)" },
-    { "id": "storage", "lane": "registro", "col": 4, "type": "database", "label": "whatsapp-media: original e URL assinada curta" },
-    { "id": "ficha_botao", "lane": "inbox", "col": 1, "type": "frontend", "label": "Gerar relatório preliminar e correção da ficha" },
-    { "id": "ficha_rota", "lane": "servidor", "col": 2, "type": "route", "label": "painel-agente/ficha: gera, valida e versiona" },
-    { "id": "ficha_tabela", "lane": "registro", "col": 4, "type": "database", "label": "locacao_fichas_preliminares: versão, quem, caminhos" }
+    {
+      "id": "botoes",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "PainelDoAgente: ações e confirmação"
+    },
+    {
+      "id": "rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente/acoes: agent+, org, rate limit"
+    },
+    {
+      "id": "mcp",
+      "lane": "integracao",
+      "col": 3,
+      "type": "process",
+      "label": "Cliente MCP externo: tools/list e tools/call"
+    },
+    {
+      "id": "hub",
+      "lane": "integracao",
+      "col": 4,
+      "type": "external",
+      "label": "Brisa Hub: boletos, contrato, ficha e análise"
+    },
+    {
+      "id": "audit",
+      "lane": "registro",
+      "col": 3,
+      "type": "database",
+      "label": "api_audit_log: ação e sucesso, sem PII"
+    },
+    {
+      "id": "recibo",
+      "lane": "registro",
+      "col": 3,
+      "type": "database",
+      "label": "idempotency_keys: conversa + pedido"
+    },
+    {
+      "id": "composer",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Composer: texto sugerido para revisão humana"
+    },
+    {
+      "id": "anexos",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Leitura documental: PDF, OCR/visão e senha"
+    },
+    {
+      "id": "aviso_teto",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Marca derivado no teto de 8000; não infere ausência"
+    },
+    {
+      "id": "visao",
+      "lane": "integracao",
+      "col": 3,
+      "type": "external",
+      "label": "Ponto visao_de_imagem (Gemini do painel)"
+    },
+    {
+      "id": "storage",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "whatsapp-media: original e URL assinada curta"
+    },
+    {
+      "id": "ficha_botao",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Gerar relatório preliminar e correção da ficha"
+    },
+    {
+      "id": "ficha_rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente/ficha: gera, valida e versiona"
+    },
+    {
+      "id": "ficha_tabela",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "locacao_fichas_preliminares: versão, quem, caminhos"
+    }
   ],
   "edges": [
     { "id": "e1", "from": "botoes", "to": "rota", "label": "consulta ou confirmação explícita" },
-    { "id": "e2", "from": "rota", "to": "mcp", "label": "credencial da organização e contato verificado" },
-    { "id": "e3", "from": "mcp", "to": "hub", "label": "tools/call com identidade e, se anunciado, arquivos" },
+    {
+      "id": "e2",
+      "from": "rota",
+      "to": "mcp",
+      "label": "credencial da organização e contato verificado"
+    },
+    {
+      "id": "e3",
+      "from": "mcp",
+      "to": "hub",
+      "label": "tools/call com identidade e, se anunciado, arquivos"
+    },
     { "id": "e4", "from": "rota", "to": "audit", "label": "ação e desfecho" },
     { "id": "e5", "from": "rota", "to": "recibo", "label": "reserva antes da análise" },
     { "id": "e6", "from": "hub", "to": "botoes", "label": "resumo estruturado ou erro visível" },
-    { "id": "e7", "from": "botoes", "to": "composer", "label": "preenche sugestão; atendente decide envio" },
+    {
+      "id": "e7",
+      "from": "botoes",
+      "to": "composer",
+      "label": "preenche sugestão; atendente decide envio"
+    },
     { "id": "e8", "from": "rota", "to": "anexos", "label": "200 mensagens mais recentes" },
     { "id": "e9", "from": "anexos", "to": "visao", "label": "foto e PDF escaneado" },
     { "id": "e10", "from": "anexos", "to": "storage", "label": "reabre original do tenant" },
     { "id": "e11", "from": "anexos", "to": "botoes", "label": "prévia, aviso de senha e limites" },
-    { "id": "e12", "from": "storage", "to": "hub", "label": "URL assinada só se a ferramenta anunciar" },
-    { "id": "e13", "from": "ficha_botao", "to": "ficha_rota", "label": "gerar ou salvar com revisão humana" },
-    { "id": "e14", "from": "ficha_rota", "to": "anexos", "label": "200 mensagens e leitura documental" },
-    { "id": "e15", "from": "ficha_rota", "to": "ficha_tabela", "label": "nova versão; audit sem valores" },
-    { "id": "e16", "from": "ficha_tabela", "to": "rota", "label": "celular do inquilino principal para a FC" },
-    { "id": "e17", "from": "ficha_rota", "to": "ficha_botao", "label": "relatório e ficha editável" }
+    {
+      "id": "e12",
+      "from": "storage",
+      "to": "hub",
+      "label": "URL assinada só se a ferramenta anunciar"
+    },
+    {
+      "id": "e13",
+      "from": "ficha_botao",
+      "to": "ficha_rota",
+      "label": "gerar ou salvar com revisão humana"
+    },
+    {
+      "id": "e14",
+      "from": "ficha_rota",
+      "to": "anexos",
+      "label": "200 mensagens e leitura documental"
+    },
+    {
+      "id": "e15",
+      "from": "ficha_rota",
+      "to": "ficha_tabela",
+      "label": "nova versão; audit sem valores"
+    },
+    {
+      "id": "e16",
+      "from": "ficha_tabela",
+      "to": "rota",
+      "label": "celular do inquilino principal para a FC"
+    },
+    {
+      "id": "e17",
+      "from": "ficha_rota",
+      "to": "ficha_botao",
+      "label": "relatório e ficha editável"
+    },
+    {
+      "id": "e18",
+      "from": "anexos",
+      "to": "aviso_teto",
+      "label": "PDF reaberto ou recorte marcado"
+    },
+    { "id": "e19", "from": "aviso_teto", "to": "ficha_rota", "label": "fontes da ficha com aviso" },
+    {
+      "id": "e20",
+      "from": "aviso_teto",
+      "to": "botoes",
+      "label": "PDF reabre; senão recorte com aviso"
+    }
   ]
 }

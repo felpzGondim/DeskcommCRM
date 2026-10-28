@@ -3,7 +3,10 @@
  * Gerar relatório preliminar.
  */
 import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
-import { enriquecerAnexosDaAnalise, frasesDosAvisos } from "@/lib/agent-engine/agent/painel-leitura-anexos";
+import {
+  enriquecerAnexosDaAnalise,
+  frasesDosAvisos,
+} from "@/lib/agent-engine/agent/painel-leitura-anexos";
 import {
   blocoDasFontesDaFicha,
   fontesDaFicha,
@@ -19,6 +22,7 @@ import {
   listarHistoricoDaFicha,
 } from "@/lib/locacao/ficha-repositorio";
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
+import { logger } from "@/lib/logger";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
 export async function lerFichaDoPainel(ctx: ContextoDaFerramenta): Promise<ResultadoDaFerramenta> {
@@ -47,13 +51,19 @@ export async function gerarRelatorioPreliminarDoPainel(
   const limites = limitesDaAnalise(ctx.settings);
   const { data: linhas, error: erroFontes } = await ctx.dbSessao
     .from("messages")
-    .select("id,direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at")
+    .select(
+      "id,direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at",
+    )
     .eq("organization_id", ctx.orgId)
     .eq("conversation_id", ctx.conversationId)
     .order("sent_at", { ascending: false })
     .limit(limites.mensagens_brutas);
   if (erroFontes) {
-    return { ok: false, texto: "Não foi possível ler a conversa para o relatório preliminar.", codigo: "internal_error" };
+    return {
+      ok: false,
+      texto: "Não foi possível ler a conversa para o relatório preliminar.",
+      codigo: "internal_error",
+    };
   }
   const janela = (linhas ?? []).slice(0, 200) as Record<string, unknown>[];
   const deps = requestTurnDeps();
@@ -66,7 +76,11 @@ export async function gerarRelatorioPreliminarDoPainel(
     const fontes = fontesDaFicha(enriquecido.linhas);
     const bloco = blocoDasFontesDaFicha(fontes);
     if (bloco.length > limites.chars_conjunto) {
-      return { ok: false, texto: "Há documentos demais para conferir de uma vez. Revise os anexos desta conversa.", codigo: "validation_error" };
+      return {
+        ok: false,
+        texto: "Há documentos demais para conferir de uma vez. Revise os anexos desta conversa.",
+        codigo: "validation_error",
+      };
     }
     const { saida } = await gerarRelatorioPreliminarNoPainel(
       getRequestPool(),
@@ -105,12 +119,28 @@ export async function gerarRelatorioPreliminarDoPainel(
     };
   } catch (err) {
     if (err instanceof FichaConflitoDeVersao) {
-      return { ok: false, texto: "Outra pessoa alterou a ficha. Recarregue e gere de novo.", codigo: "idempotency_conflict" };
+      return {
+        ok: false,
+        texto: "Outra pessoa alterou a ficha. Recarregue e gere de novo.",
+        codigo: "idempotency_conflict",
+      };
     }
+    const codigo =
+      err instanceof Error && err.message === "saida_truncada"
+        ? "saida_truncada"
+        : "invalid_format";
+    logger.error("[painel-ficha] falha ao gerar relatório", {
+      requestId: ctx.requestId,
+      organizationId: ctx.orgId,
+      codigo,
+    });
     return {
       ok: false,
-      texto: "Não foi possível gerar o relatório preliminar. Confira os documentos e tente novamente.",
-      codigo: "hub_contract_error",
+      texto:
+        codigo === "saida_truncada"
+          ? "Não foi possível gerar o relatório preliminar. A resposta da IA ficou incompleta. Tente de novo."
+          : "Não foi possível gerar o relatório preliminar. A resposta da IA veio em formato inválido. Tente de novo.",
+      codigo,
     };
   }
 }
