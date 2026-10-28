@@ -325,6 +325,24 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
       "chave de localStorage do modo de depuração das citações da IA — irmã de `deskcomm-theme` em lib/theme.tsx. Não é texto de interface: renomear só faz quem já tinha o modo ligado perdê-lo, e o par leitura/escrita teria de mudar junto",
     marcas: ["deskcomm.show_ai_citations"],
   },
+  "lib/env.ts": {
+    categoria: "INFRA",
+    motivo:
+      "nomes das variáveis de ambiente da cópia para o Drive compartilhado da locação, combinados com o operador em 28/10/2026. Não são texto de tela: aparecem no `.env` da VPS. Renomear quebra o contrato que o `.env.example` documenta e o cron deixa de achar a credencial",
+    marcas: ["deskcomm_drive_id", "deskcomm_google_sa_json"],
+  },
+  "lib/locacao/drive.ts": {
+    categoria: "INFRA",
+    motivo:
+      "as mesmas duas variáveis, lidas na cópia para o Drive. Têm de casar com `lib/env.ts` e com o `.env` da VPS; não chegam à tela do usuário final",
+    marcas: ["deskcomm_drive_id", "deskcomm_google_sa_json"],
+  },
+  "lib/locacao/drive.test.ts": {
+    categoria: "DEV",
+    motivo:
+      "o teste da credencial da cópia para o Drive cita os nomes das variáveis para provar o no-op quando elas estão vazias; não embarca na imagem",
+    marcas: ["deskcomm_drive_id", "deskcomm_google_sa_json"],
+  },
 
   // ─── DIVIDA — vazamento real. Cada linha declara a fase que a apaga. ───
   "lib/email/templates/ai-budget-alarm.tsx": {

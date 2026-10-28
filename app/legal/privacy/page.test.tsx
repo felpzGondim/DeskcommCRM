@@ -39,12 +39,14 @@ describe("/legal/privacy — seção dos dados do Google", () => {
     const texto = container.textContent ?? "";
 
     expect(container.querySelector("#dados-do-google")).not.toBeNull();
-    expect(texto).toContain("9. Dados do Google (Agenda, Meet e Google Ads)");
+    expect(texto).toContain("9. Dados do Google (Agenda, Meet, Ads e Drive)");
     expect(texto).toContain("Google Agenda:");
     expect(texto).toContain("O sistema não lê e-mails");
     expect(texto).toContain("Google Meet:");
     expect(texto).toContain("espaços de reunião do Google Meet");
     expect(texto).toContain("Google Ads:");
+    expect(texto).toContain("Google Drive:");
+    expect(texto).toContain("nunca apaga arquivo");
     expect(texto).toContain("não são vendidos");
     expect(texto).toContain("não são usados para publicidade");
     expect(texto).toContain("não são usados para treinar modelos de inteligência artificial");

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Processo de locação (Fases 3, 3.5 e 3b)",
+    "subtitle": "Da conversa ao contrato, desligado por padrão, sem mensagem a contato",
+    "output": "locacao-processo.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "inbox", "label": "Inbox e telas" },
+    { "id": "servidor", "label": "Servidor" },
+    { "id": "registro", "label": "Registro" },
+    { "id": "fora", "label": "Fora (só GET / cópia)" }
+  ],
+  "mainPath": ["painel", "flag", "processo", "etapa"],
+  "nodes": [
+    { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: Abrir processo (papel contato)" },
+    { "id": "lista", "lane": "inbox", "col": 1, "type": "frontend", "label": "/app/locacao e detalhe com aprovar/reprovar" },
+    { "id": "config", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: chaves desligadas" },
+    { "id": "flag", "lane": "servidor", "col": 2, "type": "process", "label": "organizations.settings.locacao.* e superlogica_vinculo" },
+    { "id": "rotas", "lane": "servidor", "col": 2, "type": "route", "label": "/api/v1/locacao: org, RBAC, suporte, Zod" },
+    { "id": "processo", "lane": "registro", "col": 3, "type": "database", "label": "locacao_processos + imóveis + pessoas + fichas" },
+    { "id": "etapa", "lane": "registro", "col": 3, "type": "database", "label": "9 etapas; contrato_criado; eventos sem PII" },
+    { "id": "vinculo", "lane": "registro", "col": 3, "type": "database", "label": "contato_superlogica_vinculos (backfill sem apagar chaves)" },
+    { "id": "docs", "lane": "registro", "col": 4, "type": "database", "label": "bucket locacao-processos + locacao_processo_documentos" },
+    { "id": "retencao", "lane": "servidor", "col": 2, "type": "process", "label": "cron data-retention: 90d / parado 30d / LGPD INVOKER" },
+    { "id": "aprovacao", "lane": "servidor", "col": 2, "type": "process", "label": "só aprovador (ou dono) aprova; atendente reprova com motivo" },
+    { "id": "hub", "lane": "fora", "col": 4, "type": "external", "label": "Superlógica via Hub: só GET; FC só a pedido, reuso 90d" },
+    { "id": "drive", "lane": "fora", "col": 4, "type": "external", "label": "Drive Aluguéis: DESKCOMM_* env, chave desligada, nunca apaga" },
+    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "painel", "to": "flag", "label": "só cria se processos_habilitado" },
+    { "id": "e2", "from": "flag", "to": "rotas", "label": "gate por organização" },
+    { "id": "e3", "from": "rotas", "to": "processo", "label": "service_role filtra organization_id" },
+    { "id": "e4", "from": "processo", "to": "etapa", "label": "avança, cancela, encerra" },
+    { "id": "e5", "from": "etapa", "to": "lista", "label": "atendente vê etapa e pessoas" },
+    { "id": "e6", "from": "lista", "to": "aprovacao", "label": "aprovar / reprovar com motivo" },
+    { "id": "e7", "from": "aprovacao", "to": "etapa", "label": "grava quem e quando, sem PII extra" },
+    { "id": "e8", "from": "config", "to": "flag", "label": "admin liga e desliga" },
+    { "id": "e9", "from": "flag", "to": "config", "label": "estado visível na hora" },
+    { "id": "e10", "from": "rotas", "to": "vinculo", "label": "simular / ligar / desligar" },
+    { "id": "e11", "from": "vinculo", "to": "hub", "label": "GET pessoa por telefone, nunca escrita" },
+    { "id": "e12", "from": "hub", "to": "vinculo", "label": "só ids; ambíguo vai a revisão" },
+    { "id": "e13", "from": "rotas", "to": "docs", "label": "anexo se arquivos_habilitado" },
+    { "id": "e14", "from": "docs", "to": "drive", "label": "cron só com flag + JSON e id do Drive" },
+    { "id": "e15", "from": "drive", "to": "docs", "label": "ensaio: não copia nesta versão" },
+    { "id": "e16", "from": "rotas", "to": "audit", "label": "mutação com efeito" },
+    { "id": "e17", "from": "audit", "to": "lista", "label": "histórico de etapa, sem valores" },
+    { "id": "e18", "from": "processo", "to": "retencao", "label": "encerrado_em conta os 90 dias" },
+    { "id": "e19", "from": "retencao", "to": "processo", "label": "parado 30d vira cancelado/expirado" },
+    { "id": "e20", "from": "retencao", "to": "docs", "label": "expurga ficha, hash e arquivo conferido" },
+    { "id": "e21", "from": "painel", "to": "lista", "label": "abre o processo da conversa" },
+    { "id": "e22", "from": "etapa", "to": "hub", "label": "FC a pedido; reaproveita 90 dias" }
+  ]
+}

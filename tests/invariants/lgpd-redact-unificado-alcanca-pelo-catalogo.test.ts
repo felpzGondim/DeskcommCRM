@@ -333,6 +333,30 @@ const DECISOES: Record<string, Decisao> = {
     decidida: "manter",
     razao: "body_hash é IRREVERSÍVEL (a própria doutrina do invariante irmão manda `_hash` ficar de fora) e last_error/status são código; é a prova de que a mensagem saiu, sem guardar o que ela dizia.",
   },
+  locacao_processo_participantes: {
+    decidida: "redigir",
+    caminho: "gatilho",
+    razao:
+      "0767: nome_exibicao, cpf_encrypted, cpf_mascarado e cpf_hash zerados na virada de " +
+      "is_anonymized pelo gatilho fn_locacao_limpar_contato_anonimizado; a linha do processo " +
+      "fica (é o histórico da locação, sem o dado da pessoa).",
+  },
+  contato_superlogica_vinculos: {
+    decidida: "redigir",
+    caminho: "gatilho",
+    razao:
+      "0767: o gatilho desativa o vínculo (ativo=false, motivo_desfeito='lgpd') na virada de " +
+      "is_anonymized — o id Superlógica é identificador da pessoa no terceiro; a linha fica " +
+      "como tombstone para não religar o contato anonimizado.",
+  },
+  superlogica_vinculo_revisoes: {
+    decidida: "redigir",
+    caminho: "gatilho",
+    razao:
+      "0767: o gatilho APAGA as revisões pendentes do contato na virada de is_anonymized " +
+      "(candidatos jsonb com ids Superlógica e chave_hash do telefone); fila de casamento " +
+      "não sobrevive ao titular que pediu apagamento.",
+  },
 };
 
 /** As 11 tabelas da issue #1504 — nenhuma tem FK DIRETA, por isso medida à parte. */

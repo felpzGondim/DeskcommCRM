@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.10] — não publicada
+
+### Adicionado
+
+- **Locação (desligada)** `DESKCOMM_GOOGLE_SA_JSON` e `DESKCOMM_DRIVE_ID`; o código nunca apaga.
+
 ## [1.88.0-felpz.9] — 2026-10-28
 
 ### Adicionado

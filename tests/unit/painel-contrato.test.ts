@@ -86,6 +86,19 @@ describe("locação pelo painel", () => {
       .toMatchObject({ split: false, isencao_multa_meses: 0 });
   });
 
+  it("id_imovel e participante_id são opcionais; o id do imóvel aceita número ou dígitos", () => {
+    const base = { imovel: { endereco: "Rua teste" }, locatarios: [{ cpf: "52998224725" }],
+      aluguel: 1200, data_inicio: "2026-12-01", dia_vencimento: 10, tipo: "residencial" as const,
+      indice_reajuste: "IPCA" as const, garantia: "nenhuma" as const, split: false, isencao_multa_meses: 0 };
+    expect(dadosContratoSchema.parse(base).id_imovel).toBeUndefined();
+    expect(dadosContratoSchema.parse({ ...base, id_imovel: 42 }).id_imovel).toBe(42);
+    expect(dadosContratoSchema.parse({ ...base, id_imovel: "42" }).id_imovel).toBe("42");
+    expect(dadosContratoSchema.parse({
+      ...base,
+      locatarios: [{ cpf: "52998224725", participante_id: "00000000-0000-4000-8000-000000000001" }],
+    }).locatarios[0]?.participante_id).toBe("00000000-0000-4000-8000-000000000001");
+  });
+
   it("lê o JSON de erro do Hub e recusa CPF ou token", () => {
     expect(extrairMensagemErroHub({ message: "contrato não configurado" })).toBe("contrato não configurado");
     expect(extrairMensagemErroHub({ error: { detail: "chave sem permissão de escrita" } })).toBe("chave sem permissão de escrita");

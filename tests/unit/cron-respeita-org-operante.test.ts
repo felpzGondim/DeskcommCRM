@@ -80,6 +80,7 @@ const SEM_FILTRO: Record<string, string> = {
   "sync-model-catalog": "catálogo da instalação inteira; não pertence a organização nenhuma",
   "webhook-log-retention": "retenção do arquivo de webhook: obrigação, nunca bloqueada",
   "webhook-replay": "reprocessa ENTRADA do WAHA; mensagem que chega continua gravada (spec §1.3)",
+  "locacao-drive-copia": "cópia interna para o Drive, sem mensagem a contato; no-op sem credencial e sem chave da organização",
 };
 
 function rotasDeCron(): string[] {

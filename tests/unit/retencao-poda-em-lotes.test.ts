@@ -375,9 +375,9 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 17 drenos: 15 pelo rpc (o 15º é o aviso de agendamento, 0753) + a mídia +
+    // 20 drenos: 18 pelo rpc (15 anteriores + 3 da locação, 0767) + a mídia +
     // a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(17);
+    expect(r.falhas).toHaveLength(20);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -431,8 +431,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 15 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
-    expect(r.falhas).toHaveLength(15);
+    // Só os 18 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
+    expect(r.falhas).toHaveLength(18);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 });
@@ -623,6 +623,18 @@ describe("houveEfeito — as duas direções", () => {
     lotes_checkpoints: 0,
     checkpoints_tem_resto: false,
     retencao_checkpoints_dias: 180,
+    processos_de_locacao_apagados: 0,
+    lotes_processos_de_locacao: 0,
+    processos_de_locacao_tem_resto: false,
+    retencao_processos_de_locacao_dias: 90,
+    revisoes_de_vinculo_apagadas: 0,
+    lotes_revisoes_de_vinculo: 0,
+    revisoes_de_vinculo_tem_resto: false,
+    retencao_revisoes_de_vinculo_dias: 30,
+    processos_parados_encerrados: 0,
+    lotes_processos_parados: 0,
+    processos_parados_tem_resto: false,
+    retencao_processos_parados_dias: 30,
     avisos: [] as string[],
     falhas: [] as string[],
   };
@@ -700,6 +712,9 @@ describe("houveEfeito — as duas direções", () => {
     // parar de auditar —, e um efeito novo que não entra em `houveEfeito` é
     // exatamente o silêncio que ela proíbe.
     expect(houveEfeito({ ...base, espelho_apagado: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, processos_de_locacao_apagados: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, revisoes_de_vinculo_apagadas: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, processos_parados_encerrados: 1 })).toBe(true);
   });
 });
 

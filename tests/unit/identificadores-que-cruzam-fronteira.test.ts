@@ -185,6 +185,10 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   { arquivo: "app/api/v1/conversations/[id]/notes/media/route.ts", fronteira: "storage.chave-de-objeto" },
   // O anexo de lead (#2829): anexo em campo customizado do lead, bucket `internal-media`.
   { arquivo: "app/api/v1/leads/[id]/attachments/route.ts", fronteira: "storage.chave-de-objeto" },
+  // Fase 3b: anexo do processo de locação. Chave =
+  // `{org}/processos/{processo}/{categoria}/{docId}.{ext}` — dois UUID + categoria
+  // do vocabulário + extensão da allowlist. Sem nome, CPF ou telefone.
+  { arquivo: "app/api/v1/locacao/processos/[id]/documentos/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/upload/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/ai/knowledge/sources/route.ts", fronteira: "storage.chave-de-objeto" },
   // O PDF da proposta comercial (#1832): `<org>/<proposta>.pdf`, dois uuids.

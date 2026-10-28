@@ -30,6 +30,7 @@ const ESCOPOS_DECLARADOS: Record<string, string> = {
   "meetings.space.created": "Google Meet:",
   adwords: "Google Ads:",
   datamanager: "Google Ads:",
+  drive: "Google Drive:",
 };
 
 function escoposPedidosPeloCodigo(): Map<string, string[]> {

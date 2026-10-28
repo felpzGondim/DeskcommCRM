@@ -288,12 +288,12 @@ Por baixo, cada evento vira uma linha em `event_log` — nenhum trigger de banco
 
 | Grupo | Telas |
 |---|---|
-| **Atendimento** | **Inbox** (conversas de WhatsApp, você e a IA lado a lado; **Painel do agente** na coluna direita resume a conversa e sugere resposta, sem enviar — ver `docs/decisoes/painel-agente.md`; neste fork a análise também lê anexos — `docs/decisoes/painel-anexos.md`) · **Radar** (quem esfriou e ainda está aberto) · **Respostas rápidas** |
+| **Atendimento** | **Inbox** (conversas de WhatsApp, você e a IA lado a lado; **Painel do agente** na coluna direita resume a conversa e sugere resposta, sem enviar — ver `docs/decisoes/painel-agente.md`; neste fork a análise também lê anexos — `docs/decisoes/painel-anexos.md` — e o **processo de locação** nasce desligado: ligue em Configurações › Locação — `docs/decisoes/locacao-fases-3-3b.md`) · **Radar** (quem esfriou e ainda está aberto) · **Respostas rápidas** |
 | **CRM** | **Kanban** (onde cada negócio está no funil) · **Contatos** · **Funis** (etapas, vocabulário do negócio e motivos de perda) |
 | **Agente de IA** | **Agentes** · **Follow-ups** · **Roteadores** · **Provedores** e **Credenciais** · **Conhecimento** (RAG) · **Memória** · **Skills** · **Casos** · **Alertas** · **Propostas** · **Execuções** · **Uso e orçamento** |
 | **Canais** | **Conexões** (QR ou canal oficial da Meta, com saúde, reconexão e templates) · **Nuvemshop** · **Webhooks** |
 | **Análise** | **Desempenho** (funil e performance por atendente) · **Evolução da IA** · **Audit Log** |
-| **Organização** | **Equipe** · **Distribuição de atendimento** · **Organização** · **LGPD** · **API Tokens** · **Segurança** (MFA, códigos de recuperação, sessões) · Perfil, Notificações, Billing |
+| **Organização** | **Equipe** · **Distribuição de atendimento** · **Organização** · **LGPD** · **API Tokens** · **Segurança** (MFA, códigos de recuperação, sessões) · **Locação** (neste fork: chaves do processo, vínculo Superlógica e arquivos — tudo desligado por padrão) · Perfil, Notificações, Billing |
 
 Toda tela tem porta na navegação — o CI reprova tela que existe mas em que só se chega digitando a URL.
 
