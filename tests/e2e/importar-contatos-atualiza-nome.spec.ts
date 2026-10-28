@@ -1,11 +1,10 @@
 /**
- * IMPORTAR CONTATOS — preenche nome vazio e pede confirmação em conflito.
+ * IMPORTAR CONTATOS — prévia e substituição do nome principal.
  *
  * Quem chegou pelo WhatsApp fica com o nome principal vazio (a tela mostra o
- * pushName ou o número). A planilha só criava contato novo e descartava o
- * nome dessas linhas. Este spec dirige o diálogo real: opção desligada não
- * toca quem já existe; opção ligada preenche o vazio, lista o conflito e só
- * substitui depois do clique em "Substituir estes nomes".
+ * pushName ou o número). Com a opção ligada, o primeiro envio é prévia
+ * (não grava); "Confirmar importação" cria, preenche o vazio e substitui o
+ * já preenchido. Sem confirmação nome a nome.
  *
  * Pré-requisitos (banco local do baseline, app buildada):
  *   pnpm e2e:env && pnpm e2e:build
@@ -64,7 +63,7 @@ async function criarPelaApi(
   return json.data.contact.id;
 }
 
-test("importação preenche nome vazio, preserva o preenchido e só substitui com confirmação", async ({
+test("importação mostra prévia e, ao confirmar, preenche o vazio e substitui o preenchido", async ({
   page,
 }) => {
   await login(page);
@@ -102,17 +101,17 @@ test("importação preenche nome vazio, preserva o preenchido e só substitui co
 
   const resumo = dialogo.getByTestId("resumo-da-importacao");
   await expect(resumo).toBeVisible({ timeout: 15_000 });
-  await expect(resumo).toContainText("1 importado(s)");
-  await expect(resumo).toContainText("1 atualizado(s)");
-  await expect(resumo).toContainText("1 conflito(s)");
+  await expect(resumo).toContainText("1 serão criado(s)");
+  await expect(resumo).toContainText("1 serão preenchido(s)");
+  await expect(resumo).toContainText("1 serão substituído(s)");
 
-  const { data: vazio } = await admin
+  const { data: vazioAntes } = await admin
     .from("contacts")
     .select("name")
     .eq("id", idVazio)
     .eq("organization_id", creds.org_id)
     .single();
-  expect(vazio?.name).toBe(`Maria ${SUFIXO}`);
+  expect(vazioAntes?.name ?? null).toBeNull();
 
   const { data: cheioAntes } = await admin
     .from("contacts")
@@ -122,10 +121,18 @@ test("importação preenche nome vazio, preserva o preenchido e só substitui co
     .single();
   expect(cheioAntes?.name).toBe(`Carlos ${SUFIXO}`);
 
-  await expect(dialogo.getByTestId("conflitos-de-nome")).toContainText(`Carlos Silva ${SUFIXO}`);
-  await dialogo.getByTestId("substituir-nomes").click();
-  await expect(resumo).toContainText("2 atualizado(s)");
-  await expect(dialogo.getByTestId("conflitos-de-nome")).toHaveCount(0);
+  await dialogo.getByTestId("confirmar-importacao").click();
+  await expect(resumo).toContainText("1 importado(s)");
+  await expect(resumo).toContainText("1 preenchido(s)");
+  await expect(resumo).toContainText("1 substituído(s)");
+
+  const { data: vazio } = await admin
+    .from("contacts")
+    .select("name")
+    .eq("id", idVazio)
+    .eq("organization_id", creds.org_id)
+    .single();
+  expect(vazio?.name).toBe(`Maria ${SUFIXO}`);
 
   const { data: cheioDepois } = await admin
     .from("contacts")

@@ -9354,21 +9354,21 @@ export const DICIONARIO: Traducoes = {
   "contato(s) importado(s)": { es: "contacto(s) importado(s)" },
   "contato(s) atualizado(s)": { es: "contacto(s) actualizado(s)" },
   "Atualizar contatos existentes": { es: "Actualizar contactos existentes" },
-  "Preenche o nome principal só quando a ficha está sem nome. Se o nome da ficha for diferente do da planilha, pedimos confirmação antes de substituir.": {
-    es: "Rellena el nombre principal solo cuando la ficha no tiene nombre. Si el nombre de la ficha es distinto al de la hoja, pedimos confirmación antes de sustituirlo.",
+  "O nome da planilha substitui o nome da ficha, inclusive o apelido do WhatsApp. Antes de gravar, mostramos quantos serão criados, preenchidos e substituídos.": {
+    es: "El nombre de la hoja sustituye el nombre de la ficha, incluso el apodo de WhatsApp. Antes de guardar, mostramos cuántos se crearán, se rellenarán y se sustituirán.",
   },
   "atualizado(s)": { es: "actualizado(s)" },
-  "conflito(s)": { es: "conflicto(s)" },
-  "Estes contatos já têm um nome diferente na ficha. Confirme para substituir pelos nomes da planilha.": {
-    es: "Estos contactos ya tienen un nombre distinto en la ficha. Confirma para sustituirlo por los nombres de la hoja.",
-  },
-  "Manter os nomes da ficha": { es: "Conservar los nombres de la ficha" },
-  "Substituir estes nomes": { es: "Sustituir estos nombres" },
+  "serão criado(s)": { es: "se crearán" },
+  "serão preenchido(s)": { es: "se rellenarán" },
+  "serão substituído(s)": { es: "se sustituirán" },
+  "preenchido(s)": { es: "rellenado(s)" },
+  "substituído(s)": { es: "sustituido(s)" },
+  "Confirmar importação": { es: "Confirmar importación" },
   "linha(s) com problema": { es: "fila(s) con problema" },
   "Não foi possível importar o arquivo.": { es: "No se pudo importar el archivo." },
   "Importar contatos de planilha": { es: "Importar contactos de una hoja de cálculo" },
-  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.": {
-    es: "Envía un archivo .csv con encabezado — columnas reconocidas: nombre, teléfono, email, cpf, nacimiento, tags. Excel: usa “Guardar como” → “CSV UTF-8”. Máximo 500 líneas por archivo.",
+  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Também entende a exportação do Google Contatos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.": {
+    es: "Envía un archivo .csv con encabezado — columnas reconocidas: nombre, teléfono, email, cpf, nacimiento, tags. También entiende la exportación de Google Contactos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: usa “Guardar como” → “CSV UTF-8”. Máximo 500 líneas por archivo.",
   },
   "Este arquivo não parece ser um CSV de texto. No Excel use “Salvar como” → “CSV UTF-8 (delimitado por vírgulas)”.": {
     es: "Este archivo no parece ser un CSV de texto. En Excel usa “Guardar como” → “CSV UTF-8 (delimitado por comas)”.",

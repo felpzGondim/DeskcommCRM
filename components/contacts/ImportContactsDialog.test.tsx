@@ -1,6 +1,6 @@
 /**
- * O diálogo de importação: a opção começa desligada, o conflito pede
- * confirmação e o resumo mostra criado / atualizado / pulado / conflito.
+ * O diálogo de importação: a opção começa desligada; ligada, o primeiro
+ * envio é prévia e um único "Confirmar importação" grava.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
@@ -24,9 +24,11 @@ function resumo(parcial: Partial<ImportContactsResult> = {}): ImportContactsResu
   return {
     total_linhas: 0,
     imported: 0,
+    filled: 0,
+    replaced: 0,
     updated: 0,
     skipped_duplicates: 0,
-    conflicts: [],
+    preview: false,
     errors: [],
     ...parcial,
   };
@@ -59,44 +61,51 @@ describe("ImportContactsDialog", () => {
     expect(mutateAsync).toHaveBeenCalledWith({
       file: expect.any(File),
       atualizarExistentes: false,
-      substituirContactIds: undefined,
+      confirmar: undefined,
     });
   });
 
-  it("com a opção ligada, conflito lista os nomes e só substitui no segundo clique", async () => {
+  it("com a opção ligada, a prévia conta e um único confirmar grava", async () => {
     mutateAsync
       .mockResolvedValueOnce(
         resumo({
-          total_linhas: 1,
-          skipped_duplicates: 0,
-          conflicts: [
-            {
-              linha: 2,
-              contact_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-              nome_atual: "Carlos",
-              nome_planilha: "Carlos Silva",
-            },
-          ],
+          total_linhas: 3,
+          imported: 1,
+          filled: 1,
+          replaced: 1,
+          updated: 2,
+          preview: true,
         }),
       )
-      .mockResolvedValueOnce(resumo({ updated: 1 }));
+      .mockResolvedValueOnce(
+        resumo({
+          total_linhas: 3,
+          imported: 1,
+          filled: 1,
+          replaced: 1,
+          updated: 2,
+          preview: false,
+        }),
+      );
     const user = userEvent.setup({ delay: null });
     montar();
     await user.click(screen.getByTestId("atualizar-existentes"));
     await user.upload(screen.getByTestId("arquivo-de-contatos"), csv());
     await user.click(screen.getByRole("button", { name: "Importar" }));
 
-    expect(await screen.findByTestId("conflitos-de-nome")).toHaveTextContent("Carlos Silva");
-    expect(screen.getByTestId("resumo-da-importacao")).toHaveTextContent("1 conflito(s)");
+    const painel = await screen.findByTestId("resumo-da-importacao");
+    expect(painel).toHaveTextContent("1 serão criado(s)");
+    expect(painel).toHaveTextContent("1 serão preenchido(s)");
+    expect(painel).toHaveTextContent("1 serão substituído(s)");
     expect(screen.queryByRole("button", { name: "Concluir" })).toBeNull();
 
-    await user.click(screen.getByTestId("substituir-nomes"));
+    await user.click(screen.getByTestId("confirmar-importacao"));
     expect(mutateAsync).toHaveBeenLastCalledWith({
       file: expect.any(File),
       atualizarExistentes: true,
-      substituirContactIds: ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+      confirmar: true,
     });
-    expect(await screen.findByTestId("resumo-da-importacao")).toHaveTextContent("1 atualizado(s)");
-    expect(screen.queryByTestId("conflitos-de-nome")).toBeNull();
+    expect(await screen.findByTestId("resumo-da-importacao")).toHaveTextContent("1 importado(s)");
+    expect(screen.getByRole("button", { name: "Concluir" })).toBeTruthy();
   });
 });

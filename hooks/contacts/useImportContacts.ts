@@ -7,34 +7,31 @@
  */
 import { ApiError } from "@/lib/api/types";
 import type { ApiErrorBody } from "@/lib/api/types";
-import type { ConflitoDeNome } from "@/lib/contacts/atualizar-nome-na-importacao";
 import { randomId } from "@/lib/random-id";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-export type { ConflitoDeNome };
 
 export interface ImportContactsResult {
   total_linhas: number;
   imported: number;
+  filled: number;
+  replaced: number;
   updated: number;
   skipped_duplicates: number;
-  conflicts: ConflitoDeNome[];
+  preview: boolean;
   errors: Array<{ linha: number; motivo: string }>;
 }
 
 export interface PedidoDeImportacao {
   file: File;
   atualizarExistentes?: boolean;
-  substituirContactIds?: string[];
+  confirmar?: boolean;
 }
 
 async function importarCsv(pedido: PedidoDeImportacao): Promise<ImportContactsResult> {
   const form = new FormData();
   form.append("file", pedido.file);
   if (pedido.atualizarExistentes) form.append("atualizar_existentes", "true");
-  if (pedido.substituirContactIds && pedido.substituirContactIds.length > 0) {
-    form.append("substituir_contact_ids", JSON.stringify(pedido.substituirContactIds));
-  }
+  if (pedido.confirmar) form.append("confirmar", "true");
   const res = await fetch("/api/v1/contacts/import", {
     method: "POST",
     headers: { "Idempotency-Key": randomId() },
@@ -61,8 +58,8 @@ export function useImportContacts() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: importarCsv,
-    onSuccess: () => {
-      // A lista pode ter crescido em qualquer página/filtro — invalida tudo.
+    onSuccess: (data) => {
+      if (data.preview) return;
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });

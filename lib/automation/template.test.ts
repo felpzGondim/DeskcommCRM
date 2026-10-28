@@ -12,6 +12,11 @@ describe("renderTemplate", () => {
     expect(renderTemplate("Use {{lead.custom_fields.cupom}}", ctx)).toBe("Use BF10"));
   it("alias {{nome}} resolve contact.name", () =>
     expect(renderTemplate("Oi {{nome}}", ctx)).toBe("Oi Ana"));
+  it("{{nome}} usa o nome principal gravado pela importação, não o apelido do WhatsApp", () => {
+    const importado = { contact: { name: "Maria da Silva", display_name: "MariZap" } };
+    expect(renderTemplate("Oi {{nome}}", importado)).toBe("Oi Maria da Silva");
+    expect(renderTemplate("Oi {{primeiro_nome}}", importado)).toBe("Oi Maria");
+  });
   it("{{nome}} cai no nome do perfil do WhatsApp quando não há nome cadastrado", () => {
     // Contato que chega pelo WhatsApp tem `name` nulo e o pushName em
     // `display_name` — a automação "lead.created" saía "Olá , ..." em produção.

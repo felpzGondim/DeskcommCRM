@@ -5,22 +5,22 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * Formato aceito: CSV RFC 4180 com linha de cabeçalho (delimitador detectado
  * automaticamente entre vírgula, ponto-e-vírgula e tabulação — Excel pt-BR
  * exporta ";"). Colunas reconhecidas e apelidos em `lib/contacts/csv.ts`.
+ * Exportação do Google Contatos (EN/PT) é detectada pelo cabeçalho
+ * (`Name`/`Nome`, `Phone 1 - Value`/`Telefone 1 - Valor`, células com ` ::: `).
  * XLSX é recusado na borda com instrução de exportar como CSV.
  *
  * Desfecho POR LINHA, nunca do lote inteiro:
  *   - linha inválida é pulada com motivo nominal (vem no response);
- *   - contato que já existe (telefone/e-mail/CPF da org) é contado como
- *     duplicado, não como erro — A MENOS que o operador ligue
+ *   - contato que já existe é pulado — A MENOS que o operador ligue
  *     `atualizar_existentes` (off por padrão, o comportamento de sempre);
- *   - com a opção ligada, telefone já cadastrado PREENCHE o nome principal
- *     só quando ele está vazio; nome preenchido e diferente vira conflito e
- *     só substitui com `substituir_contact_ids` (confirmação explícita);
- *   - as demais linhas seguem mesmo se uma falhar — uma planilha de 400 nomes
- *     não pode morrer inteira pelo telefone malformado da linha 7.
+ *   - com a opção ligada, o primeiro POST é PRÉVIA (não grava): conta
+ *     criados / preenchidos / substituídos. O segundo, com `confirmar`,
+ *     grava. O nome da planilha SUBSTITUI o nome principal, inclusive o
+ *     já preenchido. Sem confirmação nome a nome.
+ *   - as demais linhas seguem mesmo se uma falhar.
  *
  * Insert é linha a linha de propósito: `contacts` tem índices únicos parciais
- * (org+phone/org+email/org+cpf) e um insert em lote viraria tudo-ou-nada —
- * o 23505 de UM conflito descartaria as outras centenas criadas.
+ * e um insert em lote viraria tudo-ou-nada.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
@@ -37,17 +37,19 @@ import {
   mapHeader,
   mapLinha,
   parseCsv,
+  type LinhaNormalizada,
 } from "@/lib/contacts/csv";
 import { contactCreateSchemaDoPais } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import {
-  type ConflitoDeNome,
   decidirAtualizacaoDeNome,
-  formMarcouAtualizar,
-  lerIdsDeSubstituicao,
-  nomePrincipalVazio,
+  formMarcou,
 } from "@/lib/contacts/atualizar-nome-na-importacao";
+import {
+  expandirLinhaGoogle,
+  indicesGoogleContatos,
+} from "@/lib/contacts/planilha-google";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -62,9 +64,11 @@ interface LinhaErro {
 interface ImportSummary {
   total_linhas: number;
   imported: number;
+  filled: number;
+  replaced: number;
   updated: number;
   skipped_duplicates: number;
-  conflicts: ConflitoDeNome[];
+  preview: boolean;
   errors: LinhaErro[];
 }
 
@@ -75,39 +79,45 @@ interface ContatoExistente {
   is_anonymized: boolean;
 }
 
+function resumoVazio(total: number, errors: LinhaErro[], preview: boolean): ImportSummary {
+  return {
+    total_linhas: total,
+    imported: 0,
+    filled: 0,
+    replaced: 0,
+    updated: 0,
+    skipped_duplicates: 0,
+    preview,
+    errors,
+  };
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
   const supabase = await createClient();
-  // spec 13 §4: escrita é agent+ (viewer é read-only), igual ao POST unitário.
   const authz = await requireRole("agent", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
   const user = authz.user;
   const orgId = authz.org.orgId;
   const t = (texto: string) => traduzir(texto, user.idioma);
 
-  // O documento do titular, na régua do PAÍS da organização (issue #1033): o
-  // cabeçalho aceito, a normalização do valor e a validação saem daqui. O país
-  // vem da coluna da organização — nunca do arquivo enviado.
   const perfil = await perfilDaOrganizacao(supabase, orgId);
   const doc = perfil.documento;
   const schemaDoPais = contactCreateSchemaDoPais(perfil);
 
   let file: File;
   let atualizarExistentes = false;
-  let substituirIds = new Set<string>();
+  let confirmar = false;
   try {
     const form = await req.formData();
     const f = form.get("file");
     if (!(f instanceof File)) throw new Error("sem arquivo");
     file = f;
-    atualizarExistentes = formMarcouAtualizar(form.get("atualizar_existentes"));
-    substituirIds = lerIdsDeSubstituicao(form.get("substituir_contact_ids"));
-    // Confirmação explícita de conflito é mais forte que o checkbox: quem
-    // manda os ids já viu a lista e pediu para substituir.
-    if (substituirIds.size > 0) atualizarExistentes = true;
+    atualizarExistentes = formMarcou(form.get("atualizar_existentes"));
+    confirmar = formMarcou(form.get("confirmar"));
   } catch {
     return fail(
       "validation_failed",
@@ -116,6 +126,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       { requestId },
     );
   }
+
+  const preview = atualizarExistentes && !confirmar;
 
   const nome = file.name ?? "";
   const tipoOk =
@@ -139,27 +151,15 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  // ─── Parse + validação de linhas (puro; nada tocou no banco ainda) ───────
-  // Os BYTES, não `file.text()` — ver `decodificarCsv` (#483).
   const decodificado = decodificarCsv(await file.arrayBuffer());
   if ("erro" in decodificado) {
     return fail("validation_failed", t(decodificado.erro), 422, { requestId });
   }
-  const text = decodificado.texto;
-  const rows = parseCsv(text);
+  const rows = parseCsv(decodificado.texto);
   if (rows.length < 2) {
     return fail("validation_failed", t("CSV vazio ou sem linhas de dados."), 422, { requestId });
   }
   const header = rows[0]!;
-  const mapeado = mapHeader(header, t, doc);
-  if (mapeado.motivo !== null) {
-    return fail("validation_failed", `${t("Cabeçalho inválido:")} ${mapeado.motivo}.`, 422, {
-      details: { header: header.join(", ") },
-      requestId,
-    });
-  }
-  const indices = mapeado.indices;
-
   const dataRows = rows.slice(1);
   if (dataRows.length > CSV_MAX_DATA_ROWS) {
     return fail(
@@ -172,49 +172,45 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const candidatos: Array<{ linha: number; contato: Record<string, unknown> }> = [];
   const errors: LinhaErro[] = [];
+  const google = indicesGoogleContatos(header);
 
-  for (let i = 0; i < dataRows.length; i++) {
-    const linha = i + 2; // 1-based contando o cabeçalho — bate com o editor de planilhas.
-    const { contato, motivo } = mapLinha(dataRows[i]!, indices, t, doc, perfil.telefoneExemplo);
-    if (motivo !== null) {
-      errors.push({ linha, motivo });
-      continue;
+  if (google) {
+    for (let i = 0; i < dataRows.length; i++) {
+      const linha = i + 2;
+      const { contatos, motivo } = expandirLinhaGoogle(dataRows[i]!, google, t);
+      if (motivo !== null) {
+        errors.push({ linha, motivo });
+        continue;
+      }
+      for (const contato of contatos) {
+        const aceito = aceitarCandidato(contato, linha, schemaDoPais, doc, t, errors);
+        if (aceito) candidatos.push(aceito);
+      }
     }
-    if (contato.cpf && !doc.valida(contato.cpf)) {
-      // O texto sai do PERFIL: no Brasil continua "CPF inválido: …" (a mesma
-      // chave do dicionário), e país sem checksum público diz na mensagem que a
-      // conferência é de FORMA — prometer dígito verificado que não existe é o
-      // que a issue #1033 proíbe.
-      errors.push({ linha, motivo: t(doc.mensagemInvalido + ": ") + `"${contato.cpf}"` });
-      continue;
+  } else {
+    const mapeado = mapHeader(header, t, doc);
+    if (mapeado.motivo !== null) {
+      return fail("validation_failed", `${t("Cabeçalho inválido:")} ${mapeado.motivo}.`, 422, {
+        details: { header: header.join(", ") },
+        requestId,
+      });
     }
-    const parsed = schemaDoPais.safeParse({ ...contato, source: SOURCE_IMPORT_CSV });
-    if (!parsed.success) {
-      const primeiro = parsed.error.issues[0];
-      errors.push({ linha, motivo: primeiro?.message ?? t("dados inválidos") });
-      continue;
+    for (let i = 0; i < dataRows.length; i++) {
+      const linha = i + 2;
+      const { contato, motivo } = mapLinha(dataRows[i]!, mapeado.indices, t, doc, perfil.telefoneExemplo);
+      if (motivo !== null) {
+        errors.push({ linha, motivo });
+        continue;
+      }
+      const aceito = aceitarCandidato(contato, linha, schemaDoPais, doc, t, errors);
+      if (aceito) candidatos.push(aceito);
     }
-    candidatos.push({ linha, contato: parsed.data as Record<string, unknown> });
   }
 
   if (candidatos.length === 0) {
-    const resumo: ImportSummary = {
-      total_linhas: dataRows.length,
-      imported: 0,
-      updated: 0,
-      skipped_duplicates: 0,
-      conflicts: [],
-      errors,
-    };
-    return ok(resumo, { requestId });
+    return ok(resumoVazio(dataRows.length, errors, preview), { requestId });
   }
 
-  // ─── Pré-filtro de duplicados contra o banco (uma query por identificador) ──
-  //
-  // Os índices únicos são parciais (excluem mesclados/anonimizados), então a
-  // busca espelha o WHERE do índice — filtrar pelo que o índice não cobre
-  // produziria "duplicado" imaginário. A organização vem da sessão, nunca do
-  // arquivo: um telefone igual em outra org não aparece aqui.
   const phones = candidatos
     .map((c) => c.contato.phone_number as string | undefined)
     .filter((p): p is string => typeof p === "string");
@@ -261,14 +257,29 @@ export async function POST(req: NextRequest): Promise<Response> {
     for (const r of data ?? []) existentes.add(`email:${(r as { email_normalized: string }).email_normalized}`);
   }
 
-  // ─── Insert/atualização linha a linha com desfecho individual ─────────────
   let imported = 0;
-  let updated = 0;
+  let filled = 0;
+  let replaced = 0;
   let skippedDuplicates = 0;
-  const conflicts: ConflitoDeNome[] = [];
-  // Passo de confirmação: só aplica os ids que a tela listou. Não cria de
-  // novo nem preenche nome vazio — isso já rodou no primeiro envio.
-  const soConfirmacao = substituirIds.size > 0;
+
+  function reservarIdentificadores(
+    phone: string | undefined,
+    email: string | undefined,
+    name: string | null,
+    id = `previsto-${imported}`,
+  ): void {
+    if (phone) {
+      existentes.add(`tel:${phone}`);
+      const recem: ContatoExistente = {
+        id,
+        name,
+        is_merged_into: null,
+        is_anonymized: false,
+      };
+      for (const v of phoneLookupVariants(phone)) porTelefone.set(v, recem);
+    }
+    if (email) existentes.add(`email:${email.toLowerCase()}`);
+  }
 
   for (const { linha, contato } of candidatos) {
     const phone = contato.phone_number as string | undefined;
@@ -283,33 +294,28 @@ export async function POST(req: NextRequest): Promise<Response> {
         orgId,
         userId: user.id,
         requestId,
-        linha,
         existente: existentePorTel,
         nomePlanilha: typeof contato.name === "string" ? contato.name : null,
         atualizarExistentes,
-        substituirIds,
-        soConfirmacao,
-        conflicts,
+        gravar: !preview,
       });
-      if (desfecho === "updated") updated += 1;
-      else if (desfecho === "skipped" || desfecho === "conflict") {
-        if (desfecho === "skipped") skippedDuplicates += 1;
-      } else if (desfecho === "erro") {
+      if (desfecho === "filled") filled += 1;
+      else if (desfecho === "replaced") replaced += 1;
+      else if (desfecho === "skipped") skippedDuplicates += 1;
+      else if (desfecho === "erro") {
         errors.push({ linha, motivo: "Não foi possível atualizar o nome deste contato." });
       }
       continue;
     }
 
-    if (soConfirmacao) {
-      // Confirmação não cria contato novo: o primeiro passo já o teria criado.
+    if (email && existentes.has(`email:${email.toLowerCase()}`)) {
+      skippedDuplicates += 1;
       continue;
     }
 
-    // Só contatos existentes ou gravados com sucesso reservam identificadores.
-    // Cada repetição chega aqui para ter desfecho; uma linha inválida ou que
-    // falhou no insert não pode descartar outra válida do mesmo arquivo.
-    if (email && existentes.has(`email:${email.toLowerCase()}`)) {
-      skippedDuplicates += 1;
+    if (preview) {
+      imported += 1;
+      reservarIdentificadores(phone, email, typeof contato.name === "string" ? contato.name : null);
       continue;
     }
 
@@ -327,10 +333,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       consent: {},
     };
     if (contato.cpf) {
-      // LGPD: hash (dedupe) e versão cifrada nascem JUNTOS — o CHECK
-      // `contacts_cpf_consistency` recusa a linha se só um dos dois existir
-      // (#2522). Sem cifra disponível a linha segue SEM CPF, em vez de voltar
-      // em `errors` e parar a reimportação inteira.
       Object.assign(insertRow, await camposCpfParaGravar(supabase, contato.cpf as string));
     }
 
@@ -341,7 +343,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       .single();
 
     if (insErr) {
-      // Conflito de corrida com os índices únicos = duplicado, não erro.
       if (insErr.code === "23505") {
         skippedDuplicates += 1;
         continue;
@@ -351,20 +352,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     imported += 1;
-    if (phone) {
-      existentes.add(`tel:${phone}`);
-      const recem: ContatoExistente = {
-        id: (criado as { id: string }).id,
-        name: typeof contato.name === "string" ? contato.name : null,
-        is_merged_into: null,
-        is_anonymized: false,
-      };
-      for (const v of phoneLookupVariants(phone)) porTelefone.set(v, recem);
-    }
-    if (email) existentes.add(`email:${email.toLowerCase()}`);
+    reservarIdentificadores(
+      phone,
+      email,
+      typeof contato.name === "string" ? contato.name : null,
+      (criado as { id: string }).id,
+    );
 
-    // Mesmo evento do create unitário — quem consome `contact.created`
-    // (workers, métricas) trata importado e manual igual.
     await supabase
       .rpc("emit_event", {
         p_event_type: "contact.created",
@@ -384,33 +378,63 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
   }
 
-  await audit({
-    action: "contacts.imported",
-    actorUserId: user.id,
-    organizationId: orgId,
-    resourceType: "contact",
-    resourceId: null,
-    requestId,
-    metadata: {
-      actor_type: "user",
-      total_linhas: dataRows.length,
-      imported,
-      updated,
-      skipped_duplicates: skippedDuplicates,
-      conflicts: conflicts.length,
-      erros: errors.length,
-    },
-  });
+  const updated = filled + replaced;
+  if (!preview) {
+    await audit({
+      action: "contacts.imported",
+      actorUserId: user.id,
+      organizationId: orgId,
+      resourceType: "contact",
+      resourceId: null,
+      requestId,
+      metadata: {
+        actor_type: "user",
+        total_linhas: dataRows.length,
+        imported,
+        filled,
+        replaced,
+        updated,
+        skipped_duplicates: skippedDuplicates,
+        erros: errors.length,
+      },
+    });
+  }
 
   const resumo: ImportSummary = {
     total_linhas: dataRows.length,
     imported,
+    filled,
+    replaced,
     updated,
     skipped_duplicates: skippedDuplicates,
-    conflicts,
+    preview,
     errors,
   };
   return ok(resumo, { requestId });
+}
+
+type SchemaDoPais = ReturnType<typeof contactCreateSchemaDoPais>;
+type DocDoPais = Awaited<ReturnType<typeof perfilDaOrganizacao>>["documento"];
+
+function aceitarCandidato(
+  contato: LinhaNormalizada,
+  linha: number,
+  schemaDoPais: SchemaDoPais,
+  doc: DocDoPais,
+  t: (texto: string) => string,
+  errors: LinhaErro[],
+): { linha: number; contato: Record<string, unknown> } | null {
+  if (contato.cpf && !doc.valida(contato.cpf)) {
+    errors.push({ linha, motivo: t(doc.mensagemInvalido + ": ") + `"${contato.cpf}"` });
+    return null;
+  }
+  const parsed = schemaDoPais.safeParse({ ...contato, source: SOURCE_IMPORT_CSV });
+  if (!parsed.success) {
+    const primeiro = parsed.error.issues[0];
+    errors.push({ linha, motivo: primeiro?.message ?? t("dados inválidos") });
+    return null;
+  }
+  return { linha, contato: parsed.data as Record<string, unknown> };
 }
 
 type ClienteDaSessao = Awaited<ReturnType<typeof createClient>>;
@@ -420,49 +444,28 @@ async function aplicarNomeEmExistente(e: {
   orgId: string;
   userId: string;
   requestId: string;
-  linha: number;
   existente: ContatoExistente;
   nomePlanilha: string | null;
   atualizarExistentes: boolean;
-  substituirIds: Set<string>;
-  soConfirmacao: boolean;
-  conflicts: ConflitoDeNome[];
-}): Promise<"updated" | "skipped" | "conflict" | "erro"> {
-  // Mesclado ou anonimizado não é identidade viva — não reescreve.
+  gravar: boolean;
+}): Promise<"filled" | "replaced" | "skipped" | "erro"> {
   if (e.existente.is_merged_into || e.existente.is_anonymized) return "skipped";
-
-  if (e.soConfirmacao) {
-    if (!e.substituirIds.has(e.existente.id)) return "skipped";
-    const nomeConfirmado = e.nomePlanilha;
-    if (nomePrincipalVazio(nomeConfirmado) || !nomeConfirmado) return "skipped";
-    const gravou = await gravarNomePrincipal(e.supabase, e.orgId, e.existente.id, nomeConfirmado);
-    if (!gravou) return "erro";
-    e.existente.name = nomeConfirmado;
-    await auditarAtualizacaoDeNome(e);
-    return "updated";
-  }
-
   if (!e.atualizarExistentes) return "skipped";
 
   const decisao = decidirAtualizacaoDeNome(e.existente.name, e.nomePlanilha);
   if (decisao.tipo === "sem_nome_novo" || decisao.tipo === "mesmo") return "skipped";
-  if (decisao.tipo === "conflito") {
-    e.conflicts.push({
-      linha: e.linha,
-      contact_id: e.existente.id,
-      nome_atual: (e.existente.name ?? "").trim(),
-      nome_planilha: (e.nomePlanilha ?? "").trim(),
-    });
-    return "conflict";
-  }
 
   const nomeNovo = e.nomePlanilha;
   if (!nomeNovo) return "skipped";
-  const gravou = await gravarNomePrincipal(e.supabase, e.orgId, e.existente.id, nomeNovo);
-  if (!gravou) return "erro";
-  e.existente.name = nomeNovo;
-  await auditarAtualizacaoDeNome(e);
-  return "updated";
+
+  if (e.gravar) {
+    const gravou = await gravarNomePrincipal(e.supabase, e.orgId, e.existente.id, nomeNovo);
+    if (!gravou) return "erro";
+    e.existente.name = nomeNovo;
+    await auditarAtualizacaoDeNome(e);
+  }
+
+  return decisao.tipo === "preencher" ? "filled" : "replaced";
 }
 
 async function gravarNomePrincipal(

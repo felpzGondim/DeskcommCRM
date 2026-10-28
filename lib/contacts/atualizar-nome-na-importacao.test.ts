@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decidirAtualizacaoDeNome,
-  formMarcouAtualizar,
-  lerIdsDeSubstituicao,
+  formMarcou,
   nomePrincipalVazio,
 } from "./atualizar-nome-na-importacao";
 
@@ -41,37 +40,19 @@ describe("decidirAtualizacaoDeNome", () => {
     expect(decidirAtualizacaoDeNome("  João  ", "joão")).toEqual({ tipo: "mesmo" });
   });
 
-  it("é conflito quando a ficha já tem um nome diferente — não sobrescreve sozinha", () => {
-    expect(decidirAtualizacaoDeNome("Carlos", "Carlos Silva")).toEqual({ tipo: "conflito" });
-    expect(decidirAtualizacaoDeNome("Ana", "Maria")).toEqual({ tipo: "conflito" });
+  it("substitui quando a ficha já tem um nome diferente — é o comportamento da opção", () => {
+    expect(decidirAtualizacaoDeNome("Carlos", "Carlos Silva")).toEqual({ tipo: "substituir" });
+    expect(decidirAtualizacaoDeNome("Ana", "Maria")).toEqual({ tipo: "substituir" });
   });
 });
 
-describe("lerIdsDeSubstituicao", () => {
-  const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-
-  it("lê só UUID v4 válidos de um JSON de array", () => {
-    expect([...lerIdsDeSubstituicao(JSON.stringify([A, B, "nao-e-uuid", 3]))].sort()).toEqual(
-      [A, B].sort(),
-    );
-  });
-
-  it("lixo, objeto e JSON quebrado não confirmam ninguém", () => {
-    expect(lerIdsDeSubstituicao("")).toEqual(new Set());
-    expect(lerIdsDeSubstituicao("{")).toEqual(new Set());
-    expect(lerIdsDeSubstituicao('{"id":"x"}')).toEqual(new Set());
-    expect(lerIdsDeSubstituicao(null)).toEqual(new Set());
-  });
-});
-
-describe("formMarcouAtualizar", () => {
+describe("formMarcou", () => {
   it("só liga com os valores explícitos do checkbox", () => {
-    expect(formMarcouAtualizar("true")).toBe(true);
-    expect(formMarcouAtualizar("on")).toBe(true);
-    expect(formMarcouAtualizar("1")).toBe(true);
-    expect(formMarcouAtualizar("false")).toBe(false);
-    expect(formMarcouAtualizar(null)).toBe(false);
-    expect(formMarcouAtualizar("")).toBe(false);
+    expect(formMarcou("true")).toBe(true);
+    expect(formMarcou("on")).toBe(true);
+    expect(formMarcou("1")).toBe(true);
+    expect(formMarcou("false")).toBe(false);
+    expect(formMarcou(null)).toBe(false);
+    expect(formMarcou("")).toBe(false);
   });
 });

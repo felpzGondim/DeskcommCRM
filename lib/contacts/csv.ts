@@ -265,13 +265,17 @@ const HEADER_ALIASES: Record<string, readonly string[]> = {
   tags: ["tags", "etiquetas", "grupos"],
 };
 
-function normalizaHeader(h: string): string {
+export function normalizaCabecalho(h: string): string {
   return h
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
+}
+
+function normalizaHeader(h: string): string {
+  return normalizaCabecalho(h);
 }
 
 /**

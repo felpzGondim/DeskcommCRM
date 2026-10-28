@@ -25,12 +25,11 @@ interface Props {
 
 /**
  * Diálogo de importação de contatos por CSV. O resumo é mostrado NO diálogo
- * (e não só em toast) porque erros por linha são a parte que interessa —
- * fechar sozinho esconderia o que o usuário veio corrigir na planilha.
+ * (e não só em toast) porque erros por linha são a parte que interessa.
  *
- * Com "Atualizar contatos existentes" ligado, um segundo passo lista os
- * conflitos (ficha já tem nome diferente) e só substitui depois do clique
- * em "Substituir estes nomes".
+ * Com "Atualizar contatos existentes" ligado, o primeiro envio é prévia:
+ * mostra quantos serão criados, preenchidos e substituídos. Um único
+ * "Confirmar importação" grava — o nome da planilha substitui o da ficha.
  */
 export function ImportContactsDialog({ open, onOpenChange }: Props) {
   const t = useT();
@@ -47,24 +46,16 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  async function enviar(pedido: { substituir?: string[] }) {
+  async function enviar(pedido: { confirmar?: boolean }) {
     if (!file || importar.isPending) return;
     try {
       const r = await importar.mutateAsync({
         file,
-        atualizarExistentes: atualizarExistentes || (pedido.substituir?.length ?? 0) > 0,
-        substituirContactIds: pedido.substituir,
+        atualizarExistentes,
+        confirmar: pedido.confirmar,
       });
-      if (pedido.substituir && resumo) {
-        setResumo({
-          ...r,
-          imported: resumo.imported + r.imported,
-          updated: resumo.updated + r.updated,
-          total_linhas: resumo.total_linhas,
-        });
-      } else {
-        setResumo(r);
-      }
+      setResumo(r);
+      if (r.preview) return;
       if (r.imported > 0) toast.success(`${r.imported} ${t("contato(s) importado(s)")}`);
       if (r.updated > 0) toast.success(`${r.updated} ${t("contato(s) atualizado(s)")}`);
       if (r.errors.length > 0) toast.warning(`${r.errors.length} ${t("linha(s) com problema")}`);
@@ -82,7 +73,8 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
     await enviar({});
   }
 
-  const conflitos = resumo?.conflicts ?? [];
+  const previaPendente =
+    !!resumo?.preview && resumo.imported + resumo.filled + resumo.replaced > 0;
 
   return (
     <Dialog
@@ -97,7 +89,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
           <DialogTitle>{t("Importar contatos de planilha")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
+              "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Também entende a exportação do Google Contatos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -133,7 +125,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   <span className="font-medium">{t("Atualizar contatos existentes")}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     {t(
-                      "Preenche o nome principal só quando a ficha está sem nome. Se o nome da ficha for diferente do da planilha, pedimos confirmação antes de substituir.",
+                      "O nome da planilha substitui o nome da ficha, inclusive o apelido do WhatsApp. Antes de gravar, mostramos quantos serão criados, preenchidos e substituídos.",
                     )}
                   </span>
                 </span>
@@ -161,21 +153,24 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   {resumo.total_linhas} {t("linha(s) lidas")}
                 </span>
                 <span className="rounded-md px-2 py-1 font-medium">
-                  {resumo.imported} {t("importado(s)")}
+                  {resumo.imported}{" "}
+                  {resumo.preview ? t("serão criado(s)") : t("importado(s)")}
                 </span>
-                {resumo.updated > 0 && (
+                {(resumo.preview || resumo.filled > 0) && (
                   <span className="rounded-md px-2 py-1 font-medium">
-                    {resumo.updated} {t("atualizado(s)")}
+                    {resumo.filled}{" "}
+                    {resumo.preview ? t("serão preenchido(s)") : t("preenchido(s)")}
+                  </span>
+                )}
+                {(resumo.preview || resumo.replaced > 0) && (
+                  <span className="rounded-md px-2 py-1 font-medium">
+                    {resumo.replaced}{" "}
+                    {resumo.preview ? t("serão substituído(s)") : t("substituído(s)")}
                   </span>
                 )}
                 {resumo.skipped_duplicates > 0 && (
                   <span className="rounded-md bg-surface px-2 py-1">
                     {resumo.skipped_duplicates} {t("já existente(s)")}
-                  </span>
-                )}
-                {conflitos.length > 0 && (
-                  <span className="rounded-md bg-surface px-2 py-1">
-                    {conflitos.length} {t("conflito(s)")}
                   </span>
                 )}
                 {resumo.errors.length > 0 && (
@@ -184,24 +179,6 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   </span>
                 )}
               </div>
-
-              {conflitos.length > 0 && (
-                <div
-                  className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm"
-                  data-testid="conflitos-de-nome"
-                >
-                  <p className="text-muted-foreground">
-                    {t(
-                      "Estes contatos já têm um nome diferente na ficha. Confirme para substituir pelos nomes da planilha.",
-                    )}
-                  </p>
-                  {conflitos.map((c) => (
-                    <p key={`${c.contact_id}-${c.linha}`}>
-                      {t("Linha")} {c.linha}: “{c.nome_atual}” → “{c.nome_planilha}”
-                    </p>
-                  ))}
-                </div>
-              )}
 
               {resumo.errors.length > 0 && (
                 <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
@@ -214,18 +191,18 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
               )}
 
               <DialogFooter>
-                {conflitos.length > 0 ? (
+                {previaPendente ? (
                   <>
                     <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                      {t("Manter os nomes da ficha")}
+                      {t("Cancelar")}
                     </Button>
                     <Button
                       type="button"
-                      data-testid="substituir-nomes"
-                      onClick={() => enviar({ substituir: conflitos.map((c) => c.contact_id) })}
+                      data-testid="confirmar-importacao"
+                      onClick={() => enviar({ confirmar: true })}
                       disabled={importar.isPending}
                     >
-                      {importar.isPending ? t("Importando…") : t("Substituir estes nomes")}
+                      {importar.isPending ? t("Importando…") : t("Confirmar importação")}
                     </Button>
                   </>
                 ) : (
