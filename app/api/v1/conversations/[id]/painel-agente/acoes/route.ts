@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 import { abrirPrevia, fontesDaAnalise, hashDasFontes, pendenciasDaPrevia, previaSchema, resumoDaPrevia, selarPrevia } from "@/lib/agent-engine/agent/painel-analise-preparo";
 import { janelaUtilDaAnalise, limitesDaAnalise, rotuloDoLimite } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { assinarAnexosParaOHub, chaveDosArquivos, ferramentaAceitaArquivos } from "@/lib/agent-engine/agent/painel-arquivos-hub";

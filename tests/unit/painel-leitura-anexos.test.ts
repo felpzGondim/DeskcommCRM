@@ -5,7 +5,7 @@ import { PdfExtractError } from "@/lib/ai/rag/extractors/pdf";
 
 const extractPdfText = vi.fn();
 vi.mock("@/lib/ai/rag/extractors/pdf", async (orig) => {
-  const real = await orig();
+  const real = await orig() as object;
   return { ...real, extractPdfText: (...args: unknown[]) => extractPdfText(...args) };
 });
 

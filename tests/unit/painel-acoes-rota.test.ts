@@ -49,7 +49,7 @@ describe("rota das ações do painel", () => {
     const from = (table: string) => {
       const q = {
         select: () => q, eq: () => q, is: () => q, order: () => q,
-        limit: () => table === "messages"
+        limit: (n: number) => table === "messages" && n > 1
           ? Promise.resolve({ data: mocks.linhasFicha(), error: null }) : q,
         maybeSingle: async () => ({ data: table === "conversations"
           ? { id: "conversa-1", contact_id: "contato-1" }

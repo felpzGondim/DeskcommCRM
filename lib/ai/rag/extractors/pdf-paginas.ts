@@ -1,7 +1,8 @@
 /**
  * Rasteriza páginas de um PDF sem texto selecionável para a visão documental.
- * Usa a mesma engine (pdfjs-dist) da extração de texto. Sem canvas nativo,
- * devolve lista vazia — quem chama vira pendência visível, não silêncio.
+ * O canvas nativo é optional do pdfjs — se não estiver instalado, devolve
+ * lista vazia. Quem chama tenta a visão no PDF inteiro antes, e vira
+ * pendência visível se os dois caminhos falharem.
  */
 import type * as PdfjsDist from "pdfjs-dist";
 
@@ -12,6 +13,23 @@ export interface PaginaRasterizada {
   pagina: number;
   mime: "image/png";
   bytes: Buffer;
+}
+
+type CanvasNativo = {
+  createCanvas: (largura: number, altura: number) => {
+    getContext: (tipo: "2d") => unknown;
+    toBuffer: (tipo: "image/png") => Buffer;
+  };
+};
+
+async function carregarCanvasNativo(): Promise<CanvasNativo | null> {
+  try {
+    // Specifier montado para o bundler não resolver no collect do Vitest.
+    const spec = ["@", "napi-rs", "/canvas"].join("");
+    return (await import(spec)) as CanvasNativo;
+  } catch {
+    return null;
+  }
 }
 
 export async function rasterizarPaginasPdf(
@@ -26,7 +44,7 @@ export async function rasterizarPaginasPdf(
     });
     const doc = await loadingTask.promise;
     const teto = Math.min(doc.numPages, Math.max(1, opcoes.maxPaginas));
-    const canvasMod = await import("@napi-rs/canvas").catch(() => null);
+    const canvasMod = await carregarCanvasNativo();
     if (!canvasMod?.createCanvas) return [];
     const saida: PaginaRasterizada[] = [];
     for (let n = 1; n <= teto; n++) {
@@ -36,7 +54,11 @@ export async function rasterizarPaginasPdf(
       const viewport = page.getViewport({ scale: escala });
       const canvas = canvasMod.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
       const ctx = canvas.getContext("2d");
-      await page.render({ canvasContext: ctx as never, viewport }).promise;
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        canvasContext: ctx as never,
+        viewport,
+      }).promise;
       saida.push({ pagina: n, mime: "image/png", bytes: Buffer.from(canvas.toBuffer("image/png")) });
     }
     return saida;
