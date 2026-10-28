@@ -93,12 +93,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   });
 
   try {
-    if (pedido.acao === "analise" && pedido.etapa === "preparar") {
-      const r = await executarFerramenta("preparar_analise", contexto, { senhas });
-      registrar(r.ok);
-      return respostaDaFerramenta(r, t, requestId, { limites: r.extra?.limites });
-    }
-    if (pedido.acao === "analise" && pedido.etapa === "confirmar") {
+    if (pedido.acao === "analise") {
+      if (pedido.etapa === "preparar") {
+        const r = await executarFerramenta("preparar_analise", contexto, { senhas });
+        registrar(r.ok);
+        return respostaDaFerramenta(r, t, requestId, { limites: r.extra?.limites });
+      }
       const r = await executarFerramenta("iniciar_analise", contexto, {
         pedidoId: pedido.pedidoId,
         previaToken: pedido.previaToken,
