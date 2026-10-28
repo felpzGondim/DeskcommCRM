@@ -27,7 +27,13 @@ export const locacaoSettingsSchema = z.object({
   /** Ids de quem pode APROVAR. Vazio = só platform admin (Felipe). */
   aprovador_user_ids: z.array(uuid).max(20).optional().default([]),
   /** Fase 4. Todas false. Sem preço da FC (a confirmação só avisa créditos). */
-  analise: locacaoAnaliseSettingsSchema.optional().default({}),
+  analise: locacaoAnaliseSettingsSchema.default({
+    renda: false,
+    seguro: false,
+    fc: false,
+    relatorio: false,
+    manual: false,
+  }),
 }).passthrough();
 
 export const superlogicaVinculoSettingsSchema = z.object({
