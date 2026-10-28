@@ -533,7 +533,7 @@ atendente: **nunca envia ao cliente** ("Usar como resposta" só preenche o Compo
 conversa do painel (auditoria sem texto). Decisões em
 [`docs/decisoes/painel-agente.md`](docs/decisoes/painel-agente.md).
 
-Decisões da análise completa de inquilino (28/10): Relatório preliminar no centro; Playwright aceito; **Gerar análise** = cobrança da FC (lock anti-dobro, sem segundo clique); Migra R$ 0; bot em paralelo; sem e-mail de API. **Ainda aberto:** sim explícito de arquivos só no CRM; ok da retenção 24 h/90 dias; autorização do teste A0. Adendo: [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md) (§ decisões 28/10 e A.9). Plano, só leitura.
+Decisões da análise completa de inquilino (28/10): Relatório preliminar no centro; arquivos só no CRM (PR #15 lê extrato/CNH); Hub só dados; retenção 5 dias no Hub / 90 no CRM; Playwright aceito; **Gerar análise** = cobrança da FC (lock anti-dobro); Migra R$ 0; bot em paralelo; A0 autorizado (resultado pendente). Adendo: [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md) (§ decisões 28/10 e A.9). Plano, só leitura.
 
 ## Critério de conclusão
 
