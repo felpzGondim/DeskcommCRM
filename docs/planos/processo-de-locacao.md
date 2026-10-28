@@ -734,7 +734,7 @@ Fim do rascunho. A implementação espera o “pode ir à Fase 1”. Q1 e Q2 ain
 **Pedido do Felipe (27/10):** "Eu quero que leia sim. Podemos até criar uma função pra isso. Na prática o que eu quero é o que o Análise De Inquilinos já faz sozinho, mas dentro do CRM."
 **Esclarecimento do objetivo (28/10, Felipe):** "A ideia é que a IA analise os documentos e a conversa, faça aquele relatório preliminar, já com todos os dados para serem usados nas fases posteriores da esteira."
 **Liga com:** Fase 2 (PR #15, leitura de anexos), Fase 3 e 3b (processo, documentos, Storage) e Fase 4 (os botões) deste plano. O passo **central** deste adendo é o **Relatório preliminar** (A.6 / fase A1): relatório de 6 seções + registro estruturado que a ficha, a FC, a Migra e o `/contrato/preparar` reutilizam sem redigitar.
-**Fase 3 (proposta, 28/10 00:56, só validação):** plano detalhado da entidade processo — [`fase3-processo-locacao.md`](fase3-processo-locacao.md). Sem implementação.
+**Fase 3 (proposta, 28/10 00:56, só validação):** plano detalhado da entidade processo — [`fase3-processo-locacao.md`](fase3-processo-locacao.md). **Fase 3.5** (vínculo contato ↔ Superlógica pelo telefone, id no contato; 28/10 01:04) — [`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md). Sem implementação.
 
 ### Decisões do Felipe (28/10/2026)
 

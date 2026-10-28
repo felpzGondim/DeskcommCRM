@@ -4,6 +4,10 @@
 > Escrito em 28/10/2026 (horário de Brasília). Não contém dados pessoais: os exemplos são fictícios.
 > Ele **refina** a §4 e a Fase 3 do plano-mestre `docs/planos/processo-de-locacao.md` (PR #16) e respeita
 > as decisões já tomadas: Q3, Q10, Q11, Q15 e o adendo (a–i).
+>
+> **Atualização 28/10 01:05 (Brasília):** o Felipe decidiu que o id da pessoa na Superlógica fica **no contato**
+> do CRM (pergunta 11 respondida: lado do contato). O casamento automático contato ↔ Superlógica pelo telefone
+> virou uma fase própria, a **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)). A Fase 3 só deixa o campo e o gancho prontos.
 
 ---
 
@@ -49,11 +53,19 @@ Cada processo tem N pessoas. Cada pessoa é **uma linha** em `locacao_processo_p
 
 - `contact_id` aponta para `contacts`. O WhatsApp da pessoa é o do contato (`contacts.phone_number`). **Não** se copia o telefone para a tabela nova.
 - O campo pode ficar vazio enquanto a pessoa não tem WhatsApp conhecido. Exemplo: fiador que só mandou documento pelo inquilino.
-- `superlogica_pessoa_id` (texto, só dígitos) é preenchido em três momentos:
-  1. quando a busca no Hub já acha a pessoa pelo CPF;
-  2. quando `/contrato/confirmar` devolve `locatarios: [ids]` (a ordem segue a dos locatários enviados);
-  3. à mão pelo atendente.
-- Se a pessoa entra em outro processo depois, o id é sugerido a partir do último processo em que ela apareceu (mesmo `contact_id` ou mesmo `cpf_hash`).
+- **O id da pessoa na Superlógica mora no contato, não no processo** (decisão do Felipe, 28/10). Ele fica na tabela
+  `contato_superlogica_vinculos` (seção 6.1), ligada a `contacts`. A pessoa do processo **herda** o id pelo `contact_id`:
+  não há cópia nem coluna própria no participante. Se o vínculo do contato muda, todos os processos já enxergam o novo.
+- Consequência: quem entra no contrato (locatário, solidário, fiador) precisa ter um contato no CRM na hora do
+  "Gerar contrato". Se a pessoa não tem WhatsApp, o atendente cria um contato **sem telefone** (o CRM já aceita isso).
+- O que a Fase 3 grava no vínculo (sem casamento automático):
+  1. depois do `/contrato/confirmar` (clique humano), os ids que voltam em `locatarios: [ids]` (na ordem dos
+     locatários enviados) são gravados no contato de cada locatário com origem `contrato_confirmar`, **só se** o contato
+     ainda não tiver vínculo. Se tiver um vínculo **diferente**, nada é sobrescrito: vira um item de revisão;
+  2. o atendente liga ou desliga à mão (botão no painel do contato e na pessoa do processo), com registro de quem e
+     quando, sem valores pessoais no log.
+- O casamento em massa pelo telefone (todos os contatos × pessoas da Superlógica), a lista de revisão de casos ambíguos
+  e o relatório de simulação ficam na **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)).
 - O CPF fica em `cpf_hash` (para achar duplicados e travar FC dupla) e em `cpf_mascarado` (ex.: `***.***.**9-25`, para a tela).
   - O CPF completo, se for guardado, fica em `cpf_encrypted`, no mesmo esquema de `contacts.cpf_encrypted` (pergunta 4).
   - No dia a dia, o CPF completo vive dentro da ficha versionada (seção 3), sob retenção de 90 dias.
@@ -256,7 +268,7 @@ Observação: o schema do CRM aceita hoje só `imovel.endereco`. Para usar `id_i
 |---|---|
 | **Ficha** | Lê e grava a versão atual da ficha do processo escolhido |
 | **Gerar análise** (preparar → confirmar) | Uma análise **por pessoa** que precisa de FC. Usa o telefone do contato de cada pessoa. O `pedido_id` vem de `locacao_analises_fc` (não é mais um UUID novo a cada clique). Move para `analise`. |
-| **Contrato** (situação) | Igual a hoje (só leitura). Pode usar `superlogica_pessoa_id`, se houver. |
+| **Contrato** (situação) | Igual a hoje (só leitura). Pode usar o id da Superlógica do contato, se houver vínculo. |
 | **Gerar contrato** (preparar → confirmar) | Monta o payload pela tabela 3.5 a partir da ficha atual + participantes + imóvel. Preparar → `contrato_preparado`. A confirmação continua sendo **só pelo clique humano** no painel. O assistente nunca chama `/contrato/confirmar`. |
 | **Boletos** | Sem mudança |
 | Novos: **Aprovar** / **Reprovar** / **Cancelar** / **Marcar assinado** | Aprovar aparece só para o Felipe |
@@ -306,7 +318,7 @@ Segue o plano-mestre:
 
 ### 5.3 LGPD (pedido de exclusão ou anonimização de um contato)
 
-- Quando um contato é anonimizado, as linhas de participante ligadas a ele são limpas na hora (nome, CPF, hash). As versões de ficha dos processos onde ele aparece são apagadas e uma versão nova é gravada **sem** os dados dele (origem `lgpd`). Os documentos com aquele `participante_id` são apagados.
+- Quando um contato é anonimizado, as linhas de participante ligadas a ele são limpas na hora (nome, CPF, hash). As versões de ficha dos processos onde ele aparece são apagadas e uma versão nova é gravada **sem** os dados dele (origem `lgpd`). Os documentos com aquele `participante_id` são apagados. Os vínculos dele em `contato_superlogica_vinculos` são desligados (`motivo_desfeito = 'lgpd'`) e o id da Superlógica é zerado na linha.
 - Como encaixar com pouca divergência:
   - **Opção A (recomendada):** um gatilho nosso em `contacts`, que dispara quando `is_anonymized` vira verdadeiro e chama uma função **SECURITY INVOKER** de limpeza. Não edita a função upstream `fn_lgpd_cascade_redact_contact`.
   - **Opção B:** acrescentar uma chamada dentro da `fn_lgpd_cascade_redact_contact`. Mais explícito, mas gera conflito a cada mudança do upstream nessa função. (Pergunta 10.)
@@ -350,7 +362,7 @@ Convenção:
 - `contact_id uuid references contacts(id) on delete set null`
 - `papel text check (in ('locatario','solidario','fiador','contato'))`, `relacao text`
 - `principal boolean default false`, `interlocutor_principal boolean default false`, `fracao numeric(5,2)`
-- `superlogica_pessoa_id text check (superlogica_pessoa_id ~ '^\d+$')`
+- (sem coluna de id da Superlógica: ele vem do contato, via `contato_superlogica_vinculos`)
 - `nome_exibicao text`, `cpf_hash text`, `cpf_mascarado text`, `cpf_encrypted bytea` (se a pergunta 4 = sim)
 - `removido_em timestamptz`, `created_by uuid`
 - Índices:
@@ -358,6 +370,20 @@ Convenção:
   - `unique (processo_id, cpf_hash) where cpf_hash is not null and removido_em is null`
   - `unique (processo_id) where interlocutor_principal and removido_em is null`
   - `(organization_id, contact_id)`, `(organization_id, cpf_hash)`
+
+**`contato_superlogica_vinculos`** (lado do contato; criada na Fase 3, vazia; quem enche em massa é a Fase 3.5)
+- `id uuid pk`, `organization_id`, `contact_id uuid not null references contacts(id) on delete cascade`
+- `superlogica_pessoa_id text not null check (superlogica_pessoa_id ~ '^\d+$')`
+- `tipos text[]` (subconjunto de `locatario`, `fiador`, `proprietario`; só informativo)
+- `origem text check (in ('manual','contrato_confirmar','casamento_telefone'))`
+- `ativo boolean not null default true`, `vinculado_por uuid`, `vinculado_em timestamptz default now()`,
+  `desfeito_por uuid`, `desfeito_em timestamptz`, `motivo_desfeito text check (in ('errado','numero_mudou','lgpd','outro'))`
+- Índices:
+  - `unique (organization_id, contact_id) where ativo` (um vínculo ativo por contato; contato com 2 pessoas = caso de revisão na 3.5)
+  - `(organization_id, superlogica_pessoa_id) where ativo` (sem unique: a mesma pessoa pode ter 2 números/contatos)
+- Desligar não apaga: marca `ativo = false` com quem/quando. A linha antiga fica como histórico do vínculo.
+- Não guarda telefone, nome nem CPF. Só ids.
+- Por que tabela e não coluna em `contacts`: não altera tabela do upstream (menos conflito) e guarda o histórico de ligar/desligar.
 
 **`locacao_processo_conversas`** (N:N)
 - `id uuid pk`, `organization_id`, `processo_id … on delete cascade`, `conversation_id uuid references conversations(id) on delete cascade`
@@ -393,7 +419,7 @@ Convenção:
 **Fase 3b** (já no plano-mestre): `locacao_processo_documentos` + bucket `locacao-processos`, agora com `participante_id`.
 
 Não entram, para reduzir divergência:
-- coluna nova em `contacts` (o `superlogica_pessoa_id` fica no participante; pergunta 11);
+- coluna nova em `contacts` (o vínculo com a Superlógica fica em `contato_superlogica_vinculos`, ligado ao contato);
 - coluna nova em `conversations`;
 - coluna nova em `catalog_products`.
 
@@ -411,7 +437,7 @@ Não entram, para reduzir divergência:
 ### 6.3 Numeração e regras do repositório
 
 - Os números saem do próximo livre no dia (hoje 0762, ou 0763 se o painel usar a 0762). Plano de 4 migrations pequenas:
-  1. `07xx_locacao_imoveis_processos_participantes_conversas.sql`
+  1. `07xx_locacao_imoveis_processos_participantes_conversas.sql` (inclui `contato_superlogica_vinculos`, vazia)
   2. `07xx_locacao_fichas_e_eventos.sql`
   3. `07xx_locacao_analises_fc.sql`
   4. `07xx_locacao_retencao_e_lgpd.sql` (função de expurgo + gatilho LGPD)
@@ -424,9 +450,9 @@ Não entram, para reduzir divergência:
 - Cada migration tem um bloco "como desfazer" escrito no PR. Ele não roda sozinho. Ordem inversa:
   - `drop trigger` do LGPD em `contacts`
   - `drop function fn_expurgar_processos_de_locacao_vencidos`
-  - `drop table locacao_analises_fc, locacao_processo_eventos, locacao_processo_fichas, locacao_processo_conversas, locacao_processo_participantes, locacao_processos, locacao_imoveis`
+  - `drop table locacao_analises_fc, locacao_processo_eventos, locacao_processo_fichas, locacao_processo_conversas, locacao_processo_participantes, locacao_processos, locacao_imoveis, contato_superlogica_vinculos`
   - remover os blocos do `baseline.sql`
-- As tabelas são novas e só apontam **para fora** (organizations, contacts, conversations, catalog_products). Apagá-las não toca nenhuma tabela do upstream. A única exceção é o gatilho em `contacts`, que sai primeiro.
+- As tabelas são novas e só apontam **para fora** (organizations, contacts, conversations, catalog_products). Se a Fase 3.5 já tiver preenchido vínculos, apagar `contato_superlogica_vinculos` perde esse trabalho: exportar antes (pergunta 12). Apagá-las não toca nenhuma tabela do upstream. A única exceção é o gatilho em `contacts`, que sai primeiro.
 - Botão de desligar sem apagar nada: a chave `organizations.settings.locacao.processos_habilitado` (nova, desligada por padrão). Desligada, o painel volta ao comportamento atual (análise ligada à conversa). Desligar é o primeiro passo de qualquer volta. Apagar tabela só com ok explícito.
 - Antes de apagar em produção: exportar as tabelas (só para o Felipe, fora do Git) ou aceitar a perda, conforme a pergunta 12.
 
@@ -453,11 +479,11 @@ Cada passo vira um PR separado no fork, sem merge automático. Nada vai para pro
 | Passo | O que entra | O Felipe aprova | Como desfazer |
 |---|---|---|---|
 | **P0** | Só documentação: este plano no PR #16 (adendo) ou num PR só de docs | O texto e as respostas às perguntas | Fechar o PR |
-| **P1** | Migration 1 + RLS + testes de isolamento + chave `processos_habilitado` (desligada). Sem tela. | Aplicar a migration no banco | `drop` das 4 tabelas (6.4) |
+| **P1** | Migration 1 + RLS + testes de isolamento + chave `processos_habilitado` (desligada). Inclui `contato_superlogica_vinculos` vazia. Sem tela. | Aplicar a migration no banco | `drop` das 5 tabelas (6.4) |
 | **P2** | Rotas `/api/v1/locacao/processos` (criar, listar, ligar pessoa e conversa, imóvel com normalização) + aba "Processo" no painel, só para quem tem a chave ligada | Ligar a chave **só na Brisa** | Desligar a chave |
 | **P3** | Migration 2 (fichas e eventos) + relatório preliminar gravando a versão 1 + edição com versões + histórico | Aplicar a migration; testar com 1 processo fictício | Desligar a chave; `drop` das 2 tabelas |
 | **P4** | Migration 3 (`locacao_analises_fc`) + "Gerar análise" por pessoa, com telefone certo e anti-cobrança dupla | Primeira FC real (custa dinheiro) com um processo escolhido por ele | Desligar a chave; o fluxo antigo volta |
-| **P5** | Gerar contrato montando o payload pela ficha (tabela 3.5) + `id_imovel` + gravar `superlogica_pessoa_id`/`superlogica_contrato_id` na volta | Primeiro preparar real. O **confirmar** continua sendo clique dele. | Desligar a chave |
+| **P5** | Gerar contrato montando o payload pela ficha (tabela 3.5) + `id_imovel` + gravar o `superlogica_contrato_id` no processo e o id de cada locatário **no contato** (só se o contato não tiver vínculo; se tiver outro, vira revisão) + botão manual ligar/desligar vínculo | Primeiro preparar real. O **confirmar** continua sendo clique dele. | Desligar a chave |
 | **P6** | Status, botões Aprovar/Reprovar/Cancelar/Assinado + linha do tempo | Uso por uma semana | Desligar a chave |
 | **P7** | Migration 4 (retenção 90 dias + LGPD) + entrada no cron + export LGPD | Aplicar; ver o primeiro expurgo em modo simulado | `drop function`/trigger; tirar a entrada do cron |
 | **P8 (3b)** | Documentos + bucket + `participante_id` | Aplicar | `drop` + apagar o bucket vazio |
@@ -487,6 +513,8 @@ O deploy na VPS segue o fluxo normal de release (felpz.N), com o Felipe autoriza
 - Painel de relatórios e métricas de processos.
 - Juntar contatos duplicados do CRM.
 - Vínculo de fiador direto no contrato da Superlógica (a API não documenta).
+- Casamento em massa contato ↔ Superlógica pelo telefone, lista de revisão e relatório de simulação: **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)), logo depois da Fase 3.
+- Busca de boletos usando o vínculo: fica para depois (o Felipe pediu para não rodar agora).
 - Qualquer chamada automática ao `/contrato/confirmar`.
 
 ---
@@ -527,9 +555,9 @@ O deploy na VPS segue o fluxo normal de release (felpz.N), com o Felipe autoriza
 10. **Limpeza LGPD:**
     - (a) gatilho próprio no fork, sem mexer na função do upstream (recomendado)
     - (b) editar a função LGPD do upstream
-11. **Id da pessoa na Superlógica:** (pergunta 9 do plano-mestre)
-    - (a) só na pessoa do processo, sugerido nos próximos processos (recomendado)
-    - (b) também numa coluna nova em `contacts`
+11. ~~**Id da pessoa na Superlógica**~~ **RESPONDIDA (28/10, 01:01–01:04):** fica **no contato** do CRM
+    (tabela `contato_superlogica_vinculos`, no fork). A pessoa do processo herda o id pelo contato. O casamento
+    pelo telefone é a Fase 3.5, com perguntas próprias em [`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md).
 12. **Se um passo precisar ser desfeito em produção:**
     - (a) só desligar a chave e manter as tabelas (recomendado)
     - (b) pode apagar as tabelas novas sem exportar
