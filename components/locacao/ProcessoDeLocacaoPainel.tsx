@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 
 type CardSeguro = { seguradora?: string; codigo?: string; codigo_cotacao?: string; status?: string; plano?: string };
@@ -536,13 +537,13 @@ export function ProcessoDeLocacaoPainel({
   }
 
   async function copiarCampo(chave: string, valor: string) {
-    try {
-      await navigator.clipboard.writeText(valor);
+    const ok = await copyToClipboard(valor);
+    if (ok) {
       setCopiado(chave);
       window.setTimeout(() => setCopiado((atual) => (atual === chave ? null : atual)), 1500);
-    } catch {
-      setErro(t("Não foi possível copiar."));
+      return;
     }
+    setErro(t("Não foi possível copiar."));
   }
 
   async function revelarCpf() {
