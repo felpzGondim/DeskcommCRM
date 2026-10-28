@@ -70,7 +70,7 @@ describe("mapeamento do painel para o Brisa Hub", () => {
       { type: "text", body: "CPF 12345678900" },
       { type: "image", body: "extrato bancário", media_mime: "image/jpeg", metadata: { media_filename: "foto.jpg" }, revoked_at: "2026-10-27" },
     ]);
-    expect(ficha).toEqual({ anexos: [{ nome: "rg.png", mime: "image/png", legenda: "Meu RG" }] });
+    expect(ficha).toEqual({ anexos: [{ nome: "rg.png", mime: "image/png", legenda: "Meu RG", conteudo: "" }] });
     expect(JSON.stringify(ficha)).not.toMatch(/12345678900|secreto/);
   });
 

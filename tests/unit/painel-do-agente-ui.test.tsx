@@ -61,6 +61,23 @@ describe("Painel do agente (UI)", () => {
     expect(postMock).not.toHaveBeenCalled();
   });
 
+  it("pede a senha do PDF protegido e reenvia só nesta sessão", async () => {
+    postMock.mockResolvedValueOnce({ data: {
+      resumo: "Há um PDF protegido.", previaToken: null, pronto: false,
+      avisos: [{ tipo: "pdf_protegido", nome: "extrato.pdf", tentativas: 1 }],
+    } }).mockResolvedValueOnce({ data: { resumo: "Prévia ok", previaToken: "token", pronto: true, avisos: [] } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar análise de inquilino" }));
+    const senha = await screen.findByLabelText("Senha do PDF extrato.pdf");
+    fireEvent.change(senha, { target: { value: "segredo-da-sessao" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ler de novo com a senha" }));
+    await screen.findByText("Prévia ok");
+    expect(postMock).toHaveBeenLastCalledWith(
+      "/api/v1/conversations/c1/painel-agente/acoes",
+      { acao: "analise", etapa: "preparar", senhasPdf: [{ nome: "extrato.pdf", senha: "segredo-da-sessao" }] },
+    );
+  });
+
   it("análise exige confirmação antes de chamar a rota", async () => {
     postMock.mockResolvedValueOnce({ data: { resumo: "Renda preliminar: R$ 4.000,00", previaToken: "token", pronto: true } })
       .mockResolvedValueOnce({ data: { resumo: "Pedido de análise enviado." } });

@@ -2,9 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ACOES_HUB, apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
-import { abrirPrevia, fontesDaAnalise, hashDasFontes, lerPdfsOriginais, pendenciasDaPrevia, previaSchema, resumoDaPrevia, selarPrevia } from "@/lib/agent-engine/agent/painel-analise-preparo";
+import { apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { abrirPrevia, fontesDaAnalise, hashDasFontes, pendenciasDaPrevia, previaSchema, resumoDaPrevia, selarPrevia } from "@/lib/agent-engine/agent/painel-analise-preparo";
+import { TETO_TOKEN_PREVIA, janelaUtilDaAnalise, limitesDaAnalise, rotuloDoLimite } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import { assinarAnexosParaOHub, chaveDosArquivos, ferramentaAceitaArquivos } from "@/lib/agent-engine/agent/painel-arquivos-hub";
+import { aplicarLeiturasDocumentais, enriquecerAnexosDaAnalise, frasesDosAvisos, leiturasDocumentais, lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 import { prepararAnaliseNoPainel } from "@/lib/agent-engine/agent/painel-do-atendente";
+import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
@@ -26,7 +30,8 @@ type Ctx = { params: Promise<{ id: string }> };
 const corpo = z.discriminatedUnion("acao", [
   z.object({ acao: z.enum(["boletos", "contrato", "ficha"]) }).strict(),
   z.object({ acao: z.literal("analise"), etapa: z.enum(["preparar", "confirmar"]),
-    confirmar: z.literal(true).optional(), pedidoId: z.string().uuid().optional(), previaToken: z.string().max(30000).optional() }).strict()
+    confirmar: z.literal(true).optional(), pedidoId: z.string().uuid().optional(), previaToken: z.string().max(TETO_TOKEN_PREVIA).optional(),
+    senhasPdf: z.array(z.object({ nome: z.string().trim().min(1).max(120), senha: z.string().min(1).max(200) })).max(12).optional() }).strict()
     .refine((v) => v.etapa === "preparar" ? !v.confirmar && !v.pedidoId && !v.previaToken
       : v.confirmar === true && !!v.pedidoId && !!v.previaToken),
 ]);
@@ -69,43 +74,67 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     resourceId: id, requestId, metadata: { sucesso, replay },
   });
 
+  const { data: orgLinha } = await db.from("organizations").select("settings")
+    .eq("id", orgId).maybeSingle();
+  const limites = limitesDaAnalise(orgLinha?.settings);
+  const senhasPdf = pedido.acao === "analise"
+    ? Object.fromEntries((pedido.senhasPdf ?? []).map((s) => [s.nome, s.senha])) : {};
+
   let previaConfirmada: ReturnType<typeof abrirPrevia> = null;
+  let anexosDaAnalise: Record<string, unknown>[] = [];
   if (pedido.acao === "analise") {
     const { data: linhas, error: erroFontes } = await db.from("messages")
       .select("direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at")
       .eq("organization_id", orgId).eq("conversation_id", id)
-      .order("sent_at", { ascending: false }).limit(201);
+      .order("sent_at", { ascending: false }).limit(limites.mensagens_brutas);
     if (erroFontes) return fail("internal_error", t("Não foi possível ler a conversa para análise."), 500, { requestId });
-    if ((linhas?.length ?? 0) > 200) return fail("validation_error", t("Esta conversa é extensa demais para uma análise segura de uma vez. Revise o caso com a equipe."), 422, { requestId });
-    const originais = await lerPdfsOriginais((linhas ?? []) as Record<string, unknown>[], orgId, id);
-    const fontes = fontesDaAnalise(originais);
-    const hash = hashDasFontes(fontes);
+    const janela = janelaUtilDaAnalise((linhas ?? []) as Record<string, unknown>[], limites);
+    const deps = requestTurnDeps();
     const escopo = `${orgId}:${id}:${auth.user.id}`;
     if (pedido.etapa === "preparar") {
       try {
+        const enriquecido = await enriquecerAnexosDaAnalise(janela, orgId, id, {
+          limites, senhas: senhasPdf,
+          lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
+        });
+        anexosDaAnalise = enriquecido.linhas;
+        const fontes = fontesDaAnalise(enriquecido.linhas);
+        const hash = hashDasFontes(fontes);
         const blocoFontes = fontes.map((f) => `[${f.id}] ${f.direcao} ${f.tipo} ${f.nome} ${f.legivel ? f.texto : "(sem texto documental legível)"}`).join("\n");
-        if (blocoFontes.length > 60000) {
+        if (blocoFontes.length > limites.chars_conjunto) {
           registrar(false);
           return fail("validation_error", t("Há documentos demais para conferir de uma vez. Revise os anexos desta conversa."), 422, { requestId });
         }
-        const deps = requestTurnDeps();
         const resposta = await prepararAnaliseNoPainel(getRequestPool(), deps.llmCfg, {
           tenantId: orgId, contactId: contato.id,
           fontes: blocoFontes,
         }, { registry: deps.registry, log: deps.log });
         const previa = previaSchema.parse(JSON.parse(resposta.texto));
-        const pendencias = pendenciasDaPrevia(previa, fontes);
-        const resumo = resumoDaPrevia(previa, pendencias);
-        const previaToken = pendencias.length === 0
-          ? selarPrevia({ previa, hash, expira: Date.now() + 30 * 60_000 }, env.INTERNAL_SECRET, escopo) : null;
+        const pendencias = [
+          ...pendenciasDaPrevia(previa, fontes),
+          ...frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha),
+        ];
+        const unicas = [...new Set(pendencias)];
+        const resumo = `${resumoDaPrevia(previa, unicas)}\n${rotuloDoLimite(limites)}`;
+        const previaToken = unicas.length === 0
+          ? selarPrevia({ previa, hash, expira: Date.now() + 30 * 60_000,
+            leituras: leiturasDocumentais(enriquecido.linhas) }, env.INTERNAL_SECRET, escopo) : null;
         registrar(true);
-        return ok({ resumo, previaToken, pronto: !!previaToken }, { requestId });
+        return ok({
+          resumo, previaToken, pronto: !!previaToken,
+          avisos: enriquecido.avisos,
+          limites: rotuloDoLimite(limites),
+        }, { requestId });
       } catch {
         registrar(false);
         return fail("hub_contract_error", t("Não foi possível preparar uma prévia confiável. Confira os documentos e tente novamente."), 422, { requestId });
       }
     }
     previaConfirmada = abrirPrevia(pedido.previaToken ?? "", env.INTERNAL_SECRET, escopo);
+    const pdfs = await lerPdfsOriginais(janela, orgId, id, createAdminClient(), { limites, senhas: senhasPdf });
+    anexosDaAnalise = aplicarLeiturasDocumentais(pdfs, previaConfirmada?.leituras);
+    const fontes = fontesDaAnalise(anexosDaAnalise);
+    const hash = hashDasFontes(fontes);
     if (!previaConfirmada || previaConfirmada.hash !== hash || pendenciasDaPrevia(previaConfirmada.previa, fontes).length) {
       return fail("idempotency_conflict", t("A conversa mudou ou a prévia expirou. Refaça a leitura antes de confirmar."), 409, { requestId });
     }
@@ -135,13 +164,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         exigirReserva: true,
         chave: pedidoId, corpo: { conversationId: id, acao: "analise", pedidoId, hash: previaConfirmada!.hash },
         executar: async () => {
+          const argumentos: Record<string, unknown> = {
+            pedido_id: pedidoId, conversa_id: id, organization_id: orgId,
+            candidato: { nome: previa.candidato.nome.valor, cpf: previa.candidato.cpf.valor,
+              email: previa.candidato.email.valor, telefone: contato.phone_number },
+            imovel: { codigo_fc: previa.imovel.codigo_fc.valor, logradouro: previa.imovel.logradouro.valor,
+              apartamento: previa.imovel.apartamento.valor, aluguel: previa.imovel.aluguel.valor },
+            renda: { mensal: previa.renda.mensal.valor },
+          };
+          if (ferramentaAceitaArquivos(ferramenta)) {
+            const arquivos = await assinarAnexosParaOHub(anexosDaAnalise, orgId, id, createAdminClient(), limites.url_assinada_segundos);
+            if (arquivos.length) argumentos[chaveDosArquivos(ferramenta)] = arquivos;
+          }
           const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name,
-            { pedido_id: pedidoId, conversa_id: id, organization_id: orgId,
-              candidato: { nome: previa.candidato.nome.valor, cpf: previa.candidato.cpf.valor,
-                email: previa.candidato.email.valor, telefone: contato.phone_number },
-              imovel: { codigo_fc: previa.imovel.codigo_fc.valor, logradouro: previa.imovel.logradouro.valor,
-                apartamento: previa.imovel.apartamento.valor, aluguel: previa.imovel.aluguel.valor },
-              renda: { mensal: previa.renda.mensal.valor } }, { cabecalhos: montado.cabecalhos });
+            argumentos, { cabecalhos: montado.cabecalhos });
           if (!r.dados || typeof r.dados !== "object" || !["aceito", "ja_existia"].includes((r.dados as Record<string, unknown>).resultado as string)) {
             throw new Error("analysis_not_accepted");
           }
@@ -177,14 +213,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
     if (pedido.acao === "ficha") {
       const { data: linhas, error: erroFicha } = await db.from("messages")
-        .select("type,body,media_mime,metadata,revoked_at")
+        .select("type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at,direction")
         .eq("organization_id", orgId)
         .eq("conversation_id", id)
         .eq("direction", "inbound")
         .order("sent_at", { ascending: false })
-        .limit(60);
+        .limit(limites.mensagens_brutas);
       if (erroFicha) throw new Error("message_read_failed");
-      argumentos = { ficha: montarFichaTemporaria((linhas ?? []) as Record<string, unknown>[]) };
+      const janela = janelaUtilDaAnalise((linhas ?? []) as Record<string, unknown>[], limites);
+      const deps = requestTurnDeps();
+      const enriquecido = await enriquecerAnexosDaAnalise(janela, orgId, id, {
+        limites,
+        lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
+      });
+      argumentos = { ficha: montarFichaTemporaria(enriquecido.linhas, limites.chars_ficha_por_anexo, limites.anexos_ficha) };
     }
     const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, argumentos, { cabecalhos: montado.cabecalhos });
     if (pedido.acao === "contrato" && ferramentaInquilino) {

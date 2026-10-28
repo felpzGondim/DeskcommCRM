@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
@@ -55,6 +56,9 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
   const [carregando, setCarregando] = useState<Acao | AcaoHub | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pedidoAnalise, setPedidoAnalise] = useState<{ pedidoId: string; previaToken: string } | null>(null);
+  const [avisosAnexos, setAvisosAnexos] = useState<Array<{ tipo: string; nome: string; tentativas?: number }>>([]);
+  const [senhasPdf, setSenhasPdf] = useState<Record<string, string>>({});
+  const [limitesAnexos, setLimitesAnexos] = useState<string | null>(null);
   const conversaAtual = useRef(conversationId);
 
   // Troca de conversa = painel limpo: quem usa o painel passa
@@ -104,10 +108,14 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     setErro(null);
     setCarregando(acao);
     try {
+      const senhas = Object.entries(senhasPdf)
+        .filter(([, senha]) => senha.trim().length > 0)
+        .map(([nome, senha]) => ({ nome, senha }));
       const r = await apiClient.post<{ data: { resumo: string; sugestao?: string; links?: Array<{ rotulo: string; url: string }> } }>(
         `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
         acao === "analise" ? { acao, etapa: "confirmar", confirmar: true,
-          pedidoId: pedidoAnalise?.pedidoId, previaToken: pedidoAnalise?.previaToken } : { acao },
+          pedidoId: pedidoAnalise?.pedidoId, previaToken: pedidoAnalise?.previaToken,
+          ...(senhas.length ? { senhasPdf: senhas } : {}) } : { acao },
       );
       if (conversaAtual.current !== daConversa) return;
       setTurnos((ts) => [...ts,
@@ -131,14 +139,24 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     setPedidoAnalise(null);
     setCarregando("analise");
     try {
-      const r = await apiClient.post<{ data: { resumo: string; previaToken: string | null; pronto: boolean } }>(
-        `/api/v1/conversations/${daConversa}/painel-agente/acoes`, { acao: "analise", etapa: "preparar" },
+      const senhas = Object.entries(senhasPdf)
+        .filter(([, senha]) => senha.trim().length > 0)
+        .map(([nome, senha]) => ({ nome, senha }));
+      const r = await apiClient.post<{ data: {
+        resumo: string; previaToken: string | null; pronto: boolean;
+        avisos?: Array<{ tipo: string; nome: string; tentativas?: number }>;
+        limites?: string;
+      } }>(
+        `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
+        { acao: "analise", etapa: "preparar", ...(senhas.length ? { senhasPdf: senhas } : {}) },
       );
       if (conversaAtual.current !== daConversa) return;
       setTurnos((ts) => [...ts,
         { autor: "atendente", texto: t("Preparar análise de inquilino") },
         { autor: "ia", texto: r.data.resumo },
       ]);
+      setAvisosAnexos(r.data.avisos ?? []);
+      setLimitesAnexos(r.data.limites ?? null);
       if (r.data.pronto && r.data.previaToken) {
         setPedidoAnalise({ pedidoId: randomId(), previaToken: r.data.previaToken });
       }
@@ -178,6 +196,10 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
         <Card className="mt-2 space-y-2 p-3 text-sm">
           <p className="text-[11px] text-muted-foreground">
             {t("Só você vê este painel. Nada aqui é enviado ao cliente.")}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {t("A análise lê o conteúdo dos anexos (foto, PDF e PDF escaneado). PDF com senha pede a senha aqui.")}
+            {limitesAnexos ? ` ${limitesAnexos}` : ""}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -249,6 +271,33 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 </li>
               ))}
             </ol>
+          )}
+
+          {avisosAnexos.some((a) => a.tipo === "pdf_protegido") && (
+            <div className="space-y-2 rounded-md border border-border p-2" role="group"
+              aria-label={t("Informe a senha do PDF protegido")}>
+              <p className="text-[11px] text-muted-foreground">
+                {t("Este PDF está protegido por senha. Digite a senha para a análise ler o arquivo. A senha não é gravada.")}
+              </p>
+              {avisosAnexos.filter((a) => a.tipo === "pdf_protegido").map((aviso) => (
+                <label key={aviso.nome} className="block space-y-1">
+                  <span className="text-[11px] font-medium">{t("Senha do PDF")}: {aviso.nome}</span>
+                  {(aviso.tentativas ?? 0) >= 3 ? (
+                    <p className="text-[11px] text-destructive">{t("Três tentativas falharam. Este arquivo fica pendente.")}</p>
+                  ) : (
+                    <Input type="password" autoComplete="off" className="h-8 text-xs"
+                      value={senhasPdf[aviso.nome] ?? ""}
+                      onChange={(e) => setSenhasPdf((atual) => ({ ...atual, [aviso.nome]: e.target.value }))}
+                      aria-label={`${t("Senha do PDF")} ${aviso.nome}`} />
+                  )}
+                </label>
+              ))}
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                disabled={desabilitado || carregando !== null}
+                onClick={() => void prepararAnalise()}>
+                {t("Ler de novo com a senha")}
+              </Button>
+            </div>
           )}
 
           {pedidoAnalise && (

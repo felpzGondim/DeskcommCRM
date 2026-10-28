@@ -49,7 +49,7 @@ describe("rota das ações do painel", () => {
     const from = (table: string) => {
       const q = {
         select: () => q, eq: () => q, is: () => q, order: () => q,
-        limit: (n: number) => table === "messages" && (n === 60 || n === 201)
+        limit: (n: number) => table === "messages" && n > 1
           ? Promise.resolve({ data: mocks.linhasFicha(), error: null }) : q,
         maybeSingle: async () => ({ data: table === "conversations"
           ? { id: "conversa-1", contact_id: "contato-1" }
@@ -113,7 +113,7 @@ describe("rota das ações do painel", () => {
     const r = await POST(req({ acao: "ficha" }), ctx);
     expect(r.status).toBe(200);
     expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "buscar_cadastro", {
-      ficha: { anexos: [{ nome: "rg.pdf", mime: "application/pdf", legenda: "Identidade" }] },
+      ficha: { anexos: [{ nome: "rg.pdf", mime: "application/pdf", legenda: "Identidade", conteudo: "" }] },
     }, expect.anything());
     expect(JSON.stringify(await r.json())).toContain("holerite, CTPS ou extrato bancário");
   });
@@ -161,6 +161,48 @@ describe("rota das ações do painel", () => {
       pedidoId, previaToken: token }), ctx);
     expect(confirmacao.status).toBe(409);
     expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it("conversa com mais de 200 mensagens analisa as 200 mais recentes", async () => {
+    mocks.linhasFicha.mockReturnValue(Array.from({ length: 220 }, (_, i) => (
+      i === 0
+        ? { type: "document", body: "", media_derived_status: "ready", media_derived_text: "holerite renda liquida 4000", original_completo: true }
+        : { type: "text", body: i === 1 ? "Maria 52998224725 maria@example.com APT10 aluguel 1200" : "ok" }
+    )));
+    const r = await POST(req({ acao: "analise", etapa: "preparar" }), ctx);
+    expect(r.status).toBe(200);
+    const corpo = await r.json();
+    expect(corpo.error).toBeUndefined();
+    expect(corpo.data.resumo).toContain("Até");
+  });
+
+  it("envia URLs assinadas ao Hub só quando a ferramenta anuncia arquivos", async () => {
+    mocks.linhasFicha.mockReturnValue([
+      { type: "document", body: "", media_derived_status: "ready", media_derived_text: "holerite renda liquida 4000", original_completo: true,
+        media_mime: "application/pdf", media_storage_path: "org-1/conversa-1/h.pdf", media_size_bytes: 100,
+        metadata: { media_filename: "h.pdf" } },
+      { type: "text", body: "Maria 52998224725 maria@example.com APT10 aluguel 1200" },
+    ]);
+    mocks.admin.mockReturnValue({ storage: { from: () => ({
+      download: async () => ({ data: null, error: { message: "skip" } }),
+      createSignedUrl: async () => ({ data: { signedUrl: "https://storage.test/h.pdf?s=1" }, error: null }),
+    }) } });
+    mocks.load.mockResolvedValue({ servidor: {}, cabecalhos: {}, ferramentas: [{ name: "brisa_hub_analise", inputSchema: { properties: {
+      pedido_id: {}, conversa_id: {}, candidato: {}, imovel: {}, renda: {}, arquivos: {},
+    } } }] });
+    const preparo = await POST(req({ acao: "analise", etapa: "preparar" }), ctx);
+    const previaToken = (await preparo.json()).data.previaToken;
+    expect(previaToken).toEqual(expect.any(String));
+    mocks.call.mockResolvedValue({ dados: { resultado: "aceito" }, texto: "" });
+    mocks.idem.mockImplementation(async (v: { executar: () => Promise<{ resposta: unknown; status: number }> }) => {
+      const feito = await v.executar();
+      return { tipo: "executou", ...feito };
+    });
+    const r = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId, previaToken }), ctx);
+    expect(r.status).toBe(200);
+    expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "brisa_hub_analise", expect.objectContaining({
+      arquivos: [expect.objectContaining({ nome: "h.pdf", url: "https://storage.test/h.pdf?s=1" })],
+    }), expect.anything());
   });
 
   it("ferramenta ausente vira mensagem clara", async () => {

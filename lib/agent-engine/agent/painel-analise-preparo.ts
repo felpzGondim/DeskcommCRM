@@ -3,10 +3,10 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { z } from "zod";
 
 import { isValidCpf } from "@/lib/legal/perfil-do-pais";
-import { extractPdfText } from "@/lib/ai/rag/extractors/pdf";
-import { isMediaPathOwnedBy } from "@/lib/messaging/media/upload-validation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { LIMITES_ANEXOS_PADRAO, TETO_TOKEN_PREVIA, ehDescricaoGenericaDeMidia, textoCombinadoDaMensagem } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { scrubMessage } from "@/lib/sentry/scrub";
+
+export { lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 
 const texto = z.string().trim().max(180);
 const campo = z.object({ valor: texto.nullable(), fonte: z.string().max(16).nullable(), trecho: z.string().max(240).nullable() });
@@ -26,36 +26,12 @@ export type PreviaAnalise = z.infer<typeof previaSchema>;
 
 export interface FonteAnalise { id: string; direcao: "cliente" | "empresa"; tipo: string; nome: string; texto: string; legivel: boolean }
 
-/** Reabre os PDFs originais do próprio tenant; a derivação comum corta em 8 mil caracteres. */
-export async function lerPdfsOriginais(
-  linhas: readonly Record<string, unknown>[], orgId: string, conversaId: string,
-  admin = createAdminClient(),
-): Promise<Record<string, unknown>[]> {
-  const saida = linhas.map((v) => ({ ...v }));
-  let documentos = 0;
-  let caracteres = 0;
-  for (const linha of saida) {
-    if (linha.type !== "document" || linha.direction === "outbound" || linha.media_mime !== "application/pdf" || linha.revoked_at) continue;
-    const path = linha.media_storage_path;
-    const tamanho = linha.media_size_bytes;
-    if (++documentos > 8 || typeof path !== "string" || !isMediaPathOwnedBy(path, orgId, conversaId) ||
-      typeof tamanho !== "number" || tamanho > 10 * 1024 * 1024) continue;
-    try {
-      const { data, error } = await admin.storage.from("whatsapp-media").download(path);
-      if (error || !data) continue;
-      const bruto = await extractPdfText(Buffer.from(await data.arrayBuffer()));
-      if (!bruto || bruto.length > 40000 || caracteres + bruto.length > 60000) continue;
-      caracteres += bruto.length;
-      linha.media_derived_text = bruto;
-      linha.media_derived_status = "ready";
-      linha.original_completo = true;
-    } catch { /* documento ilegível: bloqueia a confirmação, sem logar conteúdo */ }
-  }
-  return saida;
+function comprovanteLegivel(f: FonteAnalise): boolean {
+  return f.legivel && (f.tipo === "document" || f.tipo === "image");
 }
 
 export function fontesDaAnalise(linhas: readonly Record<string, unknown>[]): FonteAnalise[] {
-  return linhas.slice(0, 200).filter((m) => !m.revoked_at).reverse().map((m, i) => {
+  return linhas.filter((m) => !m.revoked_at).reverse().map((m, i) => {
     const tipo = typeof m.type === "string" ? m.type : "text";
     const direcao = m.direction === "outbound" ? "empresa" : "cliente";
     const meta = m.metadata && typeof m.metadata === "object" ? m.metadata as Record<string, unknown> : {};
@@ -63,12 +39,14 @@ export function fontesDaAnalise(linhas: readonly Record<string, unknown>[]): Fon
     const derivado = m.media_derived_status === "ready" && typeof m.media_derived_text === "string"
       ? m.media_derived_text : "";
     const corpo = typeof m.body === "string" ? m.body : "";
-    // Descrição de imagem não é OCR financeiro: não a usamos para provar valores.
-    const textoFonte = tipo === "image" ? corpo : [corpo, derivado].filter(Boolean).join("\n");
-    return { id: `M${i + 1}`, direcao, tipo, nome, texto: textoFonte.slice(0, 42000),
-      legivel: (tipo === "text" && textoFonte.length <= 42000) ||
+    const textoFonte = textoCombinadoDaMensagem(corpo, derivado);
+    const documental = m.leitura_documental === true && !!derivado && !ehDescricaoGenericaDeMidia(derivado);
+    const teto = LIMITES_ANEXOS_PADRAO.chars_por_arquivo;
+    return { id: `M${i + 1}`, direcao, tipo, nome, texto: textoFonte.slice(0, teto),
+      legivel: (tipo === "text" && textoFonte.length <= teto) ||
         (tipo === "audio" && !!derivado && derivado.length < 8000) ||
-        (tipo === "document" && direcao === "cliente" && m.original_completo === true && textoFonte.length <= 42000) };
+        (tipo === "document" && direcao === "cliente" && m.original_completo === true && textoFonte.length <= teto) ||
+        (tipo === "image" && direcao === "cliente" && documental && textoFonte.length <= teto) };
   });
 }
 
@@ -99,13 +77,18 @@ export function pendenciasDaPrevia(p: PreviaAnalise, fontes: readonly FonteAnali
     !valorNoTrecho(p.imovel.aluguel.valor, p.imovel.aluguel.trecho)) faltam.push("Aluguel sem valor confirmado na conversa.");
   if (!p.renda.mensal.valor || !evidencia(p.renda.mensal, fontes) ||
     !valorNoTrecho(p.renda.mensal.valor, p.renda.mensal.trecho) ||
-    !fontes.some((f) => f.id === p.renda.mensal.fonte && f.tipo === "document")) {
+    !fontes.some((f) => f.id === p.renda.mensal.fonte && comprovanteLegivel(f))) {
     faltam.push("Renda mensal sem comprovante legível e origem verificável.");
   }
-  if (!p.renda.documentos.length || p.renda.documentos.some((d) => !fontes.some((f) => f.id === d.fonte && f.legivel && f.tipo === "document"))) {
+  if (!p.renda.documentos.length || p.renda.documentos.some((d) => !fontes.some((f) => f.id === d.fonte && comprovanteLegivel(f)))) {
     faltam.push("Comprovantes de renda sem análise individual verificável.");
   }
-  if (fontes.some((f) => f.direcao === "cliente" && ["document", "image"].includes(f.tipo) && !f.legivel)) faltam.push("Há anexos sem leitura completa (imagem, PDF escaneado ou arquivo extenso). Confira os originais antes de confirmar.");
+  for (const f of fontes.filter((v) => v.direcao === "cliente" && v.tipo === "document" && !v.legivel && /protegido/i.test(v.nome + v.texto))) {
+    faltam.push(`PDF protegido por senha: ${f.nome || "arquivo"}. Informe a senha no painel.`);
+  }
+  if (fontes.some((f) => f.direcao === "cliente" && ["document", "image"].includes(f.tipo) && !f.legivel)) {
+    faltam.push("Há anexos sem leitura completa (imagem, PDF escaneado ou arquivo extenso). Confira os originais antes de confirmar.");
+  }
   if (fontes.some((f) => f.direcao === "cliente" && f.tipo === "text" && !f.legivel)) faltam.push("Há mensagem longa que não foi lida por completo.");
   if (fontes.some((f) => f.direcao === "cliente" && f.tipo === "audio" && !f.legivel)) faltam.push("Há áudio sem transcrição completa nesta conversa.");
   if (fontes.some((f) => f.direcao === "cliente" && f.tipo === "video" && !f.legivel)) faltam.push("Há vídeo sem leitura completa nesta conversa.");
@@ -128,7 +111,7 @@ export function resumoDaPrevia(p: PreviaAnalise, pendencias: readonly string[]):
   ].join("\n");
 }
 
-interface Cupom { previa: PreviaAnalise; hash: string; expira: number }
+interface Cupom { previa: PreviaAnalise; hash: string; expira: number; leituras?: Record<string, string> }
 function chave(segredo: string) { return createHash("sha256").update(segredo).digest(); }
 
 export function selarPrevia(dados: Cupom, segredo: string, escopo: string): string {
@@ -141,7 +124,7 @@ export function selarPrevia(dados: Cupom, segredo: string, escopo: string): stri
 }
 
 export function abrirPrevia(token: string, segredo: string, escopo: string): Cupom | null {
-  if (!segredo || token.length > 30000) return null;
+  if (!segredo || token.length > TETO_TOKEN_PREVIA) return null;
   try {
     const bytes = Buffer.from(token, "base64url");
     if (bytes.length < 29) return null;
@@ -151,6 +134,10 @@ export function abrirPrevia(token: string, segredo: string, escopo: string): Cup
     const bruto = JSON.parse(Buffer.concat([decifra.update(bytes.subarray(28)), decifra.final()]).toString());
     if (typeof bruto.hash !== "string" || typeof bruto.expira !== "number" || bruto.expira < Date.now()) return null;
     const previa = previaSchema.safeParse(bruto.previa);
-    return previa.success ? { previa: previa.data, hash: bruto.hash, expira: bruto.expira } : null;
+    const leituras = bruto.leituras && typeof bruto.leituras === "object" && !Array.isArray(bruto.leituras)
+      ? Object.fromEntries(Object.entries(bruto.leituras as Record<string, unknown>)
+        .filter((v): v is [string, string] => typeof v[0] === "string" && typeof v[1] === "string"))
+      : undefined;
+    return previa.success ? { previa: previa.data, hash: bruto.hash, expira: bruto.expira, leituras } : null;
   } catch { return null; }
 }
