@@ -112,6 +112,13 @@
       "col": 4,
       "type": "database",
       "label": "locacao_fichas_preliminares: versão, quem, caminhos"
+    },
+    {
+      "id": "extrato",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Extrato: lançamentos, exclusões e tabela mensal"
     }
   ],
   "edges": [
@@ -189,6 +196,18 @@
       "from": "aviso_teto",
       "to": "botoes",
       "label": "PDF reabre; senão recorte com aviso"
+    },
+    {
+      "id": "e21",
+      "from": "anexos",
+      "to": "extrato",
+      "label": "texto do PDF e número de páginas"
+    },
+    {
+      "id": "e22",
+      "from": "extrato",
+      "to": "ficha_rota",
+      "label": "tabela mensal; declarado não é comprovado"
     }
   ]
 }

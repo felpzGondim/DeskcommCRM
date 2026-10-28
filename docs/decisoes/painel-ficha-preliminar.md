@@ -7,8 +7,10 @@
 
 No Painel do agente, o botão **Gerar relatório preliminar** lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão). Devolve:
 
-1. um relatório curto, só para a equipe;
+1. um relatório interno em 6 seções (Identificação, Renda comprovada, Comparação com declarado e 3x o pacote, Documentos, Alertas, Risco), só para a equipe — nunca "alugue"/"não alugue";
 2. a **ficha de dados** (pessoas, renda, imóvel, documentos, pendências), que o atendente confere e corrige.
+
+A renda comprovada sai dos créditos do extrato, mês a mês, excluindo transferências entre contas próprias, estornos/devoluções, resgates/aplicações e empréstimos. O valor declarado **nunca** é tratado como comprovado. Se o extrato for escaneado, ilegível ou só movimento de negócio, o relatório diz isso e não estima. Sem o pacote (aluguel+condomínio+IPTU): `3x não calculado: falta o valor do pacote`. Sem renda comprovada o risco não pode ser baixo. O módulo `lib/locacao/extrato` é o mesmo que a análise 4.1 e o relatório 4.5 devem reusar.
 
 **Salvar ficha** grava uma versão nova. O histórico mostra quem, quando e **quais caminhos** mudaram — nunca os valores.
 
@@ -34,8 +36,8 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 
 ## Living System Checklist
 
-1. Quem me alimenta? Conversa (200 msgs) + anexos Fase 2 + `visao_de_imagem`.
-2. Quem eu alimento? Tela do painel; a rota de análise (celular do inquilino); no futuro, processo/FC/contrato.
+1. Quem me alimenta? Conversa (200 msgs) + anexos Fase 2 + `visao_de_imagem` + `lib/locacao/extrato`.
+2. Quem eu alimento? Tela do painel; a rota de análise (celular do inquilino); no futuro, processo/FC/contrato e análises 4.1/4.5.
 3. Registro: `ai.painel_atendente.ficha_preliminar` / `.ficha_salva` — versão e caminhos, sem PII.
 4. Tela: `FichaPreliminarPainel` no `PainelDoAgente`.
 5. Porta: Inbox → Painel do agente (já existia).
@@ -43,4 +45,4 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 7. Configuração: mesmos limites de `organizations.settings.locacao.anexos` (Fase 2). Sem tela nova.
 8. Continuidade: a IA rascunha; o atendente corrige e salva. A IA não confirma FC.
 9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga.
-10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_tabela`).
+10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_tabela`, `extrato`).

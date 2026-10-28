@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.12] — 2026-10-28
+
+### Corrigido
+
+- **A renda do relatório preliminar sai do extrato, não do valor declarado** No Painel, Gerar relatório preliminar lê os créditos do extrato mês a mês, tira transferências entre contas próprias, estornos, resgates/aplicações e empréstimos, e compara com o que a pessoa disse e com 3× o pacote (aluguel+condomínio+IPTU). O valor declarado nunca conta como comprovado. Extrato escaneado, ilegível ou só de movimento de negócio aparece com recado claro, sem chute. Se faltar o pacote: "3x não calculado: falta o valor do pacote". Sem prova de renda, o risco não sai como baixo. Extrato longo deixa de ser cortado em silêncio: a IA recebe a tabela calculada. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.11] — 2026-10-28
 
 ### Adicionado

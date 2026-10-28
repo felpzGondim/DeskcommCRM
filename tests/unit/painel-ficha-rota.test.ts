@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   visao: vi.fn(),
   logError: vi.fn(),
+  runModel: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -27,6 +28,9 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: mocks.rate })
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
+vi.mock("@/lib/agent-engine/edge/llm/run-model-call", () => ({
+  runModelCall: mocks.runModel,
+}));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({ requestTurnDeps: mocks.deps }));
 vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: mocks.pool }));
 vi.mock("@/lib/agent-engine/agent/painel-relatorio-preliminar", async () => {
@@ -237,6 +241,53 @@ describe("rota da ficha preliminar", () => {
       expect.objectContaining({ codigo: "saida_truncada", organizationId: "org-1" }),
     );
     expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Maria|11977776666/);
+  });
+
+  it("modelo simulado que copia o declarado e marca risco baixo é corrigido", async () => {
+    const real = await vi.importActual<
+      typeof import("@/lib/agent-engine/agent/painel-relatorio-preliminar")
+    >("@/lib/agent-engine/agent/painel-relatorio-preliminar");
+    mocks.gerar.mockImplementation((db: unknown, cfg: unknown, input: unknown, deps: unknown) =>
+      real.gerarRelatorioPreliminarNoPainel(
+        db as never,
+        cfg as never,
+        input as never,
+        deps as never,
+      ),
+    );
+    mocks.runModel.mockResolvedValue({
+      result: {
+        text: JSON.stringify({
+          relatorio: "## Identificação\nAna\n## Risco\nbaixo",
+          ficha: {
+            renda: {
+              mensal: { valor: 5000, fonte: "M1", trecho: "renda 5000" },
+              documentos: [{ fonte: "M1", tipo: "outro", resumo: "conversa" }],
+            },
+          },
+        }),
+      },
+      callId: "c-sim",
+    });
+    mocks.enriquecer.mockResolvedValue({
+      linhas: [
+        {
+          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          type: "text",
+          body: "Ana renda 5000",
+          direction: "inbound",
+        },
+      ],
+      avisos: [],
+    });
+    const r = await POST(req({ etapa: "gerar" }), ctx);
+    expect(r.status).toBe(200);
+    const corpo = await r.json();
+    expect(corpo.data.ficha.renda.mensal.valor).toBeNull();
+    expect(corpo.data.ficha.renda.alertas.join(" ")).toMatch(/não é comprovada/i);
+    expect(corpo.data.relatorio).toMatch(/## Risco\nmoderado/);
+    expect(corpo.data.relatorio).not.toMatch(/## Risco\nbaixo/);
+    expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Ana renda 5000|11977776666/);
   });
 
   it("JSON inválido não culpa os documentos", async () => {

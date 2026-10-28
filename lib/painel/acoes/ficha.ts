@@ -11,6 +11,8 @@ import {
   blocoDasFontesDaFicha,
   fontesDaFicha,
   gerarRelatorioPreliminarNoPainel,
+  prepararFontesDoRelatorio,
+  rendaDeclaradaNasFontes,
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
@@ -73,8 +75,11 @@ export async function gerarRelatorioPreliminarDoPainel(
       senhas: senhasPdf,
       lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
     });
-    const fontes = fontesDaFicha(enriquecido.linhas);
-    const bloco = blocoDasFontesDaFicha(fontes);
+    const fontes = fontesDaFicha(enriquecido.linhas, {
+      charsPorAnexo: limites.chars_ficha_por_anexo,
+    });
+    const preparado = prepararFontesDoRelatorio(fontes);
+    const bloco = blocoDasFontesDaFicha(preparado.fontes);
     if (bloco.length > limites.chars_conjunto) {
       return {
         ok: false,
@@ -85,7 +90,14 @@ export async function gerarRelatorioPreliminarDoPainel(
     const { saida } = await gerarRelatorioPreliminarNoPainel(
       getRequestPool(),
       deps.llmCfg,
-      { tenantId: ctx.orgId, contactId: ctx.contactId, fontes: bloco },
+      {
+        tenantId: ctx.orgId,
+        contactId: ctx.contactId,
+        fontes: bloco,
+        analisesExtrato: preparado.analises,
+        pendenciasDeFonte: preparado.pendencias,
+        rendaDeclaradaCentavos: rendaDeclaradaNasFontes(fontes),
+      },
       { registry: deps.registry, log: deps.log },
     );
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
