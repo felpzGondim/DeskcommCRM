@@ -1330,6 +1330,26 @@ export const AUDIT_ACTIONS = [
   // mesma razão do `ai.case_alert_settings_changed`: `api_audit_log` é
   // append-only e a cascata de LGPD não o alcança.
   "ai.case_alert_settings_removed",
+  "locacao.processo_criado",
+  "locacao.processo_avancado",
+  "locacao.processo_aprovado",
+  "locacao.processo_reprovado",
+  "locacao.processo_cancelado",
+  "locacao.processo_assinado",
+  "locacao.processo_reaberto",
+  "locacao.participante_adicionado",
+  "locacao.conversa_ligada",
+  "locacao.ficha_gravada",
+  "locacao.analise_fc_aberta",
+  "locacao.documento_anexado",
+  "locacao.documento_removido",
+  "locacao.config_alterada",
+  "locacao.vinculo_simulado",
+  "locacao.vinculo_executado",
+  "locacao.vinculo_revisao",
+  "locacao.drive_copia",
+  "contato.superlogica.ligar",
+  "contato.superlogica.desligar",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

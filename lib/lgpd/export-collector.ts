@@ -808,6 +808,16 @@ export interface ExportPayload {
    * comprovante) é dado dele, e a cascata o apaga a pedido dele — então sai aqui
    * a pedido dele. Vai o registro (nome, tipo, tamanho, data), não o binário.
    */
+  /**
+   * Processo de locação do titular (Fases 3/3b). Opcional de propósito: ausente
+   * no Brasil deixa os fixtures byte a byte. Só ids, etapas e caminhos — nunca
+   * CPF, nome ou telefone.
+   */
+  locacao?: {
+    processos: number;
+    participantes: number;
+    documentos: number;
+  };
   lead_attachments?: Array<{
     id: string;
     lead_id: string;
@@ -1366,6 +1376,60 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     } else if (data) {
       conferirTeto("lead_attachments", data, 500);
       lead_attachments = data;
+    }
+  }
+
+  // Processo de locação (Fases 3/3b). Só contagens e ids. Sem CPF, nome ou telefone.
+  // Opcional no payload: zero some, para os fixtures brasileiros byte a byte.
+  let locacao: ExportPayload["locacao"] = undefined;
+  if (contactId) {
+    try {
+      const { count: nPart, error: errPart } = await admin
+        .from("locacao_processo_participantes")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId);
+      const { data: partes, error: errPartes } = await admin
+        .from("locacao_processo_participantes")
+        .select("processo_id")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .limit(200);
+      if (!errPart && errPartes?.code !== "42P01") {
+        const processosIds = [...new Set((partes ?? []).map((r) => String((r as { processo_id: string }).processo_id)))];
+        let nDoc = 0;
+        if (processosIds.length > 0) {
+          const { count, error: errDoc } = await admin
+            .from("locacao_processo_documentos")
+            .select("id", { count: "exact", head: true })
+            .eq("organization_id", organizationId)
+            .in("processo_id", processosIds);
+          if (!errDoc) nDoc = count ?? 0;
+        } else {
+          await admin
+            .from("locacao_processo_documentos")
+            .select("id", { count: "exact", head: true })
+            .eq("organization_id", organizationId)
+            .eq("id", "00000000-0000-0000-0000-000000000000");
+        }
+        await admin
+          .from("contato_superlogica_vinculos")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId)
+          .eq("contact_id", contactId);
+        await admin
+          .from("superlogica_vinculo_revisoes")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId)
+          .eq("contact_id", contactId);
+        const nProcessos = processosIds.length;
+        const nParticipantes = nPart ?? 0;
+        if (nProcessos > 0 || nParticipantes > 0 || nDoc > 0) {
+          locacao = { processos: nProcessos, participantes: nParticipantes, documentos: nDoc };
+        }
+      }
+    } catch {
+      logger.warn("[lgpd-export-worker] locacao load skipped", { request_id: requestId });
     }
   }
 
@@ -2343,6 +2407,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     ai_agent_runs,
     lead_state,
     b2b,
+    ...(locacao ? { locacao } : {}),
   };
 }
 

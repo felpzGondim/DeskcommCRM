@@ -1,6 +1,6 @@
 # Plano: processo de locação (Inbox → análise → contrato)
 
-**Status:** Fase 2 implementada neste fork (`feat/fase2-anexos`). Fase 1 segue operação/Hub. Fases 3–5 não começaram.
+**Status:** Fases 3, 3.5 e 3b **autorizadas** em 28/10/2026 9:22 e implementadas neste fork (desligadas por padrão). Decisões: [`docs/decisoes/locacao-fases-3-3b.md`](../decisoes/locacao-fases-3-3b.md). Fase 1 segue operação/Hub. Fases 4–5 não começaram.
 **Âncora medida:** `origin/main` do fork `felpzGondim/DeskcommCRM` em `f074df81e` (tag `v1.88.0-felpz.7`, 28/10/2026).
 **Destino (confirmado, Q15):** só este fork. Tabelas novas **não** sobem para `melgarafael/DeskcommCRM`. As peças do painel já existentes continuam como consumidor opcional do servidor MCP externo.
 

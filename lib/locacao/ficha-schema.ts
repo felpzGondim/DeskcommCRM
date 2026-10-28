@@ -1,7 +1,7 @@
 /**
  * Ficha preliminar (A1) — JSON versionado que a análise, a FC, a Migra e o
- * contrato vão reusar. Ainda não existe processo de locação: a ficha mora na
- * conversa e ganha `processo_id` nulo, para a Fase 3 só apontar.
+ * contrato reusam. Mora na conversa; `processo_id` aponta para o processo da
+ * Fase 3 quando houver (FK opcional, 0768).
  *
  * Cada valor carrega fonte, trecho e confiança. Os caminhos de campo (nunca os
  * valores) vão para o histórico e para o `audit()`.
