@@ -3,9 +3,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { countAs, sql } from "./gov-helpers";
 
 /**
- * Fases 3 / 3.5 / 3b (0763–0768): membro lê a linha da própria org e zero da
- * outra; authenticated não escreve; sem SECURITY DEFINER exposta a authenticated.
- * Sem dado pessoal: nomes e ids desta suíte são de teste.
+ * Fases 3 / 3.5 / 3b / 4 (0763–0770): membro lê a linha da própria org e zero
+ * da outra; authenticated não escreve; sem SECURITY DEFINER exposta a
+ * authenticated. Sem dado pessoal: nomes e ids desta suíte são de teste.
  */
 const orgA = randomUUID(), orgB = randomUUID();
 const membroA = randomUUID(), membroB = randomUUID();
@@ -26,6 +26,7 @@ const TABELAS = [
   "locacao_processo_fichas",
   "locacao_processo_eventos",
   "locacao_analises_fc",
+  "locacao_analises_seguro",
   "contato_superlogica_vinculos",
   "superlogica_vinculo_execucoes",
   "superlogica_vinculo_revisoes",
@@ -62,6 +63,8 @@ beforeAll(() => {
       insert into locacao_processo_eventos (organization_id, processo_id, tipo, ator_tipo)
         values ('${org}', '${proc}', 'status', 'sistema');
       insert into locacao_analises_fc (organization_id, processo_id, participante_id, pedido_id, estado)
+        values ('${org}', '${proc}', '${part}', '${randomUUID()}', 'solicitada');
+      insert into locacao_analises_seguro (organization_id, processo_id, participante_id, pedido_id, estado)
         values ('${org}', '${proc}', '${part}', '${randomUUID()}', 'solicitada');
       insert into superlogica_vinculo_execucoes (id, organization_id, modo, estado)
         values ('${execucao}', '${org}', 'simulacao', 'concluida');
@@ -106,6 +109,43 @@ describe("locacao processos: RLS e escrita", () => {
     ).toThrow(/permission denied/);
   });
 
+  it("índice único impede duas cotações em andamento no mesmo processo", () => {
+    expect(() =>
+      sql(`insert into locacao_analises_seguro (organization_id, processo_id, pedido_id, estado)
+            values ('${orgA}', '${procA}', '${randomUUID()}', 'solicitada');`),
+    ).toThrow(/duplicate|unique/i);
+  });
+
+  it("aceita evento renda e relatorio; recusa contratar", () => {
+    sql(`insert into locacao_processo_eventos (organization_id, processo_id, tipo, ator_tipo)
+          values ('${orgA}', '${procA}', 'renda', 'sistema'),
+                 ('${orgA}', '${procA}', 'relatorio', 'sistema');`);
+    expect(
+      sql(`select count(*) from locacao_processo_eventos
+            where processo_id = '${procA}' and tipo in ('renda','relatorio');`),
+    ).toBe("2");
+    expect(() =>
+      sql(`insert into locacao_processo_eventos (organization_id, processo_id, tipo, ator_tipo)
+            values ('${orgA}', '${procA}', 'contratar', 'sistema');`),
+    ).toThrow(/check|violat/i);
+  });
+
+  it("aceita origem manual na ficha, manual_assistido no documento e login_necessario na FC", () => {
+    sql(`insert into locacao_processo_fichas (organization_id, processo_id, versao, origem, ficha)
+          values ('${orgA}', '${procA}', 2, 'manual', '{}'::jsonb);`);
+    sql(`insert into locacao_processo_documentos (
+            organization_id, processo_id, participante_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+          ) values (
+            '${orgA}', '${procA}', '${partA}', 'laudo_fc',
+            '${orgA}/processos/${procA}/manual.pdf', 'application/pdf', 1, '${"cd".repeat(32)}', 'manual_assistido'
+          );`);
+    sql(`insert into locacao_analises_fc (organization_id, processo_id, participante_id, pedido_id, estado, origem)
+          values ('${orgA}', '${procA}', '${partA}', '${randomUUID()}', 'login_necessario', 'manual');`);
+    expect(
+      sql(`select count(*) from locacao_processo_fichas where processo_id = '${procA}' and origem = 'manual';`),
+    ).toBe("1");
+  });
+
   it("funções de locação SECURITY DEFINER não estão concedidas a authenticated nem anon", () => {
     expect(
       sql(`select count(*) from information_schema.routine_privileges
@@ -113,7 +153,8 @@ describe("locacao processos: RLS e escrita", () => {
           and routine_name in (
             'fn_expurgar_processos_de_locacao_vencidos',
             'fn_expurgar_revisoes_de_vinculo_vencidas',
-            'fn_encerrar_processos_de_locacao_parados'
+            'fn_encerrar_processos_de_locacao_parados',
+            'fn_locacao_limpar_contato_anonimizado'
           )
           and privilege_type = 'EXECUTE'
           and grantee in ('anon','authenticated','PUBLIC');`),

@@ -70,6 +70,7 @@ export const ORIGENS_DA_FICHA_DO_PROCESSO = [
   "hub_migra",
   "contrato",
   "lgpd",
+  "manual",
 ] as const;
 export type OrigemDaFichaDoProcesso = (typeof ORIGENS_DA_FICHA_DO_PROCESSO)[number];
 
@@ -83,6 +84,8 @@ export const TIPOS_DE_EVENTO_DO_PROCESSO = [
   "contrato_confirmar",
   "documento",
   "lgpd",
+  "renda",
+  "relatorio",
 ] as const;
 export type TipoDeEventoDoProcesso = (typeof TIPOS_DE_EVENTO_DO_PROCESSO)[number];
 
@@ -97,8 +100,25 @@ export const ESTADOS_DA_ANALISE_FC = [
   "reaproveitada",
   "erro",
   "cancelada",
+  "login_necessario",
 ] as const;
 export type EstadoDaAnaliseFc = (typeof ESTADOS_DA_ANALISE_FC)[number];
+
+export const ESTADOS_DA_ANALISE_SEGURO = [
+  "solicitada",
+  "cotando",
+  "concluida",
+  "erro",
+  "login_necessario",
+  "cancelada",
+] as const;
+export type EstadoDaAnaliseSeguro = (typeof ESTADOS_DA_ANALISE_SEGURO)[number];
+
+export const ORIGENS_DA_ANALISE = ["hub", "manual"] as const;
+export type OrigemDaAnalise = (typeof ORIGENS_DA_ANALISE)[number];
+
+export const CHAVES_DA_ANALISE = ["renda", "seguro", "fc", "relatorio", "manual"] as const;
+export type ChaveDaAnalise = (typeof CHAVES_DA_ANALISE)[number];
 
 export const MODOS_DA_EXECUCAO_DE_VINCULO = ["simulacao", "valendo"] as const;
 export type ModoDaExecucaoDeVinculo = (typeof MODOS_DA_EXECUCAO_DE_VINCULO)[number];
@@ -136,6 +156,7 @@ export const ORIGENS_DO_DOCUMENTO = [
   "hub_fc",
   "hub_migra",
   "relatorio",
+  "manual_assistido",
 ] as const;
 export type OrigemDoDocumento = (typeof ORIGENS_DO_DOCUMENTO)[number];
 

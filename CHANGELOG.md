@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.11] — 2026-10-28
+
+### Adicionado
+
+- **Base da análise de inquilino no processo (desligada)** O processo de locação passa a ter um registro de cotação de seguro-fiança (pedido, job, estado, resultado), tipos de evento renda e relatório, e chaves `locacao.analise.{renda,seguro,fc,relatorio,manual}` — todas desligadas. Sem preço da FC no banco. A confirmação da cobrança continua avisando que vai gastar créditos, sem valor na tela. Rollback: desligar as chaves; as tabelas ficam.
+
 ## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado

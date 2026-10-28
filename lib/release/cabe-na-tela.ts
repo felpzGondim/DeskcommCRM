@@ -93,7 +93,10 @@ function fatiar(raw: string): { cabecalho: string; secoes: Secao[] } {
     const m = /^##\s+\[([^\]]+)\]/.exec(linhas[inicio]!);
     const rotulo = m?.[1] ?? "";
     return {
-      versao: /^\d+\.\d+\.\d+$/.test(rotulo) ? rotulo : null,
+      // SemVer puro ou revisão deste fork (`1.88.0-felpz.N`). Sem o sufixo,
+      // as notas do fork no topo empurram a seção `1.88.0` para além do
+      // teto de 30 KB da VPS — cada felpz.N nova quebrava o gate.
+      versao: /^\d+\.\d+\.\d+(?:-felpz\.\d+)?$/.test(rotulo) ? rotulo : null,
       texto: linhas.slice(inicio, fim).join("\n") + (fim < linhas.length ? "\n" : ""),
     };
   });
