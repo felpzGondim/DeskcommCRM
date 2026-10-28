@@ -730,9 +730,10 @@ Fim do rascunho. A implementação espera o “pode ir à Fase 1”. Q1 e Q2 ain
 ## Adendo: análise completa de inquilino no CRM
 
 **Status:** plano, só leitura. Nada foi mudado no banco, no código em produção, no Hub ou na VPS.
-**Data do levantamento:** 28/10/2026.
-**Pedido do Felipe:** "Eu quero que leia sim. Podemos até criar uma função pra isso. Na prática o que eu quero é o que o Análise De Inquilinos já faz sozinho, mas dentro do CRM."
-**Liga com:** Fase 2 (PR #15, leitura de anexos), Fase 3 e 3b (processo, documentos, Storage) e Fase 4 (os 4 botões) deste plano.
+**Data do levantamento:** 28/10/2026. **Emenda:** 28/10/2026 (esclarecimento do Felipe).
+**Pedido do Felipe (27/10):** "Eu quero que leia sim. Podemos até criar uma função pra isso. Na prática o que eu quero é o que o Análise De Inquilinos já faz sozinho, mas dentro do CRM."
+**Esclarecimento do objetivo (28/10, Felipe):** "A ideia é que a IA analise os documentos e a conversa, faça aquele relatório preliminar, já com todos os dados para serem usados nas fases posteriores da esteira."
+**Liga com:** Fase 2 (PR #15, leitura de anexos), Fase 3 e 3b (processo, documentos, Storage) e Fase 4 (os botões) deste plano. O passo **central** deste adendo é o **Relatório preliminar** (A.6 / fase A1): relatório de 6 seções + registro estruturado que a ficha, a FC, a Migra e o `/contrato/preparar` reutilizam sem redigitar.
 
 ---
 
@@ -740,10 +741,10 @@ Fim do rascunho. A implementação espera o “pode ir à Fase 1”. Q1 e Q2 ain
 
 1. O bot **Análise De Inquilinos** faz tudo hoje pelo navegador do computador dele: lê os arquivos, analisa a renda, roda a FC Score+, cota na Migra e escreve o relatório de 6 seções.
 2. Boa parte da parte "robô" **já existe na VPS**: o container `brisa-hub-analise` (Playwright) já sabe entrar na FC e na Migra, salvar a ficha, cotar e baixar o laudo. Mas ele **nunca rodou um caso real registrado** e o CRM só consegue **dar a partida**. Ele não consegue acompanhar, confirmar a cobrança nem receber o resultado.
-3. **Achado importante:** nem a automação da FC nem a da Migra envia arquivo para o site. As duas só preenchem formulário com dados. **Os arquivos do candidato só servem para a análise de renda e para o arquivo do processo**, e isso pode ficar 100% dentro do CRM (o PR #15 já lê os anexos).
-4. Por isso, a recomendação é: **arquivos ficam no CRM**, o Hub recebe **só dados estruturados** e devolve **resultados** (cards da Migra, ID e laudo da FC).
-5. A análise de renda e o relatório de 6 seções ficam **no CRM, com o Gemini** (o mesmo ponto de IA do PR #15). A FC e a Migra ficam **no Hub (Playwright)**, com **modo manual assistido** de reserva.
-6. Dá para entregar em fases pequenas, uma por botão, cada uma com chave liga/desliga.
+3. **Achado importante:** nem a automação da FC nem a da Migra envia arquivo para o site. As duas só preenchem formulário com dados. **Os arquivos do candidato só servem para a leitura no CRM e para o arquivo do processo**, e isso pode ficar 100% dentro do CRM (o PR #15 já lê os anexos).
+4. Por isso, a recomendação é: **arquivos ficam no CRM**, o Hub recebe **só dados estruturados** (depois da revisão do atendente) e devolve **resultados** (cards da Migra, ID e laudo da FC).
+5. **O passo central é o Relatório preliminar, no CRM, com o Gemini do provedor já cadastrado.** A IA lê as **200 mensagens mais recentes** e o texto dos anexos (PR #15) e devolve (1) o relatório de 6 seções do bot e (2) um **registro JSON** com os dados da esteira. O atendente revisa e edita **antes** de ficha, FC, Migra ou contrato usarem qualquer campo.
+6. FC e Migra ficam **no Hub (Playwright)**, com **modo manual assistido** de reserva. O relatório **completo** (com score, restrições e cards) vem **depois**. Dá para entregar em fases pequenas, cada uma com chave liga/desliga.
 
 ---
 
@@ -791,8 +792,9 @@ Regras de preenchimento que o CRM precisa herdar:
 | Confirmar a cobrança da FC a partir do CRM | Hub: falta a ferramenta. O README diz que o MCP **nunca** chama `confirmar-cobranca-fc`. |
 | Rodar Migra e FC separadas (um botão para cada) | Hub: hoje é uma partida única para as duas. |
 | Trazer o laudo PDF da FC e o print da Migra para o CRM | Hub: o arquivo existe em `/jobs/{id}/arquivo/...`, mas não há caminho pelo MCP. |
-| Análise de renda escrita (não só a soma) | Ninguém faz. Proposta: CRM. |
-| Relatório de 6 seções | Ninguém faz. Proposta: CRM. |
+| Relatório preliminar de 6 seções + registro estruturado (o passo central) | Ninguém faz. Proposta: CRM (fase A1). |
+| Análise de renda escrita (não só a soma) | Absorvida pelo Relatório preliminar. |
+| Relatório completo com FC/Migra | Ninguém faz. Proposta: CRM, **depois** dos resultados do Hub. |
 | Guardar os resultados no processo | CRM, Fase 3 / 3b (tabela do processo e bucket `locacao-processos`). |
 
 Nota de histórico: a nota de arquitetura de 18/10 dizia "sem navegador na VPS; FC e Migra continuam com o bot". Isso **foi superado** quando o `brisa-hub-analise` com Playwright subiu. Este adendo registra a mudança.
@@ -801,11 +803,11 @@ Nota de histórico: a nota de arquitetura de 18/10 dizia "sem navegador na VPS; 
 
 ### A.4 Como os arquivos chegam (resposta à Q7)
 
-**Ponto de partida:** a FC e a Migra **não recebem arquivo**. Então a pergunta certa não é "como mandar arquivo para o Hub", e sim "**quem precisa ler o arquivo**". Resposta: só a análise de renda e o arquivo do processo. Os dois ficam no CRM.
+**Ponto de partida:** a FC e a Migra **não recebem arquivo**. Então a pergunta certa não é "como mandar arquivo para o Hub", e sim "**quem precisa ler o arquivo**". Resposta: só o Relatório preliminar (conversa + anexos) e o arquivo do processo. Os dois ficam no CRM.
 
 | Opção | Como funciona | Prós | Contras | LGPD / retenção |
 |---|---|---|---|---|
-| **0. Não mandar (recomendado)** | O CRM lê os anexos (PR #15) e manda ao Hub só os dados (nome, CPF, renda confirmada, imóvel, contatos). | Nenhuma cópia extra de extrato na VPS. Nada novo para proteger. Nenhuma mudança no Hub para isso. | O `renda.py` do Hub (soma por regex) deixa de ser usado, ou vira só uma conferência opcional. | É a menor exposição possível: o arquivo mora só no Storage do CRM. |
+| **0. Não mandar (recomendado)** | O CRM lê a conversa e os anexos (PR #15), monta o Relatório preliminar + o registro, e manda ao Hub só os dados **já revisados** (nome, CPF, renda confirmada, imóvel, contatos). | Nenhuma cópia extra de extrato na VPS. Nada novo para proteger. Nenhuma mudança no Hub para isso. | O `renda.py` do Hub (soma por regex) deixa de ser usado, ou vira só uma conferência opcional. | É a menor exposição possível: o arquivo mora só no Storage do CRM. |
 | 1. URL assinada | O CRM gera URLs do Storage válidas por 15 minutos (o PR #15 já faz isso se o schema anunciar `arquivos`). O Hub baixa os arquivos em segundo plano. | Padrão comum. Não passa bytes pelo MCP. | Precisa de lista de hosts permitidos (anti-SSRF), limite de tamanho e de tipo, e download assíncrono (o MCP tem só 12 s). Gera uma segunda cópia na VPS. | A cópia do Hub some em 24 h (já implementado). A URL expira em 15 min. |
 | 2. Base64 / multipart no MCP | Os bytes vão dentro da chamada. | Simples para foto pequena. | Um extrato de 20 MB vira uns 27 MB de JSON passando pelo Caddy, num Hub com limite de 256 MB. Ruim. | Os bytes passam por mais camadas. |
 | 3. Endpoint HTTP novo no Hub | Rota `POST` multipart fora do MCP, com a chave do CRM. | Aguenta arquivo grande. | Mais uma porta pública para proteger e testar. | Igual à opção 1. |
@@ -837,27 +839,139 @@ O bot Análise De Inquilinos (B) continua como está **até o CRM fechar de 3 a 
 
 ---
 
-### A.6 Os 4 botões da Fase 4, já com o desenho acima
+### A.6 Os botões da Fase 4, já com o desenho acima
+
+O antigo "Analisar renda" **some como botão isolado**. Ele vira o passo **primeiro e central**: **Relatório preliminar**. A renda, o empregador, os documentos e o restante da ficha saem desse passo, num registro que o atendente edita. FC, Migra, ficha cadastral e `/contrato/preparar` **não relêem a conversa** — consomem o registro já revisado.
 
 | Botão | Quem faz | Custo em dinheiro | Trava | Resultado guardado |
 |---|---|---|---|---|
-| **1. Analisar renda** | CRM. O Gemini lê o texto que o PR #15 já extrai e aplica as regras da skill `analise-financeira-inquilino` (tira autotransferência, poupança e Rende Fácil; PIX de terceiros não é renda fixa). | Só IA: centavos por candidato, registrados em `llm_calls`. | O atendente **confirma a renda** antes de seguir. Sem confirmação, os botões 2 e 3 ficam cinza. | Bloco "renda": comprovada, proposta para a FC, alertas e trechos de evidência. |
-| **2. Analisar seguro-fiança** | Hub, com acao `seguro` (só Migra, só **Analisar**). O CRM acompanha pelo status. | A cotação, até onde se sabe, **não cobra** da imobiliária (a Migra ganha na contratação). **Confirmar com a Migra.** | Um clique. Se a Migra cobrar a cotação, vira dois cliques. "Contratar" **nunca** aparece. | Bloco "seguro": seguradoras, código da cotação, status, planos e o print. |
-| **3. Analisar FC** | Hub. **Clique 1:** `fc_salvar` (grátis, gera o ID-FC, PENDENTE). **Clique 2:** caixa "Confirmo a cobrança de R$ X por pretendente" → `confirmar_cobranca_fc`. | **FC Score+**: na tabela pública, **R$ 25,30 avulso pré-pago** (de R$ 32,00), com uma faixa de **R$ 17,60**. O valor real depende do plano da Brisa. Provavelmente é cobrado **por pretendente**. Confirmar na fatura. | Segundo clique com o valor na tela. Só para o papel definido pelo Felipe. Uma confirmação vale **uma** cobrança. O Hub recusa repetir o mesmo ID-FC. | Bloco "fc": ID-FC, score e risco, restrições e o laudo PDF. |
-| **4. Gerar relatório** | CRM. O Gemini usa o `PROMPT-FORMATO.md` (6 seções) e **só** os blocos 1 a 3 guardados, nunca a conversa crua. | Só IA (centavos). | O texto é editável. O Felipe aprova. Nunca diz "alugue / não alugue", só risco baixo, moderado ou alto. | Bloco "relatorio" mais um PDF no processo (categoria `relatorio`). |
+| **1. Relatório preliminar** (central) | CRM. Gemini pelo provedor já cadastrado (ponto `painel_atendente` ou, se o Felipe quiser o custo à parte, `painel_analise`). Lê as **200 mensagens mais recentes** (é o teto que o botão "Iniciar análise" já usa hoje — CONFIRMADO em `painel-analise-preparo.ts`) e o texto dos anexos (PR #15). Aplica as regras da skill `analise-financeira-inquilino` (tira autotransferência, poupança e Rende Fácil; PIX de terceiros não é renda fixa) e o `PROMPT-FORMATO.md` (6 seções). Devolve **dois artefatos**: o relatório preliminar e o registro JSON da § A.6b. | Só IA: centavos a poucos reais num extrato longo escaneado, em `llm_calls`. | O atendente **revisa e edita** o registro (e o texto) **antes** de qualquer passo seguinte. Sem essa revisão, FC, Migra, ficha e contrato ficam cinza. Isto **não** aprova o processo (Q10). | Blocos `relatorio_preliminar` (6 seções) e `ficha` (JSON). A renda proposta para a FC mora **dentro** da ficha, não num botão à parte. |
+| **2. Analisar seguro-fiança** | Hub, com acao `seguro` (só Migra, só **Analisar**). O CRM manda os campos da ficha já revisada (A.6c). Acompanha pelo status. | A cotação, até onde se sabe, **não cobra** da imobiliária (a Migra ganha na contratação). **Confirmar com a Migra.** | Um clique. Se a Migra cobrar a cotação, vira dois cliques. "Contratar" **nunca** aparece. Exige ficha revisada. | Bloco "seguro": seguradoras, código da cotação, status, planos e o print. |
+| **3. Analisar FC** | Hub. O CRM manda os campos da ficha já revisada (A.6c). **Clique 1:** `fc_salvar` (grátis, gera o ID-FC, PENDENTE). **Clique 2:** caixa "Confirmo a cobrança de R$ X por pretendente" → `confirmar_cobranca_fc`. | **FC Score+**: na tabela pública, **R$ 25,30 avulso pré-pago** (de R$ 32,00), com uma faixa de **R$ 17,60**. O valor real depende do plano da Brisa. Provavelmente é cobrado **por pretendente**. Confirmar na fatura. | Segundo clique com o valor na tela. Só para o papel definido pelo Felipe. Uma confirmação vale **uma** cobrança. O Hub recusa repetir o mesmo ID-FC. Exige ficha revisada. | Bloco "fc": ID-FC, score e risco, restrições e o laudo PDF. |
+| **4. Relatório completo** | CRM. O Gemini usa o `PROMPT-FORMATO.md` (as mesmas 6 seções) e **só** os blocos já guardados: `relatorio_preliminar` + `ficha` + `seguro` + `fc`. **Nunca** relê a conversa crua. | Só IA (centavos). | O texto é editável. O Felipe aprova o **processo** à parte (Q10). Nunca diz "alugue / não alugue", só risco baixo, moderado ou alto. | Bloco `relatorio` mais um PDF no processo (categoria `relatorio`). |
+
+A ficha cadastral que já existe no painel (botão 4 da §1) **também** passa a ler `ficha.documentos` depois da revisão: o que falta vira o pedido no Composer, sem a IA reler anexos.
 
 **Mudanças no Hub (todas do papel `crm`, todas atrás de uma chave):**
 1. `status_analise_inquilino(pedido_id)`: só leitura. Devolve estado, cards da Migra, ID-FC, se há laudo e o erro, se houver. (É a "Fase 1.B" que já estava prevista.)
-2. Campo `acao` em `iniciar_analise_inquilino` com os valores `seguro` e `fc_salvar`, para separar os botões. O comportamento antigo (as duas juntas) continua como padrão até o CRM migrar.
+2. Campo `acao` em `iniciar_analise_inquilino` com os valores `seguro` e `fc_salvar`, para separar os botões. O comportamento antigo (as duas juntas) continua como padrão até o CRM migrar. A entrada `candidato` / `imovel` / `renda` sai do registro revisado, não de uma segunda leitura da conversa.
 3. `confirmar_cobranca_fc_analise(pedido_id, confirmado: true, confirmado_por, valor_exibido)`: idempotente, auditado e recusado se o estado não for `aguardando_cobranca_fc`.
 4. `baixar_resultado_analise(pedido_id, tipo: laudo|print_migra)`: devolve o arquivo (laudo e print são pequenos, abaixo de 2 MB) **ou** sobe direto numa URL de upload assinada que o CRM fornece. Escolher uma das duas na implementação.
 5. **Não** adicionar campo de arquivos (veja A.4).
 
 **Mudanças no CRM:**
-- 4 botões no Painel do Agente ou na tela do processo, com acompanhamento por consulta ao status a cada 10–20 s enquanto houver job ativo.
-- Duas rotas de IA novas: renda e relatório. Elas reaproveitam o ponto `visao_de_imagem` / `painel_atendente`.
+- Botão **Relatório preliminar** no Painel do Agente (no lugar do "Iniciar análise" único, ou acima dos outros). FC/Migra/relatório completo só habilitam depois da revisão.
+- Uma rota de IA nova: `relatorio_preliminar` (200 mensagens + anexos do PR #15 → texto de 6 seções + JSON da § A.6b). Reaproveita o ponto `painel_atendente` / `visao_de_imagem`. A rota do relatório **completo** é outra, e só vê blocos guardados.
+- Tela de revisão/edição do registro (CPF **mascarado** na UI; o valor completo só viaja ao Hub ou ao `/contrato/preparar` depois do clique do atendente).
+- Acompanhamento de job FC/Migra a cada 10–20 s enquanto houver job ativo.
 - Modo manual assistido (opção C), com upload do laudo e do print.
-- Chave por org em `organizations.settings.locacao.analise` (`renda`, `seguro`, `fc`, `relatorio`, `manual`).
+- Chave por org em `organizations.settings.locacao.analise` (`preliminar`, `seguro`, `fc`, `relatorio`, `manual`). A chave `renda` do rascunho anterior **não** existe — foi absorvida por `preliminar`.
+
+---
+
+### A.6b Onde o registro mora, e o schema
+
+**Antes da Fase 3 (processo ainda não existe):** só na tela, no mesmo padrão da prévia de hoje (CONFIRMADO em `docs/decisoes/painel-acoes-hub.md` e `painel-analise-preparo.ts`): token cifrado, preso a org + conversa + usuário, TTL de 30 minutos. Fecha o painel, some. Não há tabela. É o mesmo recorte do PR #15.
+
+**Na Fase 3:** o atendente "Salva no processo". Aí o registro vira jsonb no processo, e os participantes saem dele (sem redigitar):
+
+| Onde | Campo proposto | O que guarda |
+|---|---|---|
+| `locacao_processos` | `ficha jsonb` | O registro da § A.6b, **já revisado**. É a fonte que FC, Migra, ficha cadastral e contrato lêem. |
+| `locacao_processos` | `relatorio_preliminar jsonb` | As 6 seções em texto (editável). Não é o relatório completo. |
+| `locacao_processos` | `renda` / `resultado_fc` / `cotacao_seguro` / `relatorio` | Continuam como na §4.3: renda extraída da ficha na revisão; os outros três nascem nos botões 2–4. |
+| `locacao_processo_participantes` | uma linha por pessoa da ficha | `papel` (`locatario` / `fiador` / `solidario`), nome, e-mail, `cpf_mascarado`, `contact_id` se der para ligar. CPF completo **não** mora em claro (pergunta 8.4). |
+| `locacao_processos` | `imovel_*` | Endereço / código FC / identidade já previstos na §4.3, preenchidos a partir de `ficha.imovel`. |
+
+DIRC: o registro é **o conferido neste processo**, não um espelho do SuperLógica. A conversa continua a fonte original; a ficha é o recorte que o atendente topou reutilizar. Sem revisão, nenhum passo seguinte lê o JSON cru da IA.
+
+Schema proposto do JSON (`ficha`). Campos com ★ já existem na prévia de hoje (`previaSchema` em `painel-analise-preparo.ts`) ou no contrato (`dadosContratoSchema` em `painel-contrato.ts`) — CONFIRMADO. Os outros são **proposta** deste adendo, alinhada ao que o Felipe pediu e ao que o bot já extrai. Cada campo escalar leva `{ valor, fonte, trecho }` como a prévia atual, para a tela mostrar de onde veio.
+
+```text
+ficha
+  versao                    "preliminar-v1"
+  revisado                  bool          -- false até o atendente confirmar a revisão
+  revisado_por / revisado_em
+  interlocutor              -- quem fala no WhatsApp (Q3); pode NÃO ser locatário
+    contact_id              uuid | null
+    nome, celular
+  candidatos[]              -- 1..N pretendentes / locatários
+    papel                   locatario | solidario
+    nome ★                  previa.candidato.nome
+    cpf ★                   previa.candidato.cpf; na UI: ***.***.***-00
+    email ★                 previa.candidato.email   -- Migra exige
+    celular                 -- Migra e contrato
+    nascimento, rg          -- contrato (dadosContratoSchema.pessoa.dados)
+    profissao               -- contrato
+    empregador              -- proposta (holerite / CTPS)
+    endereco, numero, complemento, bairro, cep, cidade, uf
+                            -- contrato
+  fiadores[]                -- garantia = fiador; mesmo formato de candidato, sem renda
+  renda                     -- regras da skill analise-financeira-inquilino
+    mensal ★                previa.renda.mensal (depois das exclusões)
+    proposta_fc             número que vai para a FC (pode diferir da soma)
+    fontes[]                -- cada holerite / extrato / CTPS
+      tipo ★                holerite | ctps | extrato | outro
+      titular               quem recebeu
+      empregador
+      periodo ★
+      valor_bruto
+      valor_comprovado ★    depois de tirar autotransferência, poupança, Rende Fácil, PIX de terceiro
+      trecho / fonte ★
+    alertas[]               -- "PIX de terceiro ignorado", "poupança não conta", …
+  imovel
+    codigo_fc ★             regra do bot: 1ª palavra da rua + nº do apto
+    logradouro ★, apartamento ★, complemento
+    aluguel ★
+    tipo                    residencial | comercial   -- contrato
+  garantia
+    tipo                    nenhuma | caucao | seguro_fianca | fiador   -- contrato
+    caucao_valor
+    seguradora_preferida    -- pista para a Migra; a cotação é que decide
+  vigencia                  -- regra do bot: início = hoje+5d; fim = início+30 meses
+    data_inicio, data_fim, prazo_meses
+    dia_vencimento          -- contrato (o Hub tem padrão se vazio)
+  documentos
+    encontrados[]           { categoria, message_id?, file_name, mime, resumo }
+                            -- identidade | renda | residência | estado_civil | outro
+    faltantes[]             -- alimenta o botão de ficha cadastral (documentos_faltantes)
+  pendencias[] ★            previa.pendencias
+```
+
+CPF: completo só no servidor, no momento de chamar Hub ou `/contrato/preparar`, e só depois de `revisado=true`. Na tela, `cpf_mascarado`. Logs e `audit()` sem CPF, sem nome, sem trecho de extrato.
+
+---
+
+### A.6c Mapeamento: ficha → FC, Migra, ficha cadastral, contrato
+
+O Hub e o `/contrato/preparar` **não inventam campo**. O CRM projeta o registro revisado. Célula vazia = o destino não pede (ou o campo fica em branco para o atendente completar naquele passo). "INFERIDO" = lido nas skills do bot / neste adendo, sem o HTML do formulário da FC/Migra aberto.
+
+| Campo da ficha | Ficha cadastral (MCP) | FC Score+ (Hub) | Migra (Hub) | `POST /contrato/preparar` (`dadosContratoSchema`) |
+|---|---|---|---|---|
+| `interlocutor.contact_id` | — | — | — | Não vai. O WhatsApp não é locatário por default (Q3). |
+| `candidatos[].nome` | — | Nome do pretendente (INFERIDO) | Titular (INFERIDO) | `locatarios[].dados.nome` |
+| `candidatos[].cpf` | — | CPF do pretendente (INFERIDO) | CPF (INFERIDO) | `locatarios[].cpf` (11 dígitos) |
+| `candidatos[].email` | — | se o form pedir (NÃO MEDIDO) | **Obrigatório** (CONFIRMADO na prévia atual) | `locatarios[].dados.email` |
+| `candidatos[].celular` | — | se o form pedir (NÃO MEDIDO) | **Obrigatório** (adendo A.2) | `locatarios[].dados.celular` |
+| `candidatos[].nascimento` / `rg` / `profissao` / endereço | — | se o form pedir (NÃO MEDIDO) | NÃO MEDIDO | `locatarios[].dados.*` |
+| `candidatos[].empregador` | — | pista de renda (INFERIDO) | — | não tem campo próprio; vai em `profissao` ou `observacao` se o atendente quiser |
+| `candidatos[]` com `papel=solidario` | — | colocatário (INFERIDO) | **Solidário** (adendo A.2) | segundo `locatarios[]` (o schema de contrato não tem "solidário"; o Hub trata a lista) |
+| `fiadores[]` | — | NÃO MEDIDO | NÃO MEDIDO | `fiadores[]` (mesmo `pessoa`) |
+| `renda.proposta_fc` / `renda.mensal` | — | Renda informada (INFERIDO) | NÃO MEDIDO (a cotação usa o aluguel) | — |
+| `renda.fontes[]` | comprovantes categoria `renda` | — | — | — |
+| `imovel.codigo_fc` | — | **Cód. imóvel** (regra do bot, A.2) | NÃO MEDIDO | — |
+| `imovel.logradouro` + `apartamento` + `complemento` | — | endereço (INFERIDO) | endereço (INFERIDO) | `imovel.endereco` / `numero` / `complemento` |
+| `imovel.aluguel` | — | NÃO MEDIDO | valor da locação (INFERIDO) | `aluguel` |
+| `imovel.tipo` | — | — | PF Residencial vs comercial (INFERIDO) | `tipo` |
+| `garantia.tipo` | — | — | escolhe o produto (INFERIDO) | `garantia` |
+| `garantia.caucao_valor` / `seguradora_preferida` | — | — | filtro de cards (INFERIDO) | `caucao_valor` / `seguradora_fianca` |
+| `vigencia.data_inicio` / `data_fim` / `prazo_meses` | — | vigência (regra do bot: +5d / 30 meses) | vigência (INFERIDO) | `data_inicio` / `data_fim` / `prazo_meses` |
+| `vigencia.dia_vencimento` | — | — | — | `dia_vencimento` |
+| `documentos.encontrados[]` | lista de anexos já classificados | **não envia arquivo** (A.4) | **não envia arquivo** (A.4) | — |
+| `documentos.faltantes[]` | `documentos_faltantes` do MCP de ficha | — | — | pendência na tela; contrato não bloqueia (Q10) |
+| `pendencias[]` | texto do pedido no Composer | bloqueia `fc_salvar` se a ficha não estiver revisada | idem | campos vazios continuam obrigatórios no diálogo, como hoje |
+
+O atendente pode editar qualquer célula na revisão. O que o Hub ou o contrato receberem é **a versão revisada**, nunca o JSON cru da IA.
 
 ---
 
@@ -866,19 +980,21 @@ O bot Análise De Inquilinos (B) continua como está **até o CRM fechar de 3 a 
 | Fase | O que entra | Como desfazer | Esforço estimado |
 |---|---|---|---|
 | **A0. Decisões e teste de bancada** (sem código) | O Felipe responde às perguntas de A.9. Teste guiado do `brisa-hub-analise` com um caso autorizado: **Migra Analisar + FC só SALVAR** (grátis), para validar login, sessão e seletores. Pedir a API à FC e à Migra (rascunhos em A.10). | Nada a desfazer. | 1 sessão |
-| **A1. Status no Hub** | Ferramenta 1 (só leitura). Imagem nova com tag nova. | Voltar a tag anterior. | Pequeno |
-| **A2. Botão "Analisar renda"** | Só CRM: rota de IA mais o bloco na tela. Antes da Fase 3, o resultado vive só na sessão da prévia (como no PR #15). Com a Fase 3, ele é gravado no processo. | Chave `renda` desligada. | Médio |
-| **A3. Botão "Analisar seguro-fiança"** | Hub: `acao=seguro` e a ferramenta 4 (print). CRM: botão, acompanhamento e cards. | Chave `seguro` desligada. O Hub mantém o padrão antigo. | Médio |
-| **A4. Botão "Analisar FC"** | Hub: `acao=fc_salvar`, a ferramenta 3 e o laudo pela ferramenta 4. CRM: dois cliques, caixa com o valor e `audit()`. | Chave `fc` desligada. Sem a ferramenta 3, ninguém cobra. | Médio |
-| **A5. Botão "Gerar relatório"** | CRM: prompt de 6 seções, edição e PDF. Guardar no processo exige a Fase 3 / 3b. | Chave `relatorio` desligada. | Médio |
-| **A6. Manual assistido** | CRM: dados para copiar, links e upload de laudo e print, com leitura pelo Gemini. Aparece sozinho em `erro` ou `login_necessario`. | Chave `manual` desligada. | Pequeno/médio |
+| **A1. Relatório preliminar + dados estruturados** | Só CRM: rota de IA (200 mensagens + anexos do PR #15) → 6 seções + JSON da § A.6b → tela de revisão/edição (CPF mascarado). Antes da Fase 3, vive só na sessão da prévia. Com a Fase 3, grava `ficha` + `relatorio_preliminar` e preenche participantes. | Chave `preliminar` desligada. | Médio |
+| **A2. Status no Hub** | Ferramenta 1 (só leitura). Imagem nova com tag nova. Precisa existir antes de FC/Migra no CRM, para o painel não voar às cegas. | Voltar a tag anterior. | Pequeno |
+| **A3. Botão "Analisar seguro-fiança"** | Hub: `acao=seguro` e a ferramenta 4 (print). CRM: projeta a ficha revisada, acompanha e mostra os cards. | Chave `seguro` desligada. O Hub mantém o padrão antigo. | Médio |
+| **A4. Botão "Analisar FC"** | Hub: `acao=fc_salvar`, a ferramenta 3 e o laudo pela ferramenta 4. CRM: projeta a ficha revisada, dois cliques, caixa com o valor e `audit()`. | Chave `fc` desligada. Sem a ferramenta 3, ninguém cobra. | Médio |
+| **A5. Manual assistido** | CRM: dados para copiar (vêm da ficha), links e upload de laudo e print, com leitura pelo Gemini. Aparece sozinho em `erro` ou `login_necessario`. | Chave `manual` desligada. | Pequeno/médio |
+| **A6. Relatório completo** | CRM: as mesmas 6 seções, agora com score/restrições da FC e cards da Migra. Só lê blocos guardados. Guardar no processo exige a Fase 3 / 3b. | Chave `relatorio` desligada. | Médio |
 | **A7. API oficial** (se vier) | Troca o motor no Hub. O CRM não muda. | Voltar para o Playwright. | Depende da API |
 
-**Ordem sugerida:** A0 → A1 → A2 → A3 → A4 → A6 → A5. O relatório fica no fim porque depende dos três blocos e da Fase 3 para guardar.
+**Ordem sugerida:** A0 → **A1** → A2 → A3 → A4 → A5 → **A6**. O Relatório preliminar vem primeiro (é o que o Felipe descreveu). FC/Migra/status vêm depois, já alimentados pela ficha. O relatório completo fica no fim porque depende dos resultados da FC/Migra e da Fase 3 para guardar.
 
 **Dependências:**
-- O A2 pode andar já, sobre o PR #15.
-- Para gravar resultados, o A3–A5 precisam da Fase 3 (processo) e da 3b (bucket).
+- O **A1 pode andar já**, sobre o PR #15. Não espera Hub.
+- A2 (status) não bloqueia o A1; bloqueia só o acompanhamento de A3/A4.
+- Para **gravar** ficha e relatórios, A1 e A3–A6 precisam da Fase 3 (processo) e da 3b (bucket) — até lá, só tela.
+- A3/A4 recusam rodar sem `ficha.revisado=true`.
 
 ---
 
@@ -887,7 +1003,7 @@ O bot Análise De Inquilinos (B) continua como está **até o CRM fechar de 3 a 
 **Custos por candidato (estimativa):**
 - FC Score+: R$ 17,60 a R$ 25,30 por pretendente, conforme o plano. É o único custo relevante e só sai no segundo clique.
 - Migra: R$ 0 na cotação (confirmar).
-- Gemini: leitura de anexos (o PR #15 já gasta isso), mais renda e relatório. São centavos, até poucos reais num extrato longo escaneado. Fica registrado em `llm_calls`.
+- Gemini: leitura de anexos (o PR #15 já gasta isso), mais o Relatório preliminar (200 mensagens + anexos + 6 seções + JSON) e, no fim, o relatório completo. São centavos, até poucos reais num extrato longo escaneado. Fica registrado em `llm_calls`.
 - VPS: nada novo. O container já está de pé (23 MB parado, até 900 MB rodando).
 
 | Risco | Chance | Efeito | Como reduzir |
@@ -897,7 +1013,7 @@ O bot Análise De Inquilinos (B) continua como está **até o CRM fechar de 3 a 
 | O site muda o layout | Média | Seletor quebra | Prints de auditoria. Teste de bancada mensal com SALVAR (grátis). |
 | Sessão expirada | Alta | Atraso | Login automático já existe. A retomada também. |
 | Cobrança em dobro da FC | Baixa | R$ perdido | Confirmação de uso único. O Hub recusa o mesmo ID-FC. `audit()`. |
-| IA erra a renda (visão não é OCR financeiro) | Média | Renda errada na FC | O atendente confirma a renda. Trechos de evidência na tela. Conferência opcional com a soma do `renda.py`. |
+| IA erra a renda ou um campo da ficha (visão não é OCR financeiro) | Média | Dado errado na FC, na Migra ou no contrato | O atendente **revisa o registro inteiro** antes de qualquer passo. CPF mascarado. Trechos de evidência na tela. Conferência opcional com a soma do `renda.py`. |
 | Vazamento de dado pessoal | Baixa | LGPD | Arquivos não saem do CRM. Hub com 24 h. Logs sem CPF. Bucket privado. Poda de 90 dias. Cascata LGPD (§4.6). |
 | Memória da VPS (Chromium + WAHA + n8n) | Baixa | Lentidão | Um job por vez. Limite de 900 MB. Monitorar no A0. |
 | Automação nunca testada de verdade | Alta | Falha no 1º caso | A0 antes de qualquer botão. Bot como reserva até 3–5 casos bons. |
@@ -907,15 +1023,16 @@ O bot Análise De Inquilinos (B) continua como está **até o CRM fechar de 3 a 
 ### A.9 Perguntas para o Felipe
 
 1. **Q7 (arquivos):** posso fechar como "os arquivos ficam no CRM e o Hub recebe só os dados"? (A FC e a Migra não pedem arquivo.)
-2. **Renda e relatório no CRM com o Gemini**, e não no Hub? Usar o mesmo ponto `visao_de_imagem` ou criar um ponto `painel_analise` separado, para ver o custo à parte?
+2. **Relatório preliminar no CRM com o Gemini do provedor já cadastrado**, e não no Hub? Usar o mesmo ponto `painel_atendente` / `visao_de_imagem` ou criar um ponto `painel_analise` separado, para ver o custo à parte?
 3. **Robô na FC/Migra (Playwright):** você aceita o risco de termos de uso enquanto a API não vem? Ou prefere começar só pelo manual assistido?
 4. **FC:** qual é o plano da Brisa (pré ou pós-pago) e o preço por consulta? Cada colocatário é cobrado à parte? **Quem pode dar o segundo clique** (só você, ou admin)?
 5. **Migra:** a cotação tem algum custo? Quais seguradoras você quer ver?
-6. **Antes da Fase 3:** quer o botão "Analisar renda" já (resultado só na tela, sem gravar) ou prefere esperar a Fase 3 para tudo ser gravado no processo?
+6. **Antes da Fase 3:** o A1 (Relatório preliminar + JSON) já na tela, sem gravar — como a prévia de hoje — ou espera a Fase 3 para tudo nascer já persistido? (O esclarecimento de 28/10 aponta para fazer o A1 já; confirmo.)
 7. **Retenção:** está bom 24 h no Hub e 90 dias no CRM para o laudo FC e o print da Migra de quem não fechou?
 8. **Teste A0:** podemos fazer um teste com **Migra Analisar + FC só SALVAR** (grátis) com um caso que você autorizar?
 9. **API oficial:** quer que eu prepare (sem enviar) os e-mails para a FC e a Migra (A.10)? De qual conta?
 10. **Bot Análise De Inquilinos:** fica em paralelo até 3–5 casos fecharem no CRM e depois vira só reserva? Concorda?
+11. **Janela de 200 mensagens:** o esclarecimento fixa as 200 mais recentes (o teto que o botão de análise já usa). A Q6 da §8 ainda fala em 80 úteis / 400 brutas. Fecho o A1 em 200 e deixo a Q6 só para a Fase 2?
 
 ---
 
@@ -933,8 +1050,9 @@ Assunto: Token de API para cotação de seguro fiança (Multi Cálculo PF Reside
 
 ### A.11 Trilha para o AGENTS.md
 
+- O passo **primeiro e central** é o **Relatório preliminar** (A1): 200 mensagens + anexos → 6 seções + JSON da ficha. FC, Migra, ficha cadastral e `/contrato/preparar` **reutilizam a ficha revisada**, sem redigitar e sem reler a conversa.
 - **Não** criar campo de arquivos no Hub (Q7 resolvida pela opção 0, se o Felipe confirmar).
 - **Nunca** expor "Contratar" da Migra nem chamar `confirmar-cobranca-fc` sem o segundo clique humano registrado.
-- O relatório usa **só** os blocos guardados (renda, seguro, fc), nunca a conversa crua.
-- Cada botão tem uma chave própria em `organizations.settings.locacao.analise`.
-- Logs e auditoria sem CPF, nome, bytes ou texto de extrato.
+- O relatório **completo** usa **só** os blocos guardados (`relatorio_preliminar`, `ficha`, `seguro`, `fc`), nunca a conversa crua.
+- Cada botão tem uma chave própria em `organizations.settings.locacao.analise` (`preliminar`, `seguro`, `fc`, `relatorio`, `manual`).
+- CPF mascarado na UI; logs e auditoria sem CPF, nome, bytes ou texto de extrato.

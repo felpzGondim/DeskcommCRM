@@ -533,7 +533,7 @@ atendente: **nunca envia ao cliente** ("Usar como resposta" só preenche o Compo
 conversa do painel (auditoria sem texto). Decisões em
 [`docs/decisoes/painel-agente.md`](docs/decisoes/painel-agente.md).
 
-Decisões pendentes da análise completa de inquilino (renda, FC Score+, seguro-fiança, relatório): adendo em [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md) (§ A.9). Plano, só leitura.
+Decisões pendentes da análise completa de inquilino — passo central: **Relatório preliminar** (6 seções + JSON da ficha; FC/Migra/contrato reutilizam sem redigitar): adendo em [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md) (§ A.6–A.6c e A.9). Plano, só leitura.
 
 ## Critério de conclusão
 
