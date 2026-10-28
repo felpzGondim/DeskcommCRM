@@ -15,6 +15,23 @@ describe("ficha preliminar — schema", () => {
     expect(fichaVazia().pessoas[0]?.principal).toBe(true);
   });
 
+  it("ficha antiga sem bloco de exclusões fecha com listas vazias", () => {
+    const antiga = fichaVazia();
+    const bruto = {
+      ...antiga,
+      renda: {
+        mensal: antiga.renda.mensal,
+        proposta_fc: antiga.renda.proposta_fc,
+        documentos: [],
+        alertas: [],
+      },
+    };
+    const parsed = fichaPreliminarSchema.parse(bruto);
+    expect(parsed.renda.excluida.autotransferencias).toEqual([]);
+    expect(parsed.renda.pix_terceiros).toEqual([]);
+    expect(parsed.renda.evidencias).toEqual([]);
+  });
+
   it("completa o que o modelo omitiu sem inventar valor", () => {
     const ficha = completarFicha({
       pessoas: [{ papel: "contato", nome: { valor: "Ana", fonte: "M1", trecho: "Ana" } }],

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 
+import type { ChaveDaAnalise } from "@/lib/locacao/vocabulario";
+
 /** L = o loop chama sozinho. C/S = só o clique humano executa. P não existe. */
 export type NivelFerramenta = "L" | "C" | "S";
 
@@ -44,6 +46,8 @@ export interface DefinicaoDaFerramenta {
   acaoDoBotao?: string;
   /** Futuras entram ligadas no registro; a chave da org ainda desliga o loop. */
   padraoLigada: true;
+  /** Fase 4: some do botão e do ToolSet se `locacao.analise.{chave}` estiver off. */
+  exigeChaveAnalise?: ChaveDaAnalise;
   executar: (ctx: ContextoDaFerramenta, args: unknown) => Promise<ResultadoDaFerramenta>;
 }
 

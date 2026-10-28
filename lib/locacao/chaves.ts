@@ -20,6 +20,15 @@ export const locacaoAnaliseSettingsSchema = z.object({
   manual: z.boolean().optional().default(false),
 });
 
+/** PATCH parcial: sem default, para não apagar as outras chaves. */
+export const locacaoAnalisePatchSchema = z.object({
+  renda: z.boolean().optional(),
+  seguro: z.boolean().optional(),
+  fc: z.boolean().optional(),
+  relatorio: z.boolean().optional(),
+  manual: z.boolean().optional(),
+});
+
 export const locacaoSettingsSchema = z.object({
   processos_habilitado: z.boolean().optional().default(false),
   arquivos_habilitado: z.boolean().optional().default(false),

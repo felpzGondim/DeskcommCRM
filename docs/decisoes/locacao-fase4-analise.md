@@ -98,3 +98,6 @@ Produção: gravar `false` em `locacao.analise.*`. O painel volta ao de hoje.
 
 **Núcleo deste fork, desligado.** Se nenhuma organização ligar as chaves, a
 operação comum continua inteira — as tabelas existem vazias, como na Fase 3.
+
+A tela e as ferramentas do botão 1 (Analisar renda) estão em
+[`locacao-fase4-renda.md`](locacao-fase4-renda.md).

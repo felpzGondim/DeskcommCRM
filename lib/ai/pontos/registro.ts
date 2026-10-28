@@ -275,6 +275,18 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
     registraEm: "llm_calls",
   },
   {
+    id: "painel_analise",
+    rotulo: "Análise de renda do inquilino",
+    oQueFaz:
+      "Lê conversa e extratos para o atendente conferir a renda comprovada. Nunca fala com o cliente.",
+    papel: "entender",
+    exige: {},
+    emissor: "lib/locacao/analise/renda.ts",
+    sintomaDeFalha:
+      "O botão Analisar renda mostra erro, e o atendente precisa conferir o extrato à mão.",
+    registraEm: "llm_calls",
+  },
+  {
     id: "proposal_assistant",
     rotulo: "Ajustar proposta por instrução",
     oQueFaz:

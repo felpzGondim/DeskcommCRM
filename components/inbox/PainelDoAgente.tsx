@@ -400,6 +400,11 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                       {t("Use Gerar contrato para conferir a prévia e confirmar. A IA não confirma sozinha.")}
                     </p>
                   )}
+                  {p.ferramenta === "confirmar_renda" && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {t("Use Analisar renda no processo para conferir e confirmar. A IA não confirma sozinha.")}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

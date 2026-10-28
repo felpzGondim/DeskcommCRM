@@ -158,9 +158,33 @@ export async function lerProcesso(
   processoId: string,
 ): Promise<Record<string, unknown> | null> {
   const { data } = await tabelaLocacao(admin, "locacao_processos")
-    .select("id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at")
+    .select("id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at,renda_confirmada_em,renda_confirmada_por,renda_confirmada_ficha_versao")
     .eq("organization_id", orgId).eq("id", processoId).maybeSingle();
   return data ? asRec(data) : null;
+}
+
+export async function lerFichaAtualDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<{ versao: number; origem: string; ficha: unknown; campos_alterados: string[] } | null> {
+  const proc = await lerProcesso(admin, orgId, processoId);
+  const versao = Number(asRec(proc).ficha_versao_atual ?? 0);
+  if (!proc || versao <= 0) return null;
+  const { data } = await tabelaLocacao(admin, "locacao_processo_fichas")
+    .select("versao,origem,ficha,campos_alterados")
+    .eq("organization_id", orgId).eq("processo_id", processoId).eq("versao", versao)
+    .maybeSingle();
+  if (!data) return null;
+  const row = asRec(data);
+  return {
+    versao: Number(row.versao ?? versao),
+    origem: typeof row.origem === "string" ? row.origem : "preliminar_ia",
+    ficha: row.ficha,
+    campos_alterados: Array.isArray(row.campos_alterados)
+      ? row.campos_alterados.filter((v): v is string => typeof v === "string")
+      : [],
+  };
 }
 
 export async function listarProcessosDaConversa(
@@ -175,7 +199,7 @@ export async function listarProcessosDaConversa(
   const ids = (ligacoes ?? []).map((l) => String(asRec(l).processo_id));
   if (ids.length === 0) return [];
   const { data } = await tabelaLocacao(admin, "locacao_processos")
-    .select("id,imovel_id,status,encerrado_em,status_mudou_em")
+    .select("id,imovel_id,status,encerrado_em,status_mudou_em,renda_confirmada_em")
     .eq("organization_id", orgId).in("id", ids);
   const porId = new Map((data ?? []).map((p) => [String(asRec(p).id), asRec(p)]));
   return ids.map((id) => porId.get(id)).filter((p): p is Record<string, unknown> => !!p);

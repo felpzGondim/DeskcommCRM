@@ -139,7 +139,9 @@ describe("Painel do agente (UI)", () => {
         }],
         renda: { mensal: { valor: 4000, fonte: "M2", trecho: "4000", confianca: 0.7, message_id: null },
           proposta_fc: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
-          documentos: [], alertas: [] },
+          documentos: [], alertas: [],
+          excluida: { autotransferencias: [], poupanca: [], rende_facil: [] },
+          pix_terceiros: [], evidencias: [] },
         imovel: {
           codigo_fc: { valor: "Rua10", fonte: "M1", trecho: "Rua", confianca: 0.5, message_id: null },
           tipo: "residencial",

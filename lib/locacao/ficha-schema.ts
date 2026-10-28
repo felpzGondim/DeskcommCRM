@@ -22,6 +22,19 @@ export type OrigemDaFicha = (typeof ORIGENS_DA_FICHA)[number];
 const texto = z.string().trim().max(180);
 const trecho = z.string().max(240);
 
+export const lancamentoDaRendaSchema = z.object({
+  descricao: z.string().trim().max(180),
+  valor: z.number().finite(),
+  data: z.string().max(40).nullable(),
+  fonte: z.string().max(16).nullable(),
+  trecho: trecho.nullable(),
+});
+
+export const evidenciaDaRendaSchema = z.object({
+  trecho: trecho,
+  fonte: z.string().max(16),
+});
+
 export const campoSchema = z.object({
   valor: texto.nullable(),
   fonte: z.string().max(16).nullable(),
@@ -91,6 +104,14 @@ export const fichaPreliminarSchema = z.object({
       message_id: z.string().uuid().nullable(),
     })).max(20),
     alertas: z.array(z.string().max(180)).max(20),
+    /** PR 4.1: exclusões da skill. Ausente nas fichas antigas → lista vazia. */
+    excluida: z.object({
+      autotransferencias: z.array(lancamentoDaRendaSchema).max(50),
+      poupanca: z.array(lancamentoDaRendaSchema).max(50),
+      rende_facil: z.array(lancamentoDaRendaSchema).max(50),
+    }).default({ autotransferencias: [], poupanca: [], rende_facil: [] }),
+    pix_terceiros: z.array(lancamentoDaRendaSchema).max(50).default([]),
+    evidencias: z.array(evidenciaDaRendaSchema).max(20).default([]),
   }),
   imovel: z.object({
     codigo_fc: campoSchema,
@@ -178,7 +199,11 @@ export function fichaVazia(): FichaPreliminar {
   return {
     versao: FICHA_VERSAO,
     pessoas: [pessoaVazia("inquilino")],
-    renda: { mensal: { ...NUMERO_VAZIO }, proposta_fc: { ...NUMERO_VAZIO }, documentos: [], alertas: [] },
+    renda: {
+      mensal: { ...NUMERO_VAZIO }, proposta_fc: { ...NUMERO_VAZIO }, documentos: [], alertas: [],
+      excluida: { autotransferencias: [], poupanca: [], rende_facil: [] },
+      pix_terceiros: [], evidencias: [],
+    },
     imovel: {
       codigo_fc: { ...CAMPO_VAZIO }, tipo: null,
       logradouro: { ...CAMPO_VAZIO }, numero: { ...CAMPO_VAZIO }, complemento: { ...CAMPO_VAZIO },
@@ -213,6 +238,33 @@ function completarCampo(v: unknown): CampoFicha {
     message_id: typeof o.message_id === "string" || o.message_id === null ? o.message_id : null,
   });
   return parsed.success ? parsed.data : { ...CAMPO_VAZIO };
+}
+
+function completarLancamentos(v: unknown): z.infer<typeof lancamentoDaRendaSchema>[] {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 50).flatMap((item) => {
+    const o = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const parsed = lancamentoDaRendaSchema.safeParse({
+      descricao: typeof o.descricao === "string" ? o.descricao : "",
+      valor: typeof o.valor === "number" ? o.valor : 0,
+      data: typeof o.data === "string" ? o.data : null,
+      fonte: typeof o.fonte === "string" ? o.fonte : null,
+      trecho: typeof o.trecho === "string" ? o.trecho : null,
+    });
+    return parsed.success && parsed.data.descricao ? [parsed.data] : [];
+  });
+}
+
+function completarEvidencias(v: unknown): z.infer<typeof evidenciaDaRendaSchema>[] {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 20).flatMap((item) => {
+    const o = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const parsed = evidenciaDaRendaSchema.safeParse({
+      trecho: typeof o.trecho === "string" ? o.trecho : "",
+      fonte: typeof o.fonte === "string" ? o.fonte : "",
+    });
+    return parsed.success && parsed.data.trecho && parsed.data.fonte ? [parsed.data] : [];
+  });
 }
 
 function completarNumero(v: unknown): NumeroFicha {
@@ -311,6 +363,22 @@ export function completarFicha(bruto: unknown): FichaPreliminar {
       alertas: Array.isArray(renda.alertas)
         ? renda.alertas.filter((v): v is string => typeof v === "string").map((v) => v.slice(0, 180)).slice(0, 20)
         : [],
+      excluida: {
+        autotransferencias: completarLancamentos(
+          renda.excluida && typeof renda.excluida === "object"
+            ? (renda.excluida as Record<string, unknown>).autotransferencias : [],
+        ),
+        poupanca: completarLancamentos(
+          renda.excluida && typeof renda.excluida === "object"
+            ? (renda.excluida as Record<string, unknown>).poupanca : [],
+        ),
+        rende_facil: completarLancamentos(
+          renda.excluida && typeof renda.excluida === "object"
+            ? (renda.excluida as Record<string, unknown>).rende_facil : [],
+        ),
+      },
+      pix_terceiros: completarLancamentos(renda.pix_terceiros),
+      evidencias: completarEvidencias(renda.evidencias),
     },
     imovel: {
       codigo_fc: completarCampo(imovel.codigo_fc),

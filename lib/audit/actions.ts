@@ -938,6 +938,10 @@ export const AUDIT_ACTIONS = [
   "ai.painel_atendente.ficha_preliminar",
   "ai.painel_atendente.ficha_salva",
   /**
+   * PR 4.1: análise de renda no painel. ⚠️ SEM VALORES — só versão e caminhos.
+   */
+  "ai.painel_atendente.renda",
+  /**
    * O aviso de caso no WhatsApp da equipe (migration 0292).
    *
    * Três códigos e não um: "saiu", "não saiu em definitivo" e "alguém mudou a

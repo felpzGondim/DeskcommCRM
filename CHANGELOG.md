@@ -14,6 +14,8 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Base da análise de inquilino no processo (desligada)** O processo de locação passa a ter um registro de cotação de seguro-fiança (pedido, job, estado, resultado), tipos de evento renda e relatório, e chaves `locacao.analise.{renda,seguro,fc,relatorio,manual}` — todas desligadas. Sem preço da FC no banco. A confirmação da cobrança continua avisando que vai gastar créditos, sem valor na tela. Rollback: desligar as chaves; as tabelas ficam.
 
+- **Analisar renda no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.renda` (desligada). Ligada, o processo da conversa ganha Analisar renda e Confirmar renda: lê a conversa e reabre os PDFs originais (o texto derivado corta em 8 mil caracteres), exclui autotransferência, poupança e Rende Fácil, e deixa PIX de terceiros à parte. A IA só propõe confirmar; qualquer atendente clica. Sem renda confirmada, seguro e FC (ainda por vir) ficam recusados. Nada vai ao cliente. Rollback: desligar a chave.
+
 ## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado

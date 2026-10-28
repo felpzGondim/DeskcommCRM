@@ -11,6 +11,7 @@ describe("acesso mínimo da análise (4.0, sem tela)", () => {
     expect(src).toContain("export async function abrirAnaliseSeguro");
     expect(src).toContain("export async function seguroEmAndamento");
     expect(src).toContain("export async function confirmarRendaDoProcesso");
+    expect(src).toContain("export async function lerFichaAtualDoProcesso");
     expect(src).toContain("export async function gravarRascunhoRelatorio");
     expect(src.toLowerCase()).not.toContain("contratar");
   });

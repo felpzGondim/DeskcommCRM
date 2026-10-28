@@ -19,6 +19,7 @@ ser fonte sem ninguém decidir isso.
 |---|---|
 | `painel-acoes-hub.architecture.json` | botões do painel → rota tenant-aware → MCP externo → Brisa Hub, com recibo de análise e sugestão no Composer |
 | `painel-pergunta-agente.architecture.json` | campo /pergunta do painel → registro único `executarFerramenta` compartilhado com os botões; C/S só com clique humano; polling de `etapa_atual`; chave desligada |
+| `painel-analise-renda.architecture.json` | Analisar renda (PR 4.1): chave `locacao.analise.renda` off; botão e /pergunta compartilham `executarFerramenta`; PDFs originais; confirmar só com clique |
 | `nomes-internos-das-conexoes.architecture.json` | renomeação interna dos canais — cartões de WhatsApp, parceiro e redes sociais → rota tenant-aware → `channel_sessions.display_name` → cartões e seletores, com auditoria e sem alterar o nome público no provedor |
 | `conversoes-de-anuncios.architecture.json` | venda, entrega, protocolo assíncrono, pendências e reprocessamento |
 | `prospeccao-nativa.architecture.json` | busca comercial, fila gradual, configuração conversacional persistente, sandbox e assistente de voz opcional |

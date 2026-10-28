@@ -55,4 +55,15 @@ describe("chaves de locação", () => {
     expect(lido.analise.relatorio).toBe(false);
     expect(lido.analise.manual).toBe(false);
   });
+
+  it("PATCH de uma chave da análise não apaga as outras", () => {
+    const atual = lerLocacaoSettings({
+      locacao: { processos_habilitado: true, analise: { renda: true, seguro: true } },
+    });
+    const patch = { renda: false };
+    const merged = { ...atual.analise, ...patch };
+    expect(merged.renda).toBe(false);
+    expect(merged.seguro).toBe(true);
+    expect(merged.fc).toBe(false);
+  });
 });

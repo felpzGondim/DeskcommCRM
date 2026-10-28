@@ -10,6 +10,7 @@ type Estado = {
     processos_habilitado: boolean;
     arquivos_habilitado: boolean;
     drive_habilitado: boolean;
+    analise: { renda: boolean; seguro: boolean; fc: boolean; relatorio: boolean; manual: boolean };
   };
   superlogica_vinculo: { habilitado: boolean; ligar_unico_exato: boolean };
 };
@@ -93,6 +94,17 @@ export function PainelConfigLocacao() {
             disabled={salvando || !estado.locacao.arquivos_habilitado}
             onChange={(e) => void gravar({ locacao: { ...estado.locacao, drive_habilitado: e.target.checked } })} />
           {t("Ligar cópia para o Google Drive (desligado por padrão)")}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={estado.locacao.analise?.renda === true}
+            disabled={salvando || !estado.locacao.processos_habilitado}
+            onChange={(e) => void gravar({
+              locacao: {
+                ...estado.locacao,
+                analise: { ...estado.locacao.analise, renda: e.target.checked },
+              },
+            })} />
+          {t("Ligar análise de renda (desligada por padrão)")}
         </label>
       </fieldset>
       <fieldset className="space-y-2">

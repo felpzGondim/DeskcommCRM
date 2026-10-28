@@ -36,13 +36,24 @@ describe("registro único do painel", () => {
   });
 
   it("C e S existem no registro mas o loop do modelo não as coloca no ToolSet", () => {
-    expect(NOMES_C_OU_S.sort()).toEqual(["confirmar_contrato", "iniciar_analise"]);
+    expect(NOMES_C_OU_S.sort()).toEqual(["confirmar_contrato", "confirmar_renda", "iniciar_analise"]);
     const noLoop = nomesNoToolsetDoLoop();
     expect(noLoop).toContain("propor_acao");
     expect(noLoop).toContain("buscar_boletos");
     expect(noLoop).not.toContain("iniciar_analise");
     expect(noLoop).not.toContain("confirmar_contrato");
+    expect(noLoop).not.toContain("confirmar_renda");
+    expect(noLoop).not.toContain("analisar_renda");
     for (const nome of NOMES_C_OU_S) expect(noLoop).not.toContain(nome);
+  });
+
+  it("chave locacao.analise.renda desligada: analisar_renda some; ligada: entra no ToolSet mas confirmar_renda não", () => {
+    expect(nomesNoToolsetDoLoop({})).not.toContain("analisar_renda");
+    const ligada = nomesNoToolsetDoLoop({
+      locacao: { processos_habilitado: true, analise: { renda: true } },
+    });
+    expect(ligada).toContain("analisar_renda");
+    expect(ligada).not.toContain("confirmar_renda");
   });
 
   it("o loop recusa executar C/S mesmo se alguém chamar a porta com origem agente", async () => {
@@ -57,6 +68,19 @@ describe("registro único do painel", () => {
     expect(s.texto).toMatch(/exige clique/);
   });
 
+  it("confirmar_renda só com clique; chave desligada recusa analisar_renda sem chamar modelo", async () => {
+    const off = await executarFerramenta("analisar_renda", ctxAgente, {});
+    expect(off.ok).toBe(false);
+    expect(off.texto).toMatch(/não está ligada/);
+    const ctxChave: typeof ctxAgente = {
+      ...ctxAgente,
+      settings: { locacao: { processos_habilitado: true, analise: { renda: true } } },
+    };
+    const clique = await executarFerramenta("confirmar_renda", ctxChave, {});
+    expect(clique.ok).toBe(false);
+    expect(clique.texto).toMatch(/exige clique/);
+  });
+
   it("botão e agente compartilham a mesma entrada do registro", () => {
     expect(ferramentaDoPainel("buscar_boletos")?.acaoDoBotao).toBe("boletos");
     expect(ferramentaDoPainel("consultar_contrato")?.acaoDoBotao).toBe("contrato");
@@ -65,6 +89,17 @@ describe("registro único do painel", () => {
     expect(ferramentaDoPainel("sugerir_resposta")?.acaoDoBotao).toBe("sugerir");
     expect(ferramentaDoPainel("iniciar_analise")?.acaoDoBotao).toBe("analise_confirmar");
     expect(ferramentaDoPainel("confirmar_contrato")?.acaoDoBotao).toBe("contrato_confirmar");
+    expect(ferramentaDoPainel("analisar_renda")?.acaoDoBotao).toBe("analisar_renda");
+    expect(ferramentaDoPainel("confirmar_renda")?.acaoDoBotao).toBe("confirmar_renda");
+    expect(ferramentaDoPainel("analisar_renda")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("confirmar_renda")?.nivel).toBe("S");
+    const rendaRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/renda/route.ts",
+      "utf8",
+    );
+    expect(rendaRota).toContain('executarFerramenta("analisar_renda"');
+    expect(rendaRota).toContain('executarFerramenta("confirmar_renda"');
+    expect(rendaRota).toContain('origem: "botao"');
     const acoes = appApiAcoes();
     expect(acoes).toContain("executarFerramenta");
     expect(acoes).toMatch(/boletos:\s*"buscar_boletos"/);
