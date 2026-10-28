@@ -80,6 +80,14 @@ const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
     "captured_name, captured_email e captured_phone — o payload cru de captação. " +
     "A própria migration 0174 escreveu que 'o cascade de anonimização precisa alcançar esta tabela' " +
     "e o passo nunca foi acrescentado. Sai quando for.",
+  locacao_processo_participantes:
+    "0763: nome_exibicao, cpf_encrypted e cpf_mascarado do participante. " +
+    "⚠️ JÁ ESTÁ PROTEGIDA: o gatilho trg_locacao_limpar_contato_anonimizado " +
+    "(fn_locacao_limpar_contato_anonimizado, INVOKER na virada de is_anonymized, 0767) " +
+    "zera nome e CPF. A entrada existe só porque ESTE instrumento lê " +
+    "fn_lgpd_cascade_redact_contact + fn_reply_redact, não este gatilho — a mesma " +
+    "razão de crm_tasks e lead_notes. Sai no dia em que tabelasNaCascata() derivar " +
+    "também os gatilhos de contacts, ou no dia em que a função única ganhar o passo.",
 };
 
 /** Tabelas no escopo: FK para contacts E coluna de conteúdo pessoal. */

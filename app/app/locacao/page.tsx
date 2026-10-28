@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { processosLigados } from "@/lib/locacao/chaves";
 import { tabelaLocacao } from "@/lib/locacao/admin";
+import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -45,7 +46,7 @@ export default async function Page() {
           {processos.map((p) => (
             <li key={p.id}>
               <Link className="text-sm text-primary underline" href={`/app/locacao/${p.id}`}>
-                {p.status} · {p.id.slice(0, 8)}
+                {rotuloDoStatusDoProcesso(p.status, t)} · {p.id.slice(0, 8)}
               </Link>
             </li>
           ))}

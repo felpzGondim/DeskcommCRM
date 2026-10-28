@@ -200,7 +200,7 @@ export default async function PrivacyPage() {
           ao Google sem acrescentar a frase correspondente é descumprir a política
           de dados de usuário do Google. */}
       <section className="space-y-2" id="dados-do-google">
-        <h2 className="text-base font-semibold">{t("9. Dados do Google (Agenda, Meet e Google Ads)")}</h2>
+        <h2 className="text-base font-semibold">{t("9. Dados do Google (Agenda, Meet, Ads e Drive)")}</h2>
         <p>
           {t(
             "Quando uma pessoa autorizada da organização conecta uma conta Google a este sistema, os dados recebidos do Google são usados somente para a função que ela pediu:",
@@ -223,6 +223,12 @@ export default async function PrivacyPage() {
             <strong>{t("Google Ads:")}</strong>{" "}
             {t(
               "enviar ao Google Ads as vendas que um anúncio trouxe, para que ele aprenda com elas, criar e listar ações de conversão e ler as métricas das campanhas da própria conta de anúncios.",
+            )}
+          </li>
+          <li>
+            <strong>{t("Google Drive:")}</strong>{" "}
+            {t(
+              "copiar os arquivos do processo de locação para o Drive compartilhado que o operador configurou. A cópia usa uma conta de serviço da instalação, não a conta Google de uma pessoa. O sistema nunca apaga arquivo nem manda para a lixeira. A cópia fica desligada até o operador ligar a chave.",
             )}
           </li>
         </ul>

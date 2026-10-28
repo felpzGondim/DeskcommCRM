@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 
@@ -91,7 +90,7 @@ export function PainelConfigLocacao() {
       <p className="text-xs text-text-muted">
         {t("Rollback: desligar as chaves. As tabelas ficam.")}
       </p>
-      <Button size="sm" variant="outline" disabled>{salvando ? t("Salvando…") : t("Alterações gravam na hora")}</Button>
+      <p className="text-xs text-text-muted">{t("Alterações gravam na hora")}</p>
     </div>
   );
 }

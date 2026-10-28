@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ehStatusFinal, transicaoPermitida } from "@/lib/locacao/status";
+import { ehStatusFinal, rotuloDoStatusDoProcesso, transicaoPermitida } from "@/lib/locacao/status";
 
 describe("transições do processo", () => {
   it("aprovado só o aprovador move, de analise ou documentos", () => {
@@ -25,6 +25,12 @@ describe("transições do processo", () => {
     expect(transicaoPermitida("reprovado", "documentos", "aprovador")).not.toBeNull();
     expect(transicaoPermitida("cancelado", "documentos", "aprovador")).not.toBeNull();
     expect(transicaoPermitida("reprovado", "documentos", "atendente")).toBeNull();
+  });
+
+  it("rótulo da etapa não é o código do CHECK", () => {
+    expect(rotuloDoStatusDoProcesso("contrato_criado")).toBe("Contrato criado");
+    expect(rotuloDoStatusDoProcesso("analise", (s) => s.toUpperCase())).toBe("ANÁLISE");
+    expect(rotuloDoStatusDoProcesso("desconhecido")).toBe("desconhecido");
   });
 
   it("cancelar de etapa não final vale; de assinado não", () => {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 
 type ProcessoResumo = {
   id: string;
@@ -73,7 +74,7 @@ export function ProcessoDeLocacaoPainel({
           {processos.map((p) => (
             <li key={p.id}>
               <a className="text-xs text-primary underline" href={`/app/locacao/${p.id}`}>
-                {p.imovel || t("Imóvel")} · {p.status}
+                {p.imovel || t("Imóvel")} · {rotuloDoStatusDoProcesso(p.status, t)}
               </a>
             </li>
           ))}

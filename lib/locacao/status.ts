@@ -5,6 +5,7 @@
 import {
   STATUS_DO_PROCESSO,
   STATUS_FINAIS_DO_PROCESSO,
+  ehStatusDoProcesso,
   type MotivoDeCancelamento,
   type StatusDoProcesso,
 } from "@/lib/locacao/vocabulario";
@@ -57,6 +58,38 @@ const FINAIS = new Set<string>(STATUS_FINAIS_DO_PROCESSO);
 
 export function ehStatusFinal(status: StatusDoProcesso): boolean {
   return FINAIS.has(status);
+}
+
+/** Rótulo da etapa para a tela. Sem string crua do CHECK. */
+export function rotuloDoStatusDoProcesso(
+  status: string,
+  t: (texto: string) => string = (texto) => texto,
+): string {
+  if (!ehStatusDoProcesso(status)) return status;
+  switch (status) {
+    case "lead":
+      return t("Lead");
+    case "documentos":
+      return t("Documentos");
+    case "analise":
+      return t("Análise");
+    case "aprovado":
+      return t("Aprovado");
+    case "reprovado":
+      return t("Reprovado");
+    case "contrato_preparado":
+      return t("Contrato preparado");
+    case "contrato_criado":
+      return t("Contrato criado");
+    case "contrato_assinado":
+      return t("Contrato assinado");
+    case "cancelado":
+      return t("Cancelado");
+    default: {
+      const _nunca: never = status;
+      return _nunca;
+    }
+  }
 }
 
 export function transicaoPermitida(

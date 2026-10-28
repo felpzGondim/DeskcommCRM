@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { escreveComoPlatformAdmin } from "@/lib/auth/types";
 import { ehAprovador, processosLigados } from "@/lib/locacao/chaves";
+import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 import { listarParticipantes, lerProcesso } from "@/lib/locacao/repositorio";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -42,7 +43,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       <Link className="text-sm text-primary underline" href="/app/locacao">{t("Voltar aos processos")}</Link>
       <h1 className="text-xl font-semibold">{t("Processo de locação")}</h1>
       <p className="text-sm">{rotulo}</p>
-      <p className="text-sm">{t("Etapa")}: {String(processo.status)}</p>
+      <p className="text-sm">{t("Etapa")}: {rotuloDoStatusDoProcesso(String(processo.status), t)}</p>
       <h2 className="text-sm font-medium">{t("Pessoas")}</h2>
       <ul className="space-y-1 text-sm">
         {participantes.map((p) => (
