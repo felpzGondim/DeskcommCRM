@@ -141,6 +141,17 @@ Três razões medidas, todas com consequência no parque instalado:
 Daí a regra que a doutrina de packaging já enuncia e esta reforça: **versão publicada é
 imutável**. Corrige-se com `X.Y.Z+1`, nunca republicando o mesmo número.
 
+### Neste fork (`felpzGondim/DeskcommCRM`)
+
+O `release.yml` oficial está desligado (`github.repository != 'felpzGondim/DeskcommCRM'`).
+A revisão `vX.Y.Z-felpz.N` data o `CHANGELOG.md` **no PR da feature** e a tag anotada
+nasce no **merge commit dessa feature**, sem PR extra só para datar. Lei operacional:
+[`docs/deploy-fork.md`](../deploy-fork.md) e
+[`docs/decisoes/release-do-fork.md`](../decisoes/release-do-fork.md).
+A guarda `a-tag-veio-da-main` continua: a tag só publica se o commit estiver contido
+na `main`. O manifesto `sha-<commit>` que o push da `main` publica é o que a tag
+retaggeia quando as duas arquiteturas já existem no GHCR.
+
 ---
 
 ## O fragmento

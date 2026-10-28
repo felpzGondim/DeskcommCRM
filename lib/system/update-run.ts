@@ -313,7 +313,11 @@ export function ehVersaoPublicada(versao: string | null | undefined): boolean {
  * ## A versão vem de DENTRO da imagem (`APP_VERSION`), nunca de `APP_IMAGE`
  *
  * `APP_VERSION` é gravada no build (`Dockerfile:97-102`) e viaja com a imagem;
- * é a mesma que o `/api/v1/health` informa. `APP_IMAGE` não serve, e o motivo é
+ * é a mesma que o `/api/v1/health` informa. Por isso o `publish-image.yml` da
+ * tag reconstrói `deskcommcrm` mesmo quando retaggeia worker/scheduler/voz:
+ * a imagem que a main publicou assa o SHA curto, e esse valor nunca é
+ * `to_version` — o `--force` da mesma release não desmentiria o rollback.
+ * `APP_IMAGE` não serve, e o motivo é
  * a ORDEM do rollback: o `update.sh` grava `APP_IMAGE=…:<alvo>` no `.env`
  * ANTES de puxar e subir, e o `agent.sh` volta a imagem passando `APP_IMAGE`
  * só pelo SHELL (`agent.sh:313-316`), corrigindo o `.env` DEPOIS (`:323`).
