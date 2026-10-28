@@ -379,7 +379,7 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
 
           {carregando === "pergunta" && etapa && (
             <p role="status" aria-live="polite" className="text-[11px] text-muted-foreground">
-              {t(etapa)}
+              {etapa}
             </p>
           )}
 
@@ -408,7 +408,7 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
           {podeContinuar && (
             <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
               disabled={desabilitado || carregando !== null}
-              onClick={() => void pedir("pergunta", ultimaPergunta || t("continue"))}>
+              onClick={() => void pedir("pergunta", ultimaPergunta || "continue")}>
               {t("Continuar")}
             </Button>
           )}

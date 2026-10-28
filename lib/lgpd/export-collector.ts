@@ -818,6 +818,17 @@ export interface ExportPayload {
     participantes: number;
     documentos: number;
   };
+  /**
+   * Perguntas do Painel do agente sobre o titular (0769). Opcional: ausente
+   * deixa os fixtures brasileiros byte a byte. Texto já mascarado; sem user_id.
+   */
+  consultas_do_painel?: Array<{
+    pergunta: string;
+    resposta: string | null;
+    modo: string;
+    status: string;
+    created_at: string;
+  }>;
   lead_attachments?: Array<{
     id: string;
     lead_id: string;
@@ -1430,6 +1441,39 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       }
     } catch {
       logger.warn("[lgpd-export-worker] locacao load skipped", { request_id: requestId });
+    }
+  }
+
+  // Perguntas do Painel do agente sobre o titular (0769). O gatilho
+  // `fn_painel_limpar_contato_anonimizado` redige pergunta/resposta; o que se
+  // apaga a pedido dele é o que se entrega a pedido dele.
+  let consultas_do_painel: ExportPayload["consultas_do_painel"] = undefined;
+  if (contactId) {
+    try {
+      const { data, error } = await admin
+        .from("agent_panel_query_log")
+        .select("pergunta,resposta,modo,status,created_at")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) {
+        logger.warn("[lgpd-export-worker] agent_panel_query_log load failed", {
+          request_id: requestId,
+          error: error.message,
+        });
+      } else if (data && data.length > 0) {
+        conferirTeto("consultas_do_painel", data, 500);
+        consultas_do_painel = data.map((r) => ({
+          pergunta: String((r as { pergunta: string }).pergunta ?? ""),
+          resposta: (r as { resposta: string | null }).resposta,
+          modo: String((r as { modo: string }).modo ?? ""),
+          status: String((r as { status: string }).status ?? ""),
+          created_at: String((r as { created_at: string }).created_at ?? ""),
+        }));
+      }
+    } catch {
+      logger.warn("[lgpd-export-worker] agent_panel_query_log load skipped", { request_id: requestId });
     }
   }
 
@@ -2408,6 +2452,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     lead_state,
     b2b,
     ...(locacao ? { locacao } : {}),
+    ...(consultas_do_painel ? { consultas_do_painel } : {}),
   };
 }
 
