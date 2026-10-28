@@ -1,6 +1,7 @@
 # Fase 4 — análise de inquilino (PR 4.0, banco)
 
-**Autorização:** Felipe, 28/10/2026 13:05 (horário de Brasília), respostas no plano.
+**Autorização:** Felipe, 28/10/2026 13:05 (horário de Brasília), respostas no plano;
+9a confirmada depois (o botão antigo some quando os novos da Fase 4 ligam).
 **Forma:** um PR de banco (0770). Destino: só este fork. Sem merge, tag ou deploy daqui.
 **Rollback:** desligar `locacao.analise.*`; as tabelas ficam (mesmo critério da Fase 3).
 
@@ -21,9 +22,25 @@ passo pago no FC. Sem dado pessoal neste arquivo. Sem preço da FC no banco
 | Colunas de renda confirmada e rascunho/aprovação do relatório no processo | 4.1 e 4.5 |
 | Chaves `locacao.analise.{renda,seguro,fc,relatorio,manual}` | Todas **false**. A migration não liga nada. Cada uma exige `processos_habilitado`. |
 | Preço da FC | **Não entra.** Sem `fc_preco`, sem configuração de valor. |
+| Botão antigo «Iniciar análise de inquilino» | **9a (só documentação neste PR).** Some quando as chaves `locacao.analise.seguro` e `locacao.analise.fc` estiverem ligadas; desligadas, o botão continua como hoje. Quem esconde é o PR de tela (4.2/4.3), não a 0770. |
 
 Índice único parcial: uma cotação `solicitada`/`cotando` por processo. A FC
 continua com o índice por `cpf_hash` em andamento (anti-cobrança dupla).
+
+---
+
+## Botão antigo (decisão 9a — os PRs de tela implementam)
+
+O painel de hoje tem um botão só: **Iniciar análise de inquilino** (Migra + FC
+juntas, `iniciar_analise` / `iniciar_analise_inquilino`). Com a Fase 4, cada
+passo vira botão próprio. A 9a fecha o legado:
+
+- `locacao.analise.seguro` **e** `locacao.analise.fc` ligadas → o botão antigo
+  **não aparece**. Os novos (renda, seguro, FC, relatório, manual) é que
+  operam, cada um atrás da sua chave.
+- Qualquer uma das duas desligada → o botão antigo **continua como hoje**.
+- Este PR **não** mexe em tela nem em `PainelDoAgente`. Sem botão novo, sem
+  esconder o antigo. A 0770 só deixa as chaves (todas `false`).
 
 ---
 
