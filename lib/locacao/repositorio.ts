@@ -9,7 +9,9 @@ import { chaveEndereco, codigoFc, type PartesDoEndereco } from "@/lib/locacao/en
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { ehStatusFinal, transicaoPermitida, type StatusDoProcesso } from "@/lib/locacao/status";
 import type {
+  EstadoDaAnaliseSeguro,
   MotivoDeCancelamento,
+  OrigemDaAnalise,
   OrigemDaConversaDoProcesso,
   OrigemDaFichaDoProcesso,
   OrigemDoVinculoSuperlogica,
@@ -384,6 +386,134 @@ export async function abrirAnaliseFc(
     detalhe: { pedido_id: pedidoId, reaproveitada: !!input.reaproveitouDe },
   });
   return pedidoId;
+}
+
+export async function seguroEmAndamento(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<boolean> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
+    .select("id").eq("organization_id", orgId).eq("processo_id", processoId)
+    .in("estado", ["solicitada", "cotando"])
+    .maybeSingle();
+  return !!data;
+}
+
+export async function lerAnaliseSeguro(
+  admin: SupabaseClient,
+  orgId: string,
+  pedidoId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
+    .select("id,processo_id,participante_id,pedido_id,hub_job_id,estado,origem,documento_id,resultado,erro_codigo,hub_estado,concluida_em,ficha_versao")
+    .eq("organization_id", orgId).eq("pedido_id", pedidoId).maybeSingle();
+  return data ? asRec(data) : null;
+}
+
+export async function abrirAnaliseSeguro(
+  admin: SupabaseClient,
+  input: {
+    orgId: string; processoId: string; userId: string;
+    participanteId?: string | null; fichaVersao?: number | null;
+    origem?: OrigemDaAnalise;
+  },
+): Promise<string> {
+  const pedidoId = randomUUID();
+  const { error } = await tabelaLocacao(admin, "locacao_analises_seguro").insert({
+    organization_id: input.orgId,
+    processo_id: input.processoId,
+    participante_id: input.participanteId ?? null,
+    pedido_id: pedidoId,
+    ficha_versao: input.fichaVersao ?? null,
+    estado: "solicitada",
+    origem: input.origem ?? "hub",
+    autorizado_por: input.userId,
+    autorizado_em: new Date().toISOString(),
+  });
+  if (error) throw new LocacaoErro("analise_seguro_gravacao", "analise_seguro");
+  await gravarEvento(admin, {
+    orgId: input.orgId, processoId: input.processoId, tipo: "migra",
+    atorTipo: "usuario", atorId: input.userId,
+    detalhe: { pedido_id: pedidoId, origem: input.origem ?? "hub" },
+  });
+  return pedidoId;
+}
+
+export async function marcarEstadoAnaliseSeguro(
+  admin: SupabaseClient,
+  input: {
+    orgId: string; pedidoId: string;
+    estado: EstadoDaAnaliseSeguro;
+    hubJobId?: string | null;
+    hubEstado?: string | null;
+    resultado?: Record<string, unknown> | null;
+    documentoId?: string | null;
+    erroCodigo?: string | null;
+  },
+): Promise<void> {
+  const patch: Record<string, unknown> = { estado: input.estado };
+  if (input.hubJobId !== undefined) patch.hub_job_id = input.hubJobId;
+  if (input.hubEstado !== undefined) patch.hub_estado = input.hubEstado;
+  if (input.resultado !== undefined) patch.resultado = input.resultado;
+  if (input.documentoId !== undefined) patch.documento_id = input.documentoId;
+  if (input.erroCodigo !== undefined) patch.erro_codigo = input.erroCodigo;
+  if (input.estado === "concluida") patch.concluida_em = new Date().toISOString();
+  const { error } = await tabelaLocacao(admin, "locacao_analises_seguro")
+    .update(patch).eq("organization_id", input.orgId).eq("pedido_id", input.pedidoId);
+  if (error) throw new LocacaoErro("analise_seguro_estado", "analise_seguro");
+}
+
+export async function confirmarRendaDoProcesso(
+  admin: SupabaseClient,
+  input: { orgId: string; processoId: string; userId: string; fichaVersao: number },
+): Promise<void> {
+  const { error } = await tabelaLocacao(admin, "locacao_processos").update({
+    renda_confirmada_em: new Date().toISOString(),
+    renda_confirmada_por: input.userId,
+    renda_confirmada_ficha_versao: input.fichaVersao,
+  }).eq("organization_id", input.orgId).eq("id", input.processoId);
+  if (error) throw new LocacaoErro("renda_confirmacao", "renda");
+  await gravarEvento(admin, {
+    orgId: input.orgId, processoId: input.processoId, tipo: "renda",
+    atorTipo: "usuario", atorId: input.userId,
+    detalhe: { ficha_versao: input.fichaVersao, confirmada: true },
+  });
+}
+
+export async function gravarRascunhoRelatorio(
+  admin: SupabaseClient,
+  input: { orgId: string; processoId: string; userId: string; texto: string },
+): Promise<void> {
+  const { error } = await tabelaLocacao(admin, "locacao_processos").update({
+    relatorio_rascunho: input.texto,
+    relatorio_rascunho_em: new Date().toISOString(),
+    relatorio_rascunho_por: input.userId,
+  }).eq("organization_id", input.orgId).eq("id", input.processoId);
+  if (error) throw new LocacaoErro("relatorio_rascunho", "relatorio");
+  await gravarEvento(admin, {
+    orgId: input.orgId, processoId: input.processoId, tipo: "relatorio",
+    atorTipo: "usuario", atorId: input.userId,
+    detalhe: { rascunho: true },
+  });
+}
+
+export async function marcarRelatorioAprovado(
+  admin: SupabaseClient,
+  input: { orgId: string; processoId: string; userId: string; documentoId: string },
+): Promise<void> {
+  const { error } = await tabelaLocacao(admin, "locacao_processos").update({
+    relatorio_aprovado_em: new Date().toISOString(),
+    relatorio_aprovado_por: input.userId,
+    relatorio_documento_id: input.documentoId,
+    relatorio_rascunho: null,
+  }).eq("organization_id", input.orgId).eq("id", input.processoId);
+  if (error) throw new LocacaoErro("relatorio_aprovacao", "relatorio");
+  await gravarEvento(admin, {
+    orgId: input.orgId, processoId: input.processoId, tipo: "relatorio",
+    atorTipo: "usuario", atorId: input.userId,
+    detalhe: { documento_id: input.documentoId, aprovado: true },
+  });
 }
 
 export async function ligarVinculoManual(

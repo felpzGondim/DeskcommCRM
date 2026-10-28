@@ -26,6 +26,8 @@
     { "id": "docs", "lane": "registro", "col": 4, "type": "database", "label": "bucket locacao-processos + locacao_processo_documentos" },
     { "id": "retencao", "lane": "servidor", "col": 2, "type": "process", "label": "cron data-retention: 90d / parado 30d / LGPD INVOKER" },
     { "id": "aprovacao", "lane": "servidor", "col": 2, "type": "process", "label": "só aprovador (ou dono) aprova; atendente reprova com motivo" },
+    { "id": "seguro", "lane": "registro", "col": 3, "type": "database", "label": "locacao_analises_seguro: pedido, job, estado, resultado (desligado)" },
+    { "id": "chaves4", "lane": "servidor", "col": 2, "type": "process", "label": "locacao.analise.{renda,seguro,fc,relatorio,manual} todas false" },
     { "id": "hub", "lane": "fora", "col": 4, "type": "external", "label": "Superlógica via Hub: só GET; FC só a pedido, reuso 90d" },
     { "id": "drive", "lane": "fora", "col": 4, "type": "external", "label": "Drive Aluguéis: DESKCOMM_* env, chave desligada, nunca apaga" },
     { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" }
@@ -52,6 +54,10 @@
     { "id": "e19", "from": "retencao", "to": "processo", "label": "parado 30d vira cancelado/expirado" },
     { "id": "e20", "from": "retencao", "to": "docs", "label": "expurga ficha, hash e arquivo conferido" },
     { "id": "e21", "from": "painel", "to": "lista", "label": "abre o processo da conversa" },
-    { "id": "e22", "from": "etapa", "to": "hub", "label": "FC a pedido; reaproveita 90 dias" }
+    { "id": "e22", "from": "etapa", "to": "hub", "label": "FC a pedido; reaproveita 90 dias" },
+    { "id": "e23", "from": "processo", "to": "seguro", "label": "uma cotação em andamento por processo" },
+    { "id": "e24", "from": "seguro", "to": "retencao", "label": "90 dias zera resultado; LGPD zera no locatário" },
+    { "id": "e25", "from": "flag", "to": "chaves4", "label": "Fase 4 não liga nada" },
+    { "id": "e26", "from": "chaves4", "to": "seguro", "label": "chave seguro desligada: tabela vazia" }
   ]
 }

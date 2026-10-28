@@ -97,6 +97,77 @@ export type Database = {
           },
         ];
       };
+      locacao_analises_seguro: {
+        Row: {
+          id: string;
+          organization_id: string;
+          processo_id: string;
+          participante_id: string | null;
+          pedido_id: string;
+          hub_job_id: string | null;
+          ficha_versao: number | null;
+          estado: string;
+          origem: string;
+          documento_id: string | null;
+          autorizado_por: string | null;
+          autorizado_em: string | null;
+          resultado: Json | null;
+          erro_codigo: string | null;
+          hub_estado: string | null;
+          concluida_em: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          processo_id: string;
+          participante_id?: string | null;
+          pedido_id: string;
+          hub_job_id?: string | null;
+          ficha_versao?: number | null;
+          estado: string;
+          origem?: string;
+          documento_id?: string | null;
+          autorizado_por?: string | null;
+          autorizado_em?: string | null;
+          resultado?: Json | null;
+          erro_codigo?: string | null;
+          hub_estado?: string | null;
+          concluida_em?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          processo_id?: string;
+          participante_id?: string | null;
+          pedido_id?: string;
+          hub_job_id?: string | null;
+          ficha_versao?: number | null;
+          estado?: string;
+          origem?: string;
+          documento_id?: string | null;
+          autorizado_por?: string | null;
+          autorizado_em?: string | null;
+          resultado?: Json | null;
+          erro_codigo?: string | null;
+          hub_estado?: string | null;
+          concluida_em?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "locacao_analises_seguro_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_reply_drafts: {
         Row: {
           id: string;

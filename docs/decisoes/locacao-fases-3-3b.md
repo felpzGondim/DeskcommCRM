@@ -125,3 +125,4 @@ nenhuma (só `service_role`). Sem `SECURITY DEFINER` nova exposta a
 - Módulo de vínculo no Hub (o CRM usa fonte injetável; sem Hub, a simulação
   conta zero).
 - Q7 do adendo (arquivo no Hub) segue pendente.
+- Fase 4 (análise no processo): ver `docs/decisoes/locacao-fase4-analise.md`.
