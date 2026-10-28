@@ -25,6 +25,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { randomId } from "@/lib/random-id";
 import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { ProcessoDeLocacaoPainel } from "@/components/locacao/ProcessoDeLocacaoPainel";
 import { FichaPreliminarPainel } from "./FichaPreliminarPainel";
 import { GerarContratoDialog } from "./GerarContratoDialog";
 
@@ -60,6 +61,12 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
   const [avisosAnexos, setAvisosAnexos] = useState<Array<{ tipo: string; nome: string; tentativas?: number }>>([]);
   const [senhasPdf, setSenhasPdf] = useState<Record<string, string>>({});
   const [limitesAnexos, setLimitesAnexos] = useState<string | null>(null);
+  const [consultaId, setConsultaId] = useState<string | null>(null);
+  const [etapa, setEtapa] = useState<string | null>(null);
+  const [propostas, setPropostas] = useState<Array<{ ferramenta: string; motivo: string }>>([]);
+  const [podeContinuar, setPodeContinuar] = useState(false);
+  const [ultimaPergunta, setUltimaPergunta] = useState("");
+  const [ultimoModo, setUltimoModo] = useState<"normal" | "analise" | null>(null);
   const conversaAtual = useRef(conversationId);
 
   // Troca de conversa = painel limpo: quem usa o painel passa
@@ -69,9 +76,30 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     conversaAtual.current = conversationId;
   }, [conversationId]);
 
-  async function pedir(acao: Acao) {
+  useEffect(() => {
+    if (carregando !== "pergunta" || !consultaId) return;
+    let cancelado = false;
+    const tick = async () => {
+      try {
+        const r = await apiClient.get<{ data: { etapa: string | null; status: string } }>(
+          `/api/v1/conversations/${conversationId}/painel-agente?consulta_id=${consultaId}`,
+        );
+        if (!cancelado && r.data?.etapa) setEtapa(r.data.etapa);
+      } catch {
+        /* kill switch desligado ou consulta ainda não gravada */
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 400);
+    return () => {
+      cancelado = true;
+      window.clearInterval(id);
+    };
+  }, [carregando, consultaId, conversationId]);
+
+  async function pedir(acao: Acao, textoLivre?: string) {
     if (carregando || desabilitado) return;
-    const texto = pergunta.trim();
+    const texto = (textoLivre ?? pergunta).trim();
     if (acao === "pergunta" && texto.length < 3) return;
     const rotulo =
       acao === "resumir" ? t("Resumir conversa") : acao === "sugerir" ? t("Sugerir resposta") : texto;
@@ -81,25 +109,53 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     const daConversa = conversationId;
     setErro(null);
     setCarregando(acao);
+    setPropostas([]);
+    setPodeContinuar(false);
+    const novaConsulta = acao === "pergunta" ? randomId() : null;
+    if (acao === "pergunta") {
+      setConsultaId(novaConsulta);
+      setEtapa(t("gerando resumo…"));
+      setUltimaPergunta(texto);
+    }
     setTurnos((ts) => [...ts, { autor: "atendente", texto: rotulo }]);
     if (acao === "pergunta") setPergunta("");
     try {
-      const r = await apiClient.post<{ data: { resposta: string } }>(
+      const r = await apiClient.post<{ data: {
+        resposta: string;
+        propostas?: Array<{ ferramenta: string; motivo: string }>;
+        parou_por?: string;
+        modo?: "normal" | "analise";
+        sugestao?: boolean;
+      } }>(
         `/api/v1/conversations/${daConversa}/painel-agente`,
-        { acao, ...(acao === "pergunta" ? { pergunta: texto } : {}), historico },
+        {
+          acao,
+          ...(acao === "pergunta"
+            ? { pergunta: texto, consulta_id: novaConsulta, ...(textoLivre && ultimoModo ? { modo: ultimoModo } : {}) }
+            : {}),
+          historico,
+        },
       );
       if (conversaAtual.current !== daConversa) return;
       const resposta = (r.data?.resposta ?? "").trim();
+      const viraSugestao = (acao === "sugerir" || acao === "pergunta") && !!resposta;
       setTurnos((ts) => [
         ...ts,
-        { autor: "ia", texto: resposta || t("A IA não devolveu texto."), sugestao: acao === "sugerir" && !!resposta },
+        { autor: "ia", texto: resposta || t("A IA não devolveu texto."), sugestao: viraSugestao },
       ]);
+      setPropostas(r.data?.propostas ?? []);
+      setPodeContinuar(!!r.data?.parou_por && r.data.parou_por !== "fim");
+      if (r.data?.modo) setUltimoModo(r.data.modo);
     } catch (e) {
       if (conversaAtual.current !== daConversa) return;
       const msg = e instanceof Error && e.message ? e.message : t("Não deu para responder agora.");
       setErro(msg);
     } finally {
-      if (conversaAtual.current === daConversa) setCarregando(null);
+      if (conversaAtual.current === daConversa) {
+        setCarregando(null);
+        setEtapa(null);
+        setConsultaId(null);
+      }
     }
   }
 
@@ -243,6 +299,10 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
             desabilitado={desabilitado || carregando !== null}
             senhasPdf={Object.entries(senhasPdf).filter(([, senha]) => senha).map(([nome, senha]) => ({ nome, senha }))}
           />
+          <ProcessoDeLocacaoPainel
+            conversationId={conversationId}
+            desabilitado={desabilitado || carregando !== null}
+          />
           {turnos.length > 0 && (
             <ol className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite">
               {turnos.map((turno, i) => (
@@ -315,6 +375,42 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>{t("Cancelar")}</Button>
               </div>
             </div>
+          )}
+
+          {carregando === "pergunta" && etapa && (
+            <p role="status" aria-live="polite" className="text-[11px] text-muted-foreground">
+              {etapa}
+            </p>
+          )}
+
+          {propostas.length > 0 && (
+            <div className="space-y-2" aria-label={t("Ações propostas")}>
+              {propostas.map((p) => (
+                <div key={p.ferramenta} className="rounded-md border border-border p-2 text-xs">
+                  <p>{p.motivo}</p>
+                  {p.ferramenta === "iniciar_analise" && (
+                    <Button size="sm" className="mt-1.5 h-7 px-2 text-xs"
+                      disabled={desabilitado || carregando !== null}
+                      onClick={() => void prepararAnalise()}>
+                      {t("Preparar análise")}
+                    </Button>
+                  )}
+                  {p.ferramenta === "confirmar_contrato" && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {t("Use Gerar contrato para conferir a prévia e confirmar. A IA não confirma sozinha.")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {podeContinuar && (
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+              disabled={desabilitado || carregando !== null}
+              onClick={() => void pedir("pergunta", ultimaPergunta || "continue")}>
+              {t("Continuar")}
+            </Button>
           )}
 
           {erro && (

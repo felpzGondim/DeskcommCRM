@@ -1,17 +1,18 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { abrirContrato, chamarApiContrato, dadosContratoSchema, ErroApiContrato, preparoContratoSchema, resultadoContratoSchema, selarContrato } from "@/lib/agent-engine/agent/painel-contrato";
+import { dadosContratoSchema, ErroApiContrato } from "@/lib/agent-engine/agent/painel-contrato";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
-import { env } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
-import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar";
+import { FalhaDoContrato } from "@/lib/painel/acoes/contrato";
+import { montarContexto } from "@/lib/painel/contexto";
+import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -51,31 +52,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     actorUserId: auth.user.id, organizationId: orgId, resourceType: "conversation", resourceId: id,
     requestId, metadata: { sucesso },
   });
-  const hub = await carregarServidorMcpExterno(createAdminClient(), orgId, {
-    contatoDoTurno: contato.id, conversaDoTurno: id, noAtendimento: true,
+  const { data: orgLinha } = await db.from("organizations").select("settings").eq("id", orgId).maybeSingle();
+  const contexto = montarContexto({
+    orgId, conversationId: id, contactId: contato.id, userId: auth.user.id, requestId,
+    dbSessao: db, admin: createAdminClient(), settings: orgLinha?.settings,
+    idioma: auth.user.idioma, origem: "botao",
   });
-  if (!hub) return fail("tool_unavailable", t("Configure o servidor MCP do Brisa Hub antes de gerar o contrato."), 422, { requestId });
-  // Trocar servidor ou credencial também invalida a prévia, sem expor a chave.
-  const destino = createHash("sha256").update(`${hub.servidor.endpoint}:${hub.servidor.chave}`).digest("hex");
-  const escopo = `${orgId}:${id}:${auth.user.id}:${destino}`;
   try {
     if (pedido.data.etapa === "preparar") {
-      const previa = preparoContratoSchema.parse(await chamarApiContrato(hub.servidor, "preparar", pedido.data.dados));
-      const pronto = previa.pronto && previa.pendencias.length === 0 && !!previa.preview_id;
-      const token = pronto ? selarContrato(previa.preview_id!, previa.validade_s ?? 1800, env.INTERNAL_SECRET, escopo) : null;
-      registrar(true);
-      return ok({ resumo: previa.resumo.texto, pendencias: previa.pendencias, avisos: previa.avisos, token }, { requestId });
+      const r = await executarFerramenta("preparar_contrato", contexto, pedido.data.dados);
+      registrar(r.ok);
+      return ok({
+        resumo: r.texto,
+        pendencias: r.extra?.pendencias ?? [],
+        avisos: r.extra?.avisos ?? [],
+        token: r.extra?.token ?? r.previaToken ?? null,
+      }, { requestId });
     }
-    const recibo = abrirContrato(pedido.data.token, env.INTERNAL_SECRET, escopo);
-    if (!recibo) return fail("idempotency_conflict", t("A prévia expirou ou pertence a outra conversa. Prepare a locação novamente."), 409, { requestId });
-    // A mesma prévia sempre leva a mesma chave ao recibo persistente do Hub,
-    // inclusive após timeout, resposta perdida ou duplo clique.
-    const resultado = resultadoContratoSchema.parse(await chamarApiContrato(hub.servidor, "confirmar", {
-      preview_id: recibo.preview, idempotency_key: recibo.chave, confirmado: true,
-    }));
-    registrar(resultado.gravado);
-    return ok(resultado, { requestId });
+    const r = await executarFerramenta("confirmar_contrato", contexto, { token: pedido.data.token });
+    registrar(r.ok);
+    return ok(r.extra ?? { gravado: r.ok }, { requestId });
   } catch (e) {
+    if (e instanceof FalhaDoContrato) {
+      registrar(false);
+      return fail(e.codigo, t(e.message), e.codigo === "idempotency_conflict" ? 409 : 422, { requestId });
+    }
     registrar(false);
     const erro = e instanceof ErroApiContrato ? e : null;
     const etapa = pedido.data.etapa;

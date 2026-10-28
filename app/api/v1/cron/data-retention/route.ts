@@ -85,6 +85,10 @@ import {
   RETENCAO_PROSPECCAO_DIAS_PISO,
   RETENCAO_RASCUNHO_DIAS_PADRAO,
   RETENCAO_RASCUNHO_DIAS_PISO,
+  RETENCAO_PROCESSOS_DE_LOCACAO_DIAS_PADRAO,
+  RETENCAO_REVISOES_DE_VINCULO_DIAS_PADRAO,
+  RETENCAO_PROCESSOS_PARADOS_DIAS_PADRAO,
+  RETENCAO_CONSULTAS_DO_PAINEL_DIAS_PADRAO,
   interpretarRetencao,
 } from "@/lib/retencao/politica";
 import {
@@ -198,6 +202,26 @@ export interface ResultadoDaRetencao {
   lotes_checkpoints: number;
   checkpoints_tem_resto: boolean;
   retencao_checkpoints_dias: number;
+  /** Processos de locação vencidos (0767). Sem knob de env — sempre o padrão. */
+  processos_de_locacao_apagados: number;
+  lotes_processos_de_locacao: number;
+  processos_de_locacao_tem_resto: boolean;
+  retencao_processos_de_locacao_dias: number;
+  /** Revisões de vínculo Superlógica já decididas (0767). */
+  revisoes_de_vinculo_apagadas: number;
+  lotes_revisoes_de_vinculo: number;
+  revisoes_de_vinculo_tem_resto: boolean;
+  retencao_revisoes_de_vinculo_dias: number;
+  /** Processos parados encerrados após 30 dias (0767, decisão 6a). */
+  processos_parados_encerrados: number;
+  lotes_processos_parados: number;
+  processos_parados_tem_resto: boolean;
+  retencao_processos_parados_dias: number;
+  /** Registro das perguntas do Painel do agente vencido (0769). 1 ano. */
+  consultas_do_painel_apagadas: number;
+  lotes_consultas_do_painel: number;
+  consultas_do_painel_tem_resto: boolean;
+  retencao_consultas_do_painel_dias: number;
   retencao_fila_dias: number;
   retencao_auditoria_dias: number;
   retencao_espelho_dias: number;
@@ -239,7 +263,11 @@ export interface PodaDb {
       | "fn_expurgar_telemetria_de_ia_vencida"
       | "fn_expurgar_ritmo_de_envio_vencido"
       | "fn_expurgar_copias_enviadas_vencidas"
-      | "fn_expurgar_checkpoints_superados",
+      | "fn_expurgar_checkpoints_superados"
+      | "fn_expurgar_processos_de_locacao_vencidos"
+      | "fn_expurgar_revisoes_de_vinculo_vencidas"
+      | "fn_encerrar_processos_de_locacao_parados"
+      | "fn_expurgar_consultas_do_painel_vencidas",
     args: { p_retencao_dias: number; p_limite: number },
   ): Promise<{ data: number | null; error: { message: string } | null }>;
   /**
@@ -307,7 +335,11 @@ async function drenar(
     | "fn_expurgar_telemetria_de_ia_vencida"
     | "fn_expurgar_ritmo_de_envio_vencido"
     | "fn_expurgar_copias_enviadas_vencidas"
-    | "fn_expurgar_checkpoints_superados",
+    | "fn_expurgar_checkpoints_superados"
+    | "fn_expurgar_processos_de_locacao_vencidos"
+    | "fn_expurgar_revisoes_de_vinculo_vencidas"
+    | "fn_encerrar_processos_de_locacao_parados"
+    | "fn_expurgar_consultas_do_painel_vencidas",
   dias: number,
 ): Promise<{ apagadas: number; lotes: number; temResto: boolean }> {
   let apagadas = 0;
@@ -642,6 +674,10 @@ export async function podarHistorico(
   const ritmoDrenado = await executarDreno(falhas, "fn_expurgar_ritmo_de_envio_vencido", () => drenar(db, "fn_expurgar_ritmo_de_envio_vencido", ritmoDeEnvio.dias), zerado);
   const copiasDrenadas = await executarDreno(falhas, "fn_expurgar_copias_enviadas_vencidas", () => drenar(db, "fn_expurgar_copias_enviadas_vencidas", copiasEnviadas.dias), zerado);
   const checkpointsDrenados = await executarDreno(falhas, "fn_expurgar_checkpoints_superados", () => drenar(db, "fn_expurgar_checkpoints_superados", checkpoints.dias), zerado);
+  const processosLocacaoDrenados = await executarDreno(falhas, "fn_expurgar_processos_de_locacao_vencidos", () => drenar(db, "fn_expurgar_processos_de_locacao_vencidos", RETENCAO_PROCESSOS_DE_LOCACAO_DIAS_PADRAO), zerado);
+  const revisoesVinculoDrenadas = await executarDreno(falhas, "fn_expurgar_revisoes_de_vinculo_vencidas", () => drenar(db, "fn_expurgar_revisoes_de_vinculo_vencidas", RETENCAO_REVISOES_DE_VINCULO_DIAS_PADRAO), zerado);
+  const processosParadosDrenados = await executarDreno(falhas, "fn_encerrar_processos_de_locacao_parados", () => drenar(db, "fn_encerrar_processos_de_locacao_parados", RETENCAO_PROCESSOS_PARADOS_DIAS_PADRAO), zerado);
+  const consultasPainelDrenadas = await executarDreno(falhas, "fn_expurgar_consultas_do_painel_vencidas", () => drenar(db, "fn_expurgar_consultas_do_painel_vencidas", RETENCAO_CONSULTAS_DO_PAINEL_DIAS_PADRAO), zerado);
 
   return {
     jobs_apagados: jobs.apagadas,
@@ -698,6 +734,22 @@ export async function podarHistorico(
     lotes_checkpoints: checkpointsDrenados.lotes,
     checkpoints_tem_resto: checkpointsDrenados.temResto,
     retencao_checkpoints_dias: checkpoints.dias,
+    processos_de_locacao_apagados: processosLocacaoDrenados.apagadas,
+    lotes_processos_de_locacao: processosLocacaoDrenados.lotes,
+    processos_de_locacao_tem_resto: processosLocacaoDrenados.temResto,
+    retencao_processos_de_locacao_dias: RETENCAO_PROCESSOS_DE_LOCACAO_DIAS_PADRAO,
+    revisoes_de_vinculo_apagadas: revisoesVinculoDrenadas.apagadas,
+    lotes_revisoes_de_vinculo: revisoesVinculoDrenadas.lotes,
+    revisoes_de_vinculo_tem_resto: revisoesVinculoDrenadas.temResto,
+    retencao_revisoes_de_vinculo_dias: RETENCAO_REVISOES_DE_VINCULO_DIAS_PADRAO,
+    processos_parados_encerrados: processosParadosDrenados.apagadas,
+    lotes_processos_parados: processosParadosDrenados.lotes,
+    processos_parados_tem_resto: processosParadosDrenados.temResto,
+    retencao_processos_parados_dias: RETENCAO_PROCESSOS_PARADOS_DIAS_PADRAO,
+    consultas_do_painel_apagadas: consultasPainelDrenadas.apagadas,
+    lotes_consultas_do_painel: consultasPainelDrenadas.lotes,
+    consultas_do_painel_tem_resto: consultasPainelDrenadas.temResto,
+    retencao_consultas_do_painel_dias: RETENCAO_CONSULTAS_DO_PAINEL_DIAS_PADRAO,
     retencao_fila_dias: fila.dias,
     retencao_auditoria_dias: auditoria.dias,
     retencao_espelho_dias: espelho.dias,
@@ -789,7 +841,11 @@ export function houveEfeito(resultado: ResultadoDaRetencao): boolean {
     resultado.telemetria_de_ia_apagada > 0 ||
     resultado.ritmo_de_envio_apagado > 0 ||
     resultado.copias_enviadas_apagadas > 0 ||
-    resultado.checkpoints_apagados > 0
+    resultado.checkpoints_apagados > 0 ||
+    resultado.processos_de_locacao_apagados > 0 ||
+    resultado.revisoes_de_vinculo_apagadas > 0 ||
+    resultado.processos_parados_encerrados > 0 ||
+    resultado.consultas_do_painel_apagadas > 0
   );
 }
 

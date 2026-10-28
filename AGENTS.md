@@ -533,16 +533,25 @@ atendente: **nunca envia ao cliente** ("Usar como resposta" só preenche o Compo
 conversa do painel (auditoria sem texto). Decisões em
 [`docs/decisoes/painel-agente.md`](docs/decisoes/painel-agente.md).
 
-Neste fork, a Fase 2 do processo de locação lê anexos (visão/OCR até 30 páginas, PDF com senha,
-janela das 200 mensagens mais recentes) e manda o **conteúdo** para a ficha. Q7 (arquivo no Hub)
-está pendente — não inventar contrato. A1 grava o relatório preliminar e a ficha JSON em
-`locacao_fichas_preliminares` (por conversa, versionada; `processo_id` nulo sem FK). Isso **não**
-é a tabela de processo da Fase 3. A análise paga usa o celular do inquilino principal da ficha,
-nunca o de quem só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
-[`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md)
-e [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md). Não criar tabela
-de processo nem bucket sem o dono autorizar a Fase 3. Não chamar FC, Migra nem `/contrato/confirmar`
-a partir do relatório preliminar.
+Neste fork, as Fases 3, 3.5 e 3b do processo de locação foram autorizadas em 28/10/2026.
+Decisões e o que ficou como **padrão sujeito à revisão do Felipe**:
+[`docs/decisoes/locacao-fases-3-3b.md`](docs/decisoes/locacao-fases-3-3b.md). Planos:
+[`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md),
+[`docs/planos/fase3-5-vinculo-superlogica.md`](docs/planos/fase3-5-vinculo-superlogica.md),
+[`docs/planos/fase3b-arquivos.md`](docs/planos/fase3b-arquivos.md).
+
+A Fase 2 lê anexos (visão/OCR até 30 páginas, PDF com senha, janela das 200 mensagens) e
+manda o **conteúdo** para a ficha preliminar (`locacao_fichas_preliminares`). A Fase 3
+grava processo, pessoas e imóvel; `processo_id` na ficha preliminar passou a ter FK
+opcional. A análise paga usa o celular do inquilino principal da ficha, nunca o de quem
+só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
+[`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md).
+Não chamar FC, Migra nem `/contrato/confirmar` a partir do relatório preliminar. Não
+pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superlógica
+é só GET. Drive atrás de `locacao.drive_habilitado` (desligado) e das variáveis
+`DESKCOMM_GOOGLE_SA_JSON` (JSON inteiro da conta de serviço) e `DESKCOMM_DRIVE_ID`
+(Drive compartilhado Aluguéis). A chave antiga ficou exposta e será revogada; não a
+use. O código nunca apaga no Drive. Rollback: desligar as chaves; as tabelas ficam.
 
 ## Critério de conclusão
 

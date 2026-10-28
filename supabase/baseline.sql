@@ -59946,6 +59946,864 @@ $$;
 revoke execute on function public.fn_enfileirar_midia_vencida(integer) from public, anon, authenticated;
 grant execute on function public.fn_enfileirar_midia_vencida(integer) to service_role;
 
+-- ---- locação 0763 (migration 0763, fork) ----
+-- manifest: Processo de locação (Fase 3): imóveis, processos, participantes, conversas, fichas, eventos e análises FC. RLS por organization_id; escrita só service_role; sem SECURITY DEFINER. Rollback: desligar locacao.processos_habilitado (tabelas ficam).
+
+-- ---- processo de locação (migration 0763, fork, Fase 3) ----
+-- Decisões 28/10/2026: papel contato; imóvel próprio chaveado por Superlógica;
+-- CPF criptografado; 9 etapas com contrato_criado; fiador FC só a pedido;
+-- reaproveitar FC 90 dias. Sem dado pessoal neste arquivo.
+
+create or replace function public.fn_locacao_touch_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+revoke all on function public.fn_locacao_touch_updated_at() from public, anon, authenticated;
+grant execute on function public.fn_locacao_touch_updated_at() to service_role;
+
+create table if not exists public.locacao_imoveis (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  logradouro text not null,
+  numero text,
+  complemento text,
+  bairro text,
+  cidade text,
+  uf text,
+  cep text,
+  chave_endereco text not null,
+  codigo_fc text,
+  tipo text check (tipo in ('residencial','comercial')),
+  catalog_product_id uuid references public.catalog_products(id) on delete set null,
+  superlogica_imovel_id bigint,
+  aluguel_referencia_cents bigint,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists locacao_imoveis_org_chave_sem_sl_uidx
+  on public.locacao_imoveis (organization_id, chave_endereco)
+  where superlogica_imovel_id is null;
+create unique index if not exists locacao_imoveis_org_sl_uidx
+  on public.locacao_imoveis (organization_id, superlogica_imovel_id)
+  where superlogica_imovel_id is not null;
+create unique index if not exists locacao_imoveis_org_catalog_uidx
+  on public.locacao_imoveis (organization_id, catalog_product_id)
+  where catalog_product_id is not null;
+
+comment on table public.locacao_imoveis is
+  'Imóvel da carteira de locação. Chave principal = id Superlógica; endereço só enquanto não há.';
+
+drop trigger if exists trg_locacao_imoveis_updated_at on public.locacao_imoveis;
+create trigger trg_locacao_imoveis_updated_at
+  before update on public.locacao_imoveis
+  for each row execute function public.fn_locacao_touch_updated_at();
+
+alter table public.locacao_imoveis enable row level security;
+
+drop policy if exists tenant_isolation_locacao_imoveis_select on public.locacao_imoveis;
+create policy tenant_isolation_locacao_imoveis_select on public.locacao_imoveis
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_imoveis from public, anon, authenticated;
+grant select on public.locacao_imoveis to authenticated;
+grant all on public.locacao_imoveis to service_role;
+
+create table if not exists public.locacao_processos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  imovel_id uuid not null references public.locacao_imoveis(id) on delete restrict,
+  status text not null default 'lead' check (status in (
+    'lead','documentos','analise','aprovado','reprovado',
+    'contrato_preparado','contrato_criado','contrato_assinado','cancelado'
+  )),
+  status_mudou_em timestamptz not null default now(),
+  motivo_status text,
+  motivo_cancelamento text check (motivo_cancelamento in ('desistencia','alugado_outro','expirado','outro')),
+  ficha_versao_atual int,
+  aprovado_por uuid references auth.users(id) on delete set null,
+  aprovado_em timestamptz,
+  superlogica_contrato_id text,
+  contrato_preview_expira_em timestamptz,
+  encerrado_em timestamptz,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists locacao_processos_org_status_idx
+  on public.locacao_processos (organization_id, status);
+create index if not exists locacao_processos_org_imovel_idx
+  on public.locacao_processos (organization_id, imovel_id);
+create index if not exists locacao_processos_org_encerrado_idx
+  on public.locacao_processos (organization_id, encerrado_em)
+  where encerrado_em is not null;
+
+comment on table public.locacao_processos is
+  'Processo de locação. Status em 9 etapas. Retenção conta a partir de encerrado_em.';
+
+drop trigger if exists trg_locacao_processos_updated_at on public.locacao_processos;
+create trigger trg_locacao_processos_updated_at
+  before update on public.locacao_processos
+  for each row execute function public.fn_locacao_touch_updated_at();
+
+alter table public.locacao_processos enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processos_select on public.locacao_processos;
+create policy tenant_isolation_locacao_processos_select on public.locacao_processos
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processos from public, anon, authenticated;
+grant select on public.locacao_processos to authenticated;
+grant all on public.locacao_processos to service_role;
+
+create table if not exists public.locacao_processo_participantes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  contact_id uuid references public.contacts(id) on delete set null,
+  papel text not null check (papel in ('locatario','solidario','fiador','contato')),
+  relacao text check (relacao in ('parente','corretor','conjuge','empresa','outro')),
+  principal boolean not null default false,
+  interlocutor_principal boolean not null default false,
+  fracao numeric(5,2),
+  nome_exibicao text,
+  cpf_hash text,
+  cpf_mascarado text,
+  cpf_encrypted bytea,
+  removido_em timestamptz,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint locacao_participantes_cpf_consistency check (
+    (cpf_encrypted is null) = (cpf_hash is null)
+  )
+);
+
+create unique index if not exists locacao_participantes_proc_contato_papel_uidx
+  on public.locacao_processo_participantes (processo_id, contact_id, papel)
+  where contact_id is not null and removido_em is null;
+create unique index if not exists locacao_participantes_proc_cpf_uidx
+  on public.locacao_processo_participantes (processo_id, cpf_hash)
+  where cpf_hash is not null and removido_em is null;
+create unique index if not exists locacao_participantes_proc_interlocutor_uidx
+  on public.locacao_processo_participantes (processo_id)
+  where interlocutor_principal and removido_em is null;
+create index if not exists locacao_participantes_org_contato_idx
+  on public.locacao_processo_participantes (organization_id, contact_id);
+create index if not exists locacao_participantes_org_cpf_idx
+  on public.locacao_processo_participantes (organization_id, cpf_hash);
+
+comment on table public.locacao_processo_participantes is
+  'Pessoas do processo. Papel contato = só conversa. CPF criptografado; sem id Superlógica (herda do contato).';
+comment on column public.locacao_processo_participantes.cpf_mascarado is
+  'Máscara para a tela. Nunca o CPF completo.';
+
+drop trigger if exists trg_locacao_participantes_updated_at on public.locacao_processo_participantes;
+create trigger trg_locacao_participantes_updated_at
+  before update on public.locacao_processo_participantes
+  for each row execute function public.fn_locacao_touch_updated_at();
+
+alter table public.locacao_processo_participantes enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processo_participantes_select on public.locacao_processo_participantes;
+create policy tenant_isolation_locacao_processo_participantes_select on public.locacao_processo_participantes
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processo_participantes from public, anon, authenticated;
+grant select on public.locacao_processo_participantes to authenticated;
+grant all on public.locacao_processo_participantes to service_role;
+
+create table if not exists public.locacao_processo_conversas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  participante_id uuid references public.locacao_processo_participantes(id) on delete set null,
+  origem text not null check (origem in ('criacao','manual','sugestao')),
+  ultimo_uso_em timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (processo_id, conversation_id)
+);
+
+create index if not exists locacao_processo_conversas_org_conv_idx
+  on public.locacao_processo_conversas (organization_id, conversation_id);
+
+alter table public.locacao_processo_conversas enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processo_conversas_select on public.locacao_processo_conversas;
+create policy tenant_isolation_locacao_processo_conversas_select on public.locacao_processo_conversas
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processo_conversas from public, anon, authenticated;
+grant select on public.locacao_processo_conversas to authenticated;
+grant all on public.locacao_processo_conversas to service_role;
+
+create table if not exists public.locacao_processo_fichas (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  versao int not null check (versao >= 1),
+  base_versao int,
+  ficha jsonb not null,
+  origem text not null check (origem in (
+    'preliminar_ia','atendente','hub_fc','hub_migra','contrato','lgpd'
+  )),
+  campos_alterados text[] not null default '{}',
+  alterado_por uuid references auth.users(id) on delete set null,
+  alterado_em timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (processo_id, versao)
+);
+
+comment on column public.locacao_processo_fichas.campos_alterados is
+  'Caminhos de campo. Nunca valores.';
+
+alter table public.locacao_processo_fichas enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processo_fichas_select on public.locacao_processo_fichas;
+create policy tenant_isolation_locacao_processo_fichas_select on public.locacao_processo_fichas
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processo_fichas from public, anon, authenticated;
+grant select on public.locacao_processo_fichas to authenticated;
+grant all on public.locacao_processo_fichas to service_role;
+
+create table if not exists public.locacao_processo_eventos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  tipo text not null check (tipo in (
+    'status','participante','ficha','analise_fc','migra',
+    'contrato_preparar','contrato_confirmar','documento','lgpd'
+  )),
+  de text,
+  para text,
+  ator_tipo text not null check (ator_tipo in ('usuario','sistema','hub')),
+  ator_id uuid,
+  detalhe jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists locacao_processo_eventos_proc_created_idx
+  on public.locacao_processo_eventos (processo_id, created_at);
+comment on column public.locacao_processo_eventos.detalhe is
+  'Só ids, versões e caminhos. Nunca valores pessoais.';
+
+alter table public.locacao_processo_eventos enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processo_eventos_select on public.locacao_processo_eventos;
+create policy tenant_isolation_locacao_processo_eventos_select on public.locacao_processo_eventos
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processo_eventos from public, anon, authenticated;
+grant select on public.locacao_processo_eventos to authenticated;
+grant all on public.locacao_processo_eventos to service_role;
+
+create table if not exists public.locacao_analises_fc (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  participante_id uuid references public.locacao_processo_participantes(id) on delete set null,
+  cpf_hash text,
+  pedido_id uuid not null unique,
+  hub_job_id text,
+  ficha_versao int,
+  estado text not null check (estado in (
+    'solicitada','aguardando_cobranca','cobrando','concluida','reaproveitada','erro','cancelada'
+  )),
+  reaproveitou_de uuid references public.locacao_analises_fc(id) on delete set null,
+  autorizado_por uuid references auth.users(id) on delete set null,
+  autorizado_em timestamptz,
+  resultado jsonb,
+  concluida_em timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists locacao_analises_fc_org_cpf_andamento_uidx
+  on public.locacao_analises_fc (organization_id, cpf_hash)
+  where estado in ('solicitada','aguardando_cobranca','cobrando') and cpf_hash is not null;
+create index if not exists locacao_analises_fc_org_cpf_concluida_idx
+  on public.locacao_analises_fc (organization_id, cpf_hash, concluida_em desc);
+
+comment on table public.locacao_analises_fc is
+  'Uma tentativa de FC por pessoa. Trava anti-cobrança dupla pelo índice único parcial.';
+
+drop trigger if exists trg_locacao_analises_fc_updated_at on public.locacao_analises_fc;
+create trigger trg_locacao_analises_fc_updated_at
+  before update on public.locacao_analises_fc
+  for each row execute function public.fn_locacao_touch_updated_at();
+
+alter table public.locacao_analises_fc enable row level security;
+
+drop policy if exists tenant_isolation_locacao_analises_fc_select on public.locacao_analises_fc;
+create policy tenant_isolation_locacao_analises_fc_select on public.locacao_analises_fc
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_analises_fc from public, anon, authenticated;
+grant select on public.locacao_analises_fc to authenticated;
+grant all on public.locacao_analises_fc to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ---- locação 0764 (migration 0764, fork) ----
+-- manifest: Vínculo contato ↔ Superlógica no lado do contato (Fase 3, enche na 3.5). Um ativo por contato; histórico ao desligar. RLS por organization_id; sem SECURITY DEFINER.
+
+-- ---- contato_superlogica_vinculos (migration 0764, fork) ----
+
+create table if not exists public.contato_superlogica_vinculos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  superlogica_pessoa_id text not null check (superlogica_pessoa_id ~ '^\d+$'),
+  tipos text[] not null default '{}',
+  origem text not null check (origem in ('manual','contrato_confirmar','casamento_telefone')),
+  qualidade text check (qualidade in ('exato','sem_9','ddd_presumido')),
+  ativo boolean not null default true,
+  vinculado_por uuid references auth.users(id) on delete set null,
+  vinculado_em timestamptz not null default now(),
+  desfeito_por uuid references auth.users(id) on delete set null,
+  desfeito_em timestamptz,
+  motivo_desfeito text check (motivo_desfeito in ('errado','numero_mudou','lgpd','outro')),
+  execucao_id uuid,
+  created_at timestamptz not null default now(),
+  constraint contato_superlogica_vinculos_tipos_ck check (
+    tipos <@ array['locatario','fiador','proprietario']::text[]
+  )
+);
+
+create unique index if not exists contato_superlogica_vinculos_org_contato_ativo_uidx
+  on public.contato_superlogica_vinculos (organization_id, contact_id)
+  where ativo;
+create index if not exists contato_superlogica_vinculos_org_pessoa_ativo_idx
+  on public.contato_superlogica_vinculos (organization_id, superlogica_pessoa_id)
+  where ativo;
+
+comment on table public.contato_superlogica_vinculos is
+  'Id da pessoa na Superlógica no contato. Sem telefone, nome ou CPF. Desligar marca ativo=false.';
+
+alter table public.contato_superlogica_vinculos enable row level security;
+
+drop policy if exists tenant_isolation_contato_superlogica_vinculos_select on public.contato_superlogica_vinculos;
+create policy tenant_isolation_contato_superlogica_vinculos_select on public.contato_superlogica_vinculos
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.contato_superlogica_vinculos from public, anon, authenticated;
+grant select on public.contato_superlogica_vinculos to authenticated;
+grant all on public.contato_superlogica_vinculos to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ---- locação 0765 (migration 0765, fork) ----
+-- manifest: Fase 3.5: execuções e revisões do casamento Superlógica + backfill idempotente das chaves custom_fields já gravadas (sem apagá-las). RLS por organization_id.
+
+-- ---- superlogica vínculo execuções e revisões (migration 0765, fork, Fase 3.5) ----
+-- Padrões sujeitos à revisão do Felipe (perguntas 1–12 = a).
+
+create table if not exists public.superlogica_vinculo_execucoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  modo text not null check (modo in ('simulacao','valendo')),
+  estado text not null check (estado in ('rodando','concluida','erro','cancelada')),
+  iniciado_por uuid references auth.users(id) on delete set null,
+  iniciado_em timestamptz not null default now(),
+  terminado_em timestamptz,
+  resumo jsonb not null default '{}'::jsonb,
+  erro_codigo text,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists superlogica_vinculo_execucoes_org_rodando_uidx
+  on public.superlogica_vinculo_execucoes (organization_id)
+  where estado = 'rodando';
+
+comment on column public.superlogica_vinculo_execucoes.resumo is
+  'Só contagens. Nunca telefone, nome ou CPF.';
+
+alter table public.superlogica_vinculo_execucoes enable row level security;
+
+drop policy if exists tenant_isolation_superlogica_vinculo_execucoes_select on public.superlogica_vinculo_execucoes;
+create policy tenant_isolation_superlogica_vinculo_execucoes_select on public.superlogica_vinculo_execucoes
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.superlogica_vinculo_execucoes from public, anon, authenticated;
+grant select on public.superlogica_vinculo_execucoes to authenticated;
+grant all on public.superlogica_vinculo_execucoes to service_role;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'contato_superlogica_vinculos_execucao_fk'
+  ) then
+    alter table public.contato_superlogica_vinculos
+      add constraint contato_superlogica_vinculos_execucao_fk
+      foreign key (execucao_id) references public.superlogica_vinculo_execucoes(id) on delete set null;
+  end if;
+end $$;
+
+create table if not exists public.superlogica_vinculo_revisoes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  execucao_id uuid references public.superlogica_vinculo_execucoes(id) on delete set null,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  candidatos jsonb not null default '[]'::jsonb,
+  categoria text not null check (categoria in (
+    'unico_exato','unico_parcial','varias_pessoas_um_numero','uma_pessoa_varios_contatos',
+    'ja_vinculado_igual','ja_vinculado_diferente','numero_mudou','sem_casamento','fora'
+  )),
+  chave_hash text,
+  estado text not null default 'pendente' check (estado in ('pendente','ligado','nao_ligar','expirado')),
+  decidido_por uuid references auth.users(id) on delete set null,
+  decidido_em timestamptz,
+  expira_em timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists superlogica_vinculo_revisoes_org_estado_idx
+  on public.superlogica_vinculo_revisoes (organization_id, estado);
+create unique index if not exists superlogica_vinculo_revisoes_org_contato_pendente_uidx
+  on public.superlogica_vinculo_revisoes (organization_id, contact_id)
+  where estado = 'pendente';
+
+comment on column public.superlogica_vinculo_revisoes.candidatos is
+  'Lista de {superlogica_pessoa_id, tipo, ativo, qualidade}. Só ids.';
+comment on column public.superlogica_vinculo_revisoes.chave_hash is
+  'Hash da chave de telefone, para saber se mudou. Nunca o número.';
+
+alter table public.superlogica_vinculo_revisoes enable row level security;
+
+drop policy if exists tenant_isolation_superlogica_vinculo_revisoes_select on public.superlogica_vinculo_revisoes;
+create policy tenant_isolation_superlogica_vinculo_revisoes_select on public.superlogica_vinculo_revisoes
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.superlogica_vinculo_revisoes from public, anon, authenticated;
+grant select on public.superlogica_vinculo_revisoes to authenticated;
+grant all on public.superlogica_vinculo_revisoes to service_role;
+
+-- Backfill idempotente: chaves já gravadas em contacts.custom_fields (lote
+-- fase35-20261028 e quaisquer outras com superlogica_id_pessoa). NÃO apaga as
+-- chaves — o CRM continua lendo-as até a tela nova ser o único caminho.
+insert into public.contato_superlogica_vinculos (
+  organization_id, contact_id, superlogica_pessoa_id, tipos, origem, qualidade,
+  ativo, vinculado_em
+)
+select
+  c.organization_id,
+  c.id,
+  trim(c.custom_fields->>'superlogica_id_pessoa'),
+  case
+    when coalesce(c.custom_fields->>'superlogica_tipo','') in ('locatario','fiador','proprietario')
+      then array[c.custom_fields->>'superlogica_tipo']
+    else '{}'::text[]
+  end,
+  'casamento_telefone',
+  case c.custom_fields->>'superlogica_qualidade'
+    when 'exato' then 'exato'
+    when 'sem_9' then 'sem_9'
+    when 'ddd_presumido' then 'ddd_presumido'
+    else null
+  end,
+  true,
+  coalesce(
+    nullif(c.custom_fields->>'superlogica_vinculado_em','')::timestamptz,
+    now()
+  )
+from public.contacts c
+where c.custom_fields ? 'superlogica_id_pessoa'
+  and trim(c.custom_fields->>'superlogica_id_pessoa') ~ '^\d+$'
+  and not exists (
+    select 1 from public.contato_superlogica_vinculos v
+    where v.organization_id = c.organization_id
+      and v.contact_id = c.id
+      and v.ativo
+  );
+
+notify pgrst, 'reload schema';
+
+-- ---- locação 0766 (migration 0766, fork) ----
+-- manifest: Fase 3b: documentos do processo + bucket privado locacao-processos. Drive e VPS atrás de chave desligada. RLS por organization_id; sem apagar pela sessão.
+
+-- ---- documentos do processo (migration 0766, fork, Fase 3b) ----
+-- Padrões sujeitos à revisão do Felipe (perguntas 1–12 = a).
+-- Drive DESLIGADO por padrão. Credencial só em variável de ambiente, nunca no Git.
+
+create table if not exists public.locacao_processo_documentos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  processo_id uuid not null references public.locacao_processos(id) on delete cascade,
+  participante_id uuid references public.locacao_processo_participantes(id) on delete set null,
+  categoria text not null check (categoria in (
+    'documento_pessoal','comprovante_renda','laudo_fc','cotacao_seguro','relatorio','contrato','outro'
+  )),
+  storage_path text not null,
+  mime text not null,
+  tamanho_bytes bigint not null check (tamanho_bytes > 0 and tamanho_bytes <= 20971520),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  md5 text check (md5 ~ '^[0-9a-f]{32}$'),
+  origem text not null check (origem in (
+    'anexo_conversa','upload_manual','hub_fc','hub_migra','relatorio'
+  )),
+  mensagem_id uuid,
+  drive_status text not null default 'nao_se_aplica' check (drive_status in (
+    'nao_se_aplica','pendente','copiado','falhou'
+  )),
+  drive_file_id text,
+  drive_copiado_em timestamptz,
+  drive_md5 text,
+  drive_tentativas int not null default 0,
+  drive_proxima_em timestamptz,
+  drive_erro_codigo text,
+  vps_status text not null default 'nao_se_aplica' check (vps_status in (
+    'nao_se_aplica','pendente','copiado','falhou'
+  )),
+  vps_sha256 text,
+  vps_copiado_em timestamptz,
+  removido_em timestamptz,
+  removido_por uuid references auth.users(id) on delete set null,
+  motivo_remocao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  constraint locacao_processo_documentos_path_ck check (
+    storage_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/processos/'
+  )
+);
+
+create index if not exists locacao_processo_documentos_proc_idx
+  on public.locacao_processo_documentos (organization_id, processo_id)
+  where removido_em is null;
+create index if not exists locacao_processo_documentos_drive_pendente_idx
+  on public.locacao_processo_documentos (organization_id, drive_proxima_em)
+  where drive_status = 'pendente';
+
+comment on table public.locacao_processo_documentos is
+  'Arquivos do processo no bucket locacao-processos. Caminho sem nome/CPF/telefone.';
+
+alter table public.locacao_processo_documentos enable row level security;
+
+drop policy if exists tenant_isolation_locacao_processo_documentos_select on public.locacao_processo_documentos;
+create policy tenant_isolation_locacao_processo_documentos_select on public.locacao_processo_documentos
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_processo_documentos from public, anon, authenticated;
+grant select on public.locacao_processo_documentos to authenticated;
+grant all on public.locacao_processo_documentos to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'locacao-processos',
+  'locacao-processos',
+  false,
+  20971520,
+  array['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif']
+)
+on conflict (id) do nothing;
+
+drop policy if exists "locacao-processos: leitura por organizacao" on storage.objects;
+create policy "locacao-processos: leitura por organizacao" on storage.objects
+  for select using (
+    bucket_id = 'locacao-processos'
+    and name ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'
+    and (split_part(name, '/', 1))::uuid in (select public.fn_user_org_ids())
+  );
+
+notify pgrst, 'reload schema';
+
+-- ---- locação 0767 (migration 0767, fork) ----
+-- manifest: Retenção de 90 dias do processo de locação + encerrar parado em 30 dias + limpeza LGPD por gatilho INVOKER em contacts. A única SECURITY DEFINER é o expurgo, revogada de anon/authenticated.
+
+-- ---- retenção e LGPD do processo de locação (migration 0767, fork) ----
+
+create or replace function public.fn_expurgar_processos_de_locacao_vencidos(
+  p_retencao_dias int default null,
+  p_limite int default null
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_dias int := greatest(coalesce(p_retencao_dias, 90), 90);
+  v_limite int := least(greatest(coalesce(p_limite, 200), 1), 2000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_n int := 0;
+  r record;
+begin
+  for r in
+    select p.id, p.organization_id, p.status
+      from public.locacao_processos p
+     where p.encerrado_em is not null
+       and p.encerrado_em < v_corte
+       and p.status in ('contrato_assinado','reprovado','cancelado')
+     order by p.encerrado_em
+     limit v_limite
+  loop
+    -- Com contrato: só zera fichas/CPF/documentos se a conferência do Drive
+    -- não for exigida aqui — a conferência mora no TypeScript (Drive desligado
+    -- por padrão; sem Drive, processos SEM contrato apagam; COM contrato o
+    -- TypeScript decide). Esta função só limpa o que NÃO é o histórico:
+    -- fichas, hashes, ciphertext, linhas de documento já removidas.
+    delete from public.locacao_processo_fichas f
+     where f.organization_id = r.organization_id and f.processo_id = r.id;
+
+    delete from public.locacao_processo_documentos d
+     where d.organization_id = r.organization_id
+       and d.processo_id = r.id
+       and (
+         r.status <> 'contrato_assinado'
+         or (d.drive_status in ('copiado','nao_se_aplica') and d.vps_status in ('copiado','nao_se_aplica'))
+       );
+
+    update public.locacao_analises_fc a
+       set resultado = null, cpf_hash = null, updated_at = now()
+     where a.organization_id = r.organization_id and a.processo_id = r.id;
+
+    update public.locacao_processo_participantes ptc
+       set nome_exibicao = null, cpf_hash = null, cpf_mascarado = null,
+           cpf_encrypted = null, updated_at = now()
+     where ptc.organization_id = r.organization_id and ptc.processo_id = r.id;
+
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end;
+$$;
+revoke execute on function public.fn_expurgar_processos_de_locacao_vencidos(int, int) from public, anon, authenticated;
+grant execute on function public.fn_expurgar_processos_de_locacao_vencidos(int, int) to service_role;
+
+create or replace function public.fn_expurgar_revisoes_de_vinculo_vencidas(
+  p_retencao_dias int default null,
+  p_limite int default null
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_dias int := greatest(coalesce(p_retencao_dias, 30), 30);
+  v_limite int := least(greatest(coalesce(p_limite, 500), 1), 5000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_n int;
+begin
+  with vencidas as (
+    select id from public.superlogica_vinculo_revisoes
+     where estado in ('ligado','nao_ligar','expirado')
+       and coalesce(decidido_em, created_at) < v_corte
+     order by created_at
+     limit v_limite
+  )
+  delete from public.superlogica_vinculo_revisoes r
+   using vencidas v where r.id = v.id;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke execute on function public.fn_expurgar_revisoes_de_vinculo_vencidas(int, int) from public, anon, authenticated;
+grant execute on function public.fn_expurgar_revisoes_de_vinculo_vencidas(int, int) to service_role;
+
+create or replace function public.fn_encerrar_processos_de_locacao_parados(
+  p_retencao_dias int default null,
+  p_limite int default null
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_dias int := greatest(coalesce(p_retencao_dias, 30), 30);
+  v_limite int := least(greatest(coalesce(p_limite, 200), 1), 2000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_n int;
+begin
+  with parados as (
+    select id from public.locacao_processos
+     where encerrado_em is null
+       and status not in ('contrato_assinado','reprovado','cancelado')
+       and status_mudou_em < v_corte
+     order by status_mudou_em
+     limit v_limite
+  )
+  update public.locacao_processos p
+     set status = 'cancelado',
+         motivo_cancelamento = 'expirado',
+         motivo_status = 'parado_30d',
+         encerrado_em = now(),
+         status_mudou_em = now(),
+         updated_at = now()
+    from parados x
+   where p.id = x.id;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke execute on function public.fn_encerrar_processos_de_locacao_parados(int, int) from public, anon, authenticated;
+grant execute on function public.fn_encerrar_processos_de_locacao_parados(int, int) to service_role;
+
+-- LGPD: gatilho INVOKER em contacts. Não edita fn_lgpd_cascade_redact_contact.
+create or replace function public.fn_locacao_limpar_contato_anonimizado()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+begin
+  if new.is_anonymized is true and coalesce(old.is_anonymized, false) is distinct from true then
+    update public.locacao_processo_participantes
+       set nome_exibicao = null, cpf_hash = null, cpf_mascarado = null,
+           cpf_encrypted = null, updated_at = now()
+     where organization_id = new.organization_id and contact_id = new.id;
+
+    update public.contato_superlogica_vinculos
+       set ativo = false, desfeito_em = now(), motivo_desfeito = 'lgpd'
+     where organization_id = new.organization_id and contact_id = new.id and ativo;
+
+    delete from public.superlogica_vinculo_revisoes
+     where organization_id = new.organization_id and contact_id = new.id;
+
+    delete from public.locacao_processo_documentos d
+     using public.locacao_processo_participantes p
+     where d.organization_id = new.organization_id
+       and p.organization_id = new.organization_id
+       and d.participante_id = p.id
+       and p.contact_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.fn_locacao_limpar_contato_anonimizado() from public, anon, authenticated;
+grant execute on function public.fn_locacao_limpar_contato_anonimizado() to service_role;
+
+drop trigger if exists trg_locacao_limpar_contato_anonimizado on public.contacts;
+create trigger trg_locacao_limpar_contato_anonimizado
+  after update of is_anonymized on public.contacts
+  for each row
+  execute function public.fn_locacao_limpar_contato_anonimizado();
+
+notify pgrst, 'reload schema';
+
+-- ---- registro das perguntas do painel (migration 0769, fork) ----
+-- Decisões 28/10/2026: tetos 6/10 passos, US$ 0,05 / 0,30, 45s / 120s;
+-- boletos só leitura; qualquer atendente; retenção 1 ano; análise e contrato
+-- exigem clique humano. A migration NÃO liga painel_agente.ferramentas_habilitado.
+
+create table if not exists public.agent_panel_query_log (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  user_id uuid not null,
+  pergunta text not null default '',
+  resposta text,
+  modo text not null default 'normal' check (modo in ('normal', 'analise')),
+  status text not null default 'rodando' check (status in ('rodando', 'pronto', 'erro')),
+  etapa_atual text,
+  ferramentas jsonb not null default '[]'::jsonb,
+  propostas jsonb not null default '[]'::jsonb,
+  passos integer not null default 0,
+  tokens_entrada integer not null default 0,
+  tokens_saida integer not null default 0,
+  custo_usd numeric(12, 6) not null default 0,
+  duracao_ms integer,
+  parou_por text check (parou_por is null or parou_por in ('fim', 'passos', 'custo', 'tempo')),
+  llm_call_ids uuid[] not null default '{}'::uuid[],
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists agent_panel_query_log_org_created_idx
+  on public.agent_panel_query_log (organization_id, created_at desc);
+create index if not exists agent_panel_query_log_org_conv_idx
+  on public.agent_panel_query_log (organization_id, conversation_id, created_at desc);
+create index if not exists agent_panel_query_log_org_contact_idx
+  on public.agent_panel_query_log (organization_id, contact_id);
+
+comment on table public.agent_panel_query_log is
+  'Pergunta do Painel do agente: texto, ferramentas, custo e etapa. Entra na cascata LGPD. Retenção 1 ano.';
+comment on column public.agent_panel_query_log.pergunta is
+  'Texto da pergunta do atendente, já mascarado (CPF/telefone).';
+comment on column public.agent_panel_query_log.resposta is
+  'Texto da resposta da IA, já mascarado. Nunca enviado ao cliente.';
+comment on column public.agent_panel_query_log.etapa_atual is
+  'Andamento para o polling da tela enquanto status=rodando. Nulo quando pronto.';
+
+alter table public.agent_panel_query_log enable row level security;
+
+drop policy if exists tenant_isolation_agent_panel_query_log_select on public.agent_panel_query_log;
+create policy tenant_isolation_agent_panel_query_log_select on public.agent_panel_query_log
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.agent_panel_query_log from public, anon, authenticated;
+grant select on public.agent_panel_query_log to authenticated;
+grant all on public.agent_panel_query_log to service_role;
+
+create or replace function public.fn_expurgar_consultas_do_painel_vencidas(
+  p_retencao_dias int default null,
+  p_limite int default null
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_dias int := greatest(coalesce(p_retencao_dias, 365), 365);
+  v_limite int := least(greatest(coalesce(p_limite, 500), 1), 5000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_n int;
+begin
+  with vencidas as (
+    select id from public.agent_panel_query_log
+     where created_at < v_corte
+     order by created_at
+     limit v_limite
+  )
+  delete from public.agent_panel_query_log r
+   using vencidas v where r.id = v.id;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke execute on function public.fn_expurgar_consultas_do_painel_vencidas(int, int) from public, anon, authenticated;
+grant execute on function public.fn_expurgar_consultas_do_painel_vencidas(int, int) to service_role;
+
+create or replace function public.fn_painel_limpar_contato_anonimizado()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+begin
+  if new.is_anonymized is true and coalesce(old.is_anonymized, false) is distinct from true then
+    update public.agent_panel_query_log
+       set pergunta = '(anonimizado)',
+           resposta = '(anonimizado)',
+           ferramentas = '[]'::jsonb,
+           propostas = '[]'::jsonb,
+           updated_at = now()
+     where organization_id = new.organization_id and contact_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.fn_painel_limpar_contato_anonimizado() from public, anon, authenticated;
+grant execute on function public.fn_painel_limpar_contato_anonimizado() to service_role;
+
+drop trigger if exists trg_painel_limpar_contato_anonimizado on public.contacts;
+create trigger trg_painel_limpar_contato_anonimizado
+  after update of is_anonymized on public.contacts
+  for each row
+  execute function public.fn_painel_limpar_contato_anonimizado();
+
+notify pgrst, 'reload schema';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -63287,3 +64145,30 @@ grant select on public.locacao_fichas_preliminares to authenticated;
 grant all on public.locacao_fichas_preliminares to service_role;
 
 notify pgrst, 'reload schema';
+
+-- ---- locação 0768 (migration 0768, fork) ----
+-- manifest: Liga locacao_fichas_preliminares.processo_id à tabela de processos (FK opcional) e índice de documentos do Drive. Sem SECURITY DEFINER nova.
+
+-- ---- ponte ficha preliminar → processo (migration 0768, fork) ----
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'locacao_fichas_preliminares_processo_fk'
+  ) then
+    alter table public.locacao_fichas_preliminares
+      add constraint locacao_fichas_preliminares_processo_fk
+      foreign key (processo_id) references public.locacao_processos(id) on delete set null;
+  end if;
+end $$;
+
+create index if not exists locacao_fichas_preliminares_processo_idx
+  on public.locacao_fichas_preliminares (organization_id, processo_id)
+  where processo_id is not null;
+
+comment on column public.locacao_fichas_preliminares.processo_id is
+  'Processo de locação da Fase 3, quando a ficha preliminar foi ligada. Nulo continua válido.';
+
+notify pgrst, 'reload schema';
+

@@ -661,6 +661,15 @@ const schema = z.object({
    */
   VAPID_PUBLIC_KEY: z.string().optional().default(""),
   VAPID_PRIVATE_KEY: z.string().optional().default(""),
+
+  /**
+   * Cópia dos documentos de locação para o Google Drive compartilhado (Fase 3b).
+   * Opcional. Sem as duas o cron é no-op. JSON inteiro da conta de serviço —
+   * nunca caminho de arquivo. A chave antiga ficou exposta e será revogada;
+   * este processo não a lê. Destino e e-mail da conta: docs/decisoes/locacao-fases-3-3b.md.
+   */
+  DESKCOMM_GOOGLE_SA_JSON: z.string().optional().default(""),
+  DESKCOMM_DRIVE_ID: z.string().optional().default(""),
 });
 
 let parsed = schema.safeParse(process.env);

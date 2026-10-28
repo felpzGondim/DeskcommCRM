@@ -10,6 +10,7 @@ const texto = z.string().trim().min(1).max(240);
 const dinheiro = z.number().finite().nonnegative();
 const pessoa = z.object({
   cpf: z.string().regex(/^\d{11}$/),
+  participante_id: z.string().uuid().optional(),
   dados: z.object({
     nome: texto.optional(), email: z.email().max(240).optional(), celular: texto.optional(),
     nascimento: z.iso.date().optional(), rg: texto.optional(), profissao: texto.optional(),
@@ -19,6 +20,7 @@ const pessoa = z.object({
 }).strict();
 
 export const dadosContratoSchema = z.object({
+  id_imovel: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional(),
   imovel: z.object({ endereco: texto, numero: texto.optional(), complemento: texto.optional() }).strict(),
   locatarios: z.array(pessoa).min(1).max(10), fiadores: z.array(pessoa).max(10).optional(),
   aluguel: dinheiro.positive(), data_inicio: z.iso.date(), data_fim: z.iso.date().optional(),

@@ -7,20 +7,26 @@
  *
  * ## O que este emissor NÃO faz, de propósito
  *
- * · **Nenhuma tool.** A IA lê a conversa e escreve para o atendente. Não envia,
- *   não move funil, não grava nada. "Usar como resposta" só preenche o
- *   Composer — quem envia é a pessoa.
+ * · **Nada vai ao cliente.** "Usar como resposta" só preenche o Composer —
+ *   quem envia é a pessoa. Sem `send_message` neste ponto.
  * · **Nenhum `llmOverride` nem `model`.** O provedor/modelo vem do ponto
  *   `painel_atendente` na tela de Provedores (binding por organização). Sem
- *   binding, segue o padrão da organização.
+ *   binding, segue o padrão da organização. Dá para trocar o modelo do campo
+ *   pela config de provedores/propósito.
  * · **Nenhuma isenção de orçamento** (`PURPOSES_ISENTOS`): conta no teto da org.
- * · **Nada é gravado** além da linha de custo em `llm_calls` (feita pelo seam)
- *   e da auditoria sem conteúdo, na rota.
+ * · Ferramentas (quando a chave `painel_agente.ferramentas_habilitado` está
+ *   ligada) vêm do registro único em `lib/painel/ferramentas/registro.ts` —
+ *   o mesmo caminho dos botões. C e S não entram no loop.
  */
 import type pg from "pg";
 import type { ModelMessage } from "ai";
 
-import { runModelCall, type LlmEdgeConfig, type RunModelCallDeps } from "../edge/llm/run-model-call";
+import {
+  runModelCall,
+  type LlmEdgeConfig,
+  type RunModelCallDeps,
+  type ToolSet,
+} from "../edge/llm/run-model-call";
 
 export const PURPOSE_PAINEL_ATENDENTE = "painel_atendente";
 
@@ -112,6 +118,18 @@ export function montarMensagensDoPainel(input: {
 export interface RespostaDoPainel {
   texto: string;
   callId: string | null;
+  tokensEntrada?: number;
+  tokensSaida?: number;
+  custoUsd?: number;
+  passosModelo?: number;
+}
+
+export interface OpcoesDoPainel {
+  system?: string;
+  tools?: ToolSet;
+  maxSteps?: number;
+  abortSignal?: AbortSignal;
+  pararQuando?: () => boolean;
 }
 
 export async function responderNoPainel(
@@ -123,8 +141,9 @@ export async function responderNoPainel(
     mensagens: ModelMessage[];
   },
   deps: RunModelCallDeps = {},
+  opcoes: OpcoesDoPainel = {},
 ): Promise<RespostaDoPainel> {
-  const { result, callId } = await runModelCall(
+  const { result, callId, usage, costCents } = await runModelCall(
     db,
     llmCfg,
     {
@@ -133,13 +152,23 @@ export async function responderNoPainel(
       jobId: null,
       agentId: null,
       purpose: "painel_atendente",
-      system: SYSTEM_DO_PAINEL,
+      system: opcoes.system ?? SYSTEM_DO_PAINEL,
       messages: input.mensagens,
-      // Sem ferramentas e sem modelo próprio: o provedor vem do ponto (ver o cabeçalho).
+      ...(opcoes.tools ? { tools: opcoes.tools } : {}),
+      ...(opcoes.maxSteps !== undefined ? { maxSteps: opcoes.maxSteps } : {}),
+      ...(opcoes.abortSignal ? { abortSignal: opcoes.abortSignal } : {}),
+      ...(opcoes.pararQuando ? { pararQuando: opcoes.pararQuando } : {}),
     },
     deps,
   );
-  return { texto: (result.text ?? "").trim(), callId: callId ?? null };
+  return {
+    texto: (result.text ?? "").trim(),
+    callId: callId ?? null,
+    tokensEntrada: usage?.inputTokens,
+    tokensSaida: usage?.outputTokens,
+    custoUsd: costCents == null ? 0 : costCents / 100,
+    passosModelo: Array.isArray(result.steps) ? result.steps.length : undefined,
+  };
 }
 
 /** Leitura preliminar para o atendente revisar; o modelo não aciona FC/Migra. */

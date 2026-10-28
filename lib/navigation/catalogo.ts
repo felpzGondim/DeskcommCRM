@@ -1165,6 +1165,23 @@ export const NAV_CATALOG = [
     section: "Sua empresa",
   },
   {
+    href: "/app/locacao",
+    label: "Processo de locação",
+    description: "Processos de locação desta empresa, da conversa até o contrato.",
+    icon: "ClipboardText",
+    group: "atendimento",
+    minRole: "agent",
+  },
+  {
+    href: "/app/settings/tenant/locacao",
+    label: "Locação",
+    description: "Liga e desliga o processo de locação, as ferramentas do campo de pergunta do painel, o vínculo Superlógica e os arquivos.",
+    icon: "Key",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "admin",
+  },
+  {
     // A porta da fonte de dados externa (migration 0372). Fica em "Dados e
     // acesso" porque é o MESMO eixo de API Tokens: por onde dado entra e sai do
     // CRM. NÃO é `admin` como as vizinhas de propósito — a decisão do dono (D2)

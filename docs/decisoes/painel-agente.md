@@ -21,8 +21,11 @@
    código de erro — sem texto; o custo fica em `llm_calls` com `purpose = 'painel_atendente'`.
 3. **A conversa do cliente vai cercada como dado** (`=== CONVERSA COM O CLIENTE … ===`), com as
    mensagens cortadas em 1.500 caracteres e no máximo as 60 últimas.
-4. **Sem ferramentas e sem modelo próprio:** o provedor vem só do ponto `painel_atendente`
+4. **Sem modelo próprio:** o provedor vem só do ponto `painel_atendente`
    (`ai_purpose_bindings`), e o gasto conta no orçamento do mês (o ponto não é isento).
+   Ferramentas no campo /pergunta são um recorte posterior, **desligado por padrão** —
+   ver `docs/decisoes/painel-agente-ferramentas.md`. Com a chave desligada, este item
+   continua verdadeiro (nenhuma tool no loop).
 5. **Limites:** 10 pedidos/min por pessoa e 40/min por organização.
 6. Contato anonimizado (LGPD) → o painel recusa (422).
 
@@ -35,11 +38,13 @@
 - `lib/ai/pontos/registro.ts` — o ponto `painel_atendente` (aparece em Provedores).
 - `lib/audit/actions.ts` — a ação `ai.painel_atendente`.
 - Testes: `tests/unit/painel-do-atendente.test.ts`, `tests/unit/painel-do-agente-ui.test.tsx`.
+- Ferramentas no /pergunta (chave desligada): `docs/decisoes/painel-agente-ferramentas.md`.
 
 ## Banco
 
-**Sem migration.** `ai_purpose_bindings.purpose` e `llm_calls.purpose` são texto livre (sem CHECK),
-conferido por leitura no banco em 26/10/2026.
+A parte 1 não tinha tabela própria. O recorte de ferramentas (28/10/2026) acrescenta
+`agent_panel_query_log` (migration 0769) — ver `docs/decisoes/painel-agente-ferramentas.md`.
+`ai_purpose_bindings.purpose` e `llm_calls.purpose` continuam texto livre (sem CHECK).
 
 ## Sem provedor escolhido
 

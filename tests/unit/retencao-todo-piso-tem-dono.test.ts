@@ -74,6 +74,10 @@ const DONO_NO_SQL: Record<string, string> = {
   RITMO_DE_ENVIO: "fn_expurgar_ritmo_de_envio_vencido",
   COPIAS_ENVIADAS: "fn_expurgar_copias_enviadas_vencidas",
   CHECKPOINTS: "fn_expurgar_checkpoints_superados",
+  PROCESSOS_DE_LOCACAO: "fn_expurgar_processos_de_locacao_vencidos",
+  REVISOES_DE_VINCULO: "fn_expurgar_revisoes_de_vinculo_vencidas",
+  PROCESSOS_PARADOS: "fn_encerrar_processos_de_locacao_parados",
+  CONSULTAS_DO_PAINEL: "fn_expurgar_consultas_do_painel_vencidas",
 };
 
 /**
