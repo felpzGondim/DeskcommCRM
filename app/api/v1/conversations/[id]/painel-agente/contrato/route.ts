@@ -10,6 +10,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { env } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { logger } from "@/lib/logger";
 import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -77,10 +78,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   } catch (e) {
     registrar(false);
     const erro = e instanceof ErroApiContrato ? e : null;
+    const etapa = pedido.data.etapa;
+    // Resposta 200 do Hub em formato que o painel não reconhece (schema ou JSON inválido).
+    const respostaInvalida = e instanceof z.ZodError || e instanceof SyntaxError;
+    // Só tipo do erro e caminhos dos campos: nunca valores nem dados pessoais.
+    logger.warn("painel_agente.contrato.falha", {
+      requestId, etapa,
+      tipo: erro ? `ErroApiContrato:${erro.codigo}` : e instanceof z.ZodError ? "ZodError" : e instanceof Error ? e.name : typeof e,
+      ...(e instanceof z.ZodError ? {
+        caminhos: e.issues.slice(0, 20).map((i) => ({ caminho: i.path.map(String).join("."), codigo: i.code })),
+      } : {}),
+    });
+    if (!erro && respostaInvalida) {
+      return fail("hub_unavailable", `${t("O Brisa Hub respondeu num formato que o painel não reconhece. Avise a administração informando a referência:")} ${requestId}`, 502, { requestId });
+    }
     return fail("hub_unavailable", erro?.detalhe ?? t(erro?.codigo === "hub_contract_permission"
       ? "A chave do CRM não está autorizada na API de contratos do Brisa Hub. Peça à administração para habilitar esse acesso."
       : erro?.codigo === "hub_contract_unconfigured"
         ? "O serviço de contratos do Hub não está configurado. Peça à administração para conferir a integração."
-        : "Não foi possível concluir a operação no Brisa Hub. Se já confirmou, tente novamente pela mesma prévia para consultar ou retomar o pedido."), 502, { requestId });
+        : etapa === "preparar"
+          ? "Não foi possível preparar a locação no Brisa Hub. Tente novamente em instantes."
+          : "Não foi possível concluir a operação no Brisa Hub. Se já confirmou, tente novamente pela mesma prévia para consultar ou retomar o pedido."), 502, { requestId });
   }
 }

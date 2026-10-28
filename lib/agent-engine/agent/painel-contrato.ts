@@ -44,7 +44,7 @@ const pendenciaBruta = z.union([
   z.object({
     campo: z.string().trim().max(200).optional(),
     pergunta: z.string().trim().min(1).max(4000),
-  }).strict(),
+  }), // Sem .strict(): o Hub pode mandar chaves extras (ex.: tipo, id_contrato); só campo/pergunta são usados.
 ]);
 export function normalizarPendencia(valor: z.infer<typeof pendenciaBruta>): PendenciaContrato {
   if (typeof valor === "string") return { campo: "", pergunta: valor };
