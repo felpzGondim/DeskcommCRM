@@ -535,9 +535,14 @@ conversa do painel (auditoria sem texto). Decisões em
 
 Neste fork, a Fase 2 do processo de locação lê anexos (visão/OCR até 30 páginas, PDF com senha,
 janela das 200 mensagens mais recentes) e manda o **conteúdo** para a ficha. Q7 (arquivo no Hub)
-está pendente — não inventar contrato. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md)
+está pendente — não inventar contrato. A1 grava o relatório preliminar e a ficha JSON em
+`locacao_fichas_preliminares` (por conversa, versionada; `processo_id` nulo sem FK). Isso **não**
+é a tabela de processo da Fase 3. A análise paga usa o celular do inquilino principal da ficha,
+nunca o de quem só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
+[`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md)
 e [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md). Não criar tabela
-de processo nem bucket sem o dono autorizar a Fase 3.
+de processo nem bucket sem o dono autorizar a Fase 3. Não chamar FC, Migra nem `/contrato/confirmar`
+a partir do relatório preliminar.
 
 ## Critério de conclusão
 

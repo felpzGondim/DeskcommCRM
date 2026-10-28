@@ -24,7 +24,10 @@
     { "id": "composer", "lane": "inbox", "col": 1, "type": "frontend", "label": "Composer: texto sugerido para revisão humana" },
     { "id": "anexos", "lane": "servidor", "col": 2, "type": "process", "label": "Leitura documental: PDF, OCR/visão e senha" },
     { "id": "visao", "lane": "integracao", "col": 3, "type": "external", "label": "Ponto visao_de_imagem (Gemini do painel)" },
-    { "id": "storage", "lane": "registro", "col": 4, "type": "database", "label": "whatsapp-media: original e URL assinada curta" }
+    { "id": "storage", "lane": "registro", "col": 4, "type": "database", "label": "whatsapp-media: original e URL assinada curta" },
+    { "id": "ficha_botao", "lane": "inbox", "col": 1, "type": "frontend", "label": "Gerar relatório preliminar e correção da ficha" },
+    { "id": "ficha_rota", "lane": "servidor", "col": 2, "type": "route", "label": "painel-agente/ficha: gera, valida e versiona" },
+    { "id": "ficha_tabela", "lane": "registro", "col": 4, "type": "database", "label": "locacao_fichas_preliminares: versão, quem, caminhos" }
   ],
   "edges": [
     { "id": "e1", "from": "botoes", "to": "rota", "label": "consulta ou confirmação explícita" },
@@ -38,6 +41,11 @@
     { "id": "e9", "from": "anexos", "to": "visao", "label": "foto e PDF escaneado" },
     { "id": "e10", "from": "anexos", "to": "storage", "label": "reabre original do tenant" },
     { "id": "e11", "from": "anexos", "to": "botoes", "label": "prévia, aviso de senha e limites" },
-    { "id": "e12", "from": "storage", "to": "hub", "label": "URL assinada só se a ferramenta anunciar" }
+    { "id": "e12", "from": "storage", "to": "hub", "label": "URL assinada só se a ferramenta anunciar" },
+    { "id": "e13", "from": "ficha_botao", "to": "ficha_rota", "label": "gerar ou salvar com revisão humana" },
+    { "id": "e14", "from": "ficha_rota", "to": "anexos", "label": "200 mensagens e leitura documental" },
+    { "id": "e15", "from": "ficha_rota", "to": "ficha_tabela", "label": "nova versão; audit sem valores" },
+    { "id": "e16", "from": "ficha_tabela", "to": "rota", "label": "celular do inquilino principal para a FC" },
+    { "id": "e17", "from": "ficha_rota", "to": "ficha_botao", "label": "relatório e ficha editável" }
   ]
 }

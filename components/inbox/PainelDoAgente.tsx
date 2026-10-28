@@ -25,6 +25,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { randomId } from "@/lib/random-id";
 import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
+import { FichaPreliminarPainel } from "./FichaPreliminarPainel";
 import { GerarContratoDialog } from "./GerarContratoDialog";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
@@ -237,6 +238,11 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
               {t(ACOES_HUB.analise.rotulo)}
             </Button>
           </div>
+          <FichaPreliminarPainel
+            conversationId={conversationId}
+            desabilitado={desabilitado || carregando !== null}
+            senhasPdf={Object.entries(senhasPdf).filter(([, senha]) => senha).map(([nome, senha]) => ({ nome, senha }))}
+          />
           {turnos.length > 0 && (
             <ol className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite">
               {turnos.map((turno, i) => (

@@ -63242,3 +63242,48 @@ create policy channel_sessions_tenant_delete on public.channel_sessions
       and public.fn_role_at_least(organization_id, 'admin'))
     or public.fn_is_platform_admin_full()
   );
+
+-- ---- ficha preliminar da conversa (migration 0762, fork) ----
+--
+-- A1 do plano de análise: relatório preliminar + ficha JSON por conversa.
+-- Só acrescenta versão. processo_id nulo, sem FK, até a Fase 3. Sem
+-- SECURITY DEFINER. Rollback: drop table public.locacao_fichas_preliminares.
+
+create table if not exists public.locacao_fichas_preliminares (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  processo_id uuid,
+  versao int not null check (versao >= 1),
+  base_versao int,
+  origem text not null check (origem in ('preliminar_ia', 'atendente')),
+  ficha jsonb not null,
+  relatorio text not null default '',
+  campos_alterados text[] not null default '{}',
+  alterado_por uuid references auth.users(id) on delete set null,
+  alterado_em timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (organization_id, conversation_id, versao)
+);
+
+create index if not exists locacao_fichas_preliminares_org_conv_idx
+  on public.locacao_fichas_preliminares (organization_id, conversation_id, versao desc);
+
+comment on table public.locacao_fichas_preliminares is
+  'Versões da ficha preliminar (A1) por conversa. Só acrescenta. processo_id nulo até a Fase 3.';
+comment on column public.locacao_fichas_preliminares.campos_alterados is
+  'Caminhos de campo que mudaram. Nunca valores (CPF, renda, telefone).';
+comment on column public.locacao_fichas_preliminares.processo_id is
+  'Reserva para a Fase 3 ligar a ficha a um processo. Sem FK nesta migration.';
+
+alter table public.locacao_fichas_preliminares enable row level security;
+
+drop policy if exists tenant_isolation_locacao_fichas_preliminares_select on public.locacao_fichas_preliminares;
+create policy tenant_isolation_locacao_fichas_preliminares_select on public.locacao_fichas_preliminares
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.locacao_fichas_preliminares from public, anon, authenticated;
+grant select on public.locacao_fichas_preliminares to authenticated;
+grant all on public.locacao_fichas_preliminares to service_role;
+
+notify pgrst, 'reload schema';

@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.9] — 2026-10-28
+
+### Adicionado
+
+- **O painel gera um relatório preliminar e uma ficha de dados que o atendente confere** No Painel do agente, Gerar relatório preliminar lê a conversa (200 mensagens) e o conteúdo dos anexos e monta um relatório curto mais a ficha de dados (pessoas, renda, imóvel, documentos). O atendente corrige e salva; cada salvamento é uma versão nova (quem, quando, quais campos — sem valores). A análise paga passa a usar o celular do inquilino principal da ficha, não o de quem só conversa. Ainda não cria processo, não cobra FC e não confirma contrato.
+
 ## [1.88.0-felpz.8] — 2026-10-28
 
 ### Adicionado
