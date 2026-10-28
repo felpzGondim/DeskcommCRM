@@ -78,6 +78,8 @@ export const TEXTO_SEM_LOCATARIO =
 export const TEXTO_CONFIRMAR_SEM_PENDENTE =
   "Não há cobrança da FC aguardando confirmação neste pedido.";
 export const TEXTO_AVISO_CREDITOS = "vai gastar créditos";
+export const TEXTO_CPF_DIVERGE =
+  "O CPF da ficha não bate com o desta pessoa no processo. Corrija a ficha antes de analisar a FC.";
 
 function recusaDesligada(): ResultadoDaFerramenta {
   return { ok: false, texto: TEXTO_ANALISE_DESLIGADA, codigo: "tool_unavailable" };
@@ -281,6 +283,9 @@ export async function analisarFcDoPainel(
   const atual = await lerFichaAtualDoProcesso(ctx.admin, ctx.orgId, alvo.id);
   if (!atual) return { ok: false, texto: TEXTO_SEM_PROCESSO_FC, codigo: "validation_error" };
   const ficha = completarFicha(atual.ficha);
+  if (part.cpfHash && !pessoaDaFichaParaFc(ficha, { cpfHash: part.cpfHash })) {
+    return { ok: false, texto: TEXTO_CPF_DIVERGE, codigo: "validation_error" };
+  }
   const { pessoa, telefone } = pessoaETelefone(ficha, part);
   const hashFicha = pessoa ? hashCpfDoParticipante(pessoa.cpf.valor ?? "") : null;
   const cpfHash = part.cpfHash ?? hashFicha;
