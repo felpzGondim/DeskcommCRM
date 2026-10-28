@@ -58,6 +58,25 @@ describe("locação pelo painel", () => {
       .toBe("iptu: Qual o valor mensal do IPTU?");
   });
 
+  it("aceita pendência com chaves extras do Hub (ex.: contrato não encerrado)", () => {
+    const previa = preparoContratoSchema.parse({
+      pronto: false, resumo: { texto: "Prévia", itens: [] }, divergencias: [], split_pendente: false,
+      pendencias: [
+        { campo: "imovel", pergunta: "O imóvel tem contrato não encerrado. Encerrar antes?", tipo: "bloqueio", id_contrato: "123" },
+        { campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" },
+      ],
+    });
+    expect(previa.pendencias).toEqual([
+      { campo: "imovel", pergunta: "O imóvel tem contrato não encerrado. Encerrar antes?" },
+      { campo: "iptu", pergunta: "Qual o valor mensal do IPTU?" },
+    ]);
+  });
+
+  it("recusa resposta 200 fora do formato (sem resumo ou pendência sem pergunta)", () => {
+    expect(preparoContratoSchema.safeParse({ pronto: false, pendencias: [] }).success).toBe(false);
+    expect(preparoContratoSchema.safeParse({ pronto: false, resumo: { texto: "x" }, pendencias: [{ campo: "iptu" }] }).success).toBe(false);
+  });
+
   it("exige split e isencao_multa_meses no pedido do painel", () => {
     const base = { imovel: { endereco: "Rua teste" }, locatarios: [{ cpf: "52998224725" }],
       aluguel: 1200, data_inicio: "2026-12-01", dia_vencimento: 10, tipo: "residencial" as const,

@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.7] — 2026-10-27
+
+### Corrigido
+
+- **Preparar a locação não falha mais quando o Hub manda pendência com informações extras** Quando o imóvel já tem um contrato não encerrado, o Hub devolve essa pendência com campos a mais; o painel recusava a resposta inteira e mostrava um erro genérico. Agora a pendência aparece como pergunta normal. Se o Hub responder num formato que o painel não reconhece, a mensagem diz isso e traz um número de referência para a administração localizar o registro (o log guarda só o tipo do erro e os campos afetados, sem valores nem dados pessoais). No preparar, o erro não fala mais em "Se já confirmou"; o confirmar segue igual.
+
 ## [1.88.0-felpz.6] — 2026-10-27
 
 ### Corrigido

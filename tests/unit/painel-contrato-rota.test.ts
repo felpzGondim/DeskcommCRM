@@ -104,6 +104,44 @@ describe("rota de criação da locação", () => {
     expect((await r.json()).error.message).toBe("contrato não configurado");
   });
 
+  it("pendência com chaves extras do Hub não derruba a prévia", async () => {
+    m.call.mockResolvedValueOnce({ pronto: false, resumo: { texto: "Prévia", itens: [] }, divergencias: [],
+      pendencias: [{ campo: "imovel", pergunta: "Contrato não encerrado no imóvel.", tipo: "bloqueio", id_contrato: "9" }] });
+    const r = await POST(pedido({ etapa: "preparar", dados }), ctx);
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.data.token).toBeNull();
+    expect(body.data.pendencias).toEqual([{ campo: "imovel", pergunta: "Contrato não encerrado no imóvel." }]);
+  });
+
+  it("resposta 200 inválida do Hub vira erro tratado com referência e log sem dados pessoais", async () => {
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.call.mockResolvedValueOnce({ pronto: false, pendencias: [{ campo: "cpf", pergunta: 52998224725 }] });
+    const r = await POST(pedido({ etapa: "preparar", dados }), ctx);
+    expect(r.status).toBe(502);
+    const body = await r.json();
+    expect(body.error.message).toContain("formato que o painel não reconhece");
+    expect(body.error.message).toMatch(/referência: [0-9a-f-]{36}$/);
+    expect(body.error.message).not.toContain("Se já confirmou");
+    expect(aviso).toHaveBeenCalledTimes(1);
+    const linha = String(aviso.mock.calls[0]![0]);
+    expect(linha).toContain("ZodError");
+    expect(linha).toContain('"caminho":"pendencias.0"');
+    expect(linha).not.toContain("52998224725");
+    aviso.mockRestore();
+  });
+
+  it("falha genérica no preparar não fala em confirmação; no confirmar mantém o recado", async () => {
+    m.call.mockRejectedValueOnce(new Error("rede caiu"));
+    const r = await POST(pedido({ etapa: "preparar", dados }), ctx);
+    expect(r.status).toBe(502);
+    expect((await r.json()).error.message).not.toContain("Se já confirmou");
+    const token = await preparar();
+    m.call.mockRejectedValueOnce(new Error("rede caiu"));
+    const c = await POST(pedido({ etapa: "confirmar", token, confirmado: true }), ctx);
+    expect((await c.json()).error.message).toContain("Se já confirmou");
+  });
+
   it("suporte só leitura, falta de confirmação e conversa inacessível impedem a chamada", async () => {
     m.support.mockResolvedValueOnce(new Response(null, { status: 403 }));
     expect((await POST(pedido({ etapa: "preparar", dados }), ctx)).status).toBe(403);
