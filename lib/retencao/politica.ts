@@ -364,6 +364,10 @@ export const RETENCAO_REVISOES_DE_VINCULO_DIAS_PISO = 30;
 export const RETENCAO_PROCESSOS_PARADOS_DIAS_PADRAO = 30;
 export const RETENCAO_PROCESSOS_PARADOS_DIAS_PISO = 30;
 
+/** 1 ano para o registro da pergunta do Painel do agente (0769). Sem knob de env. */
+export const RETENCAO_CONSULTAS_DO_PAINEL_DIAS_PADRAO = 365;
+export const RETENCAO_CONSULTAS_DO_PAINEL_DIAS_PISO = 365;
+
 /**
  * Teto de 36500 dias (100 anos) para todo knob que passa por
  * `interpretarRetencao`. Os dois do arquivo de webhooks

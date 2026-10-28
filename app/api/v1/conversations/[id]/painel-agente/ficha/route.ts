@@ -2,16 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
-import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
-import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
-import { enriquecerAnexosDaAnalise, frasesDosAvisos } from "@/lib/agent-engine/agent/painel-leitura-anexos";
-import {
-  blocoDasFontesDaFicha,
-  fontesDaFicha,
-  gerarRelatorioPreliminarNoPainel,
-} from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
-import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -26,6 +16,9 @@ import {
   lerVersaoDaFicha,
   listarHistoricoDaFicha,
 } from "@/lib/locacao/ficha-repositorio";
+import { montarContexto } from "@/lib/painel/contexto";
+import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
+import { respostaDaFerramenta } from "@/lib/painel/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -160,63 +153,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const { data: orgLinha } = await db!.from("organizations").select("settings")
     .eq("id", orgId!).maybeSingle();
-  const limites = limitesDaAnalise(orgLinha?.settings);
-  const senhasPdf = Object.fromEntries((pedido.senhasPdf ?? []).map((s) => [s.nome, s.senha]));
-  try {
-    const { data: linhas, error: erroFontes } = await db!.from("messages")
-      .select("id,direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at")
-      .eq("organization_id", orgId!).eq("conversation_id", id)
-      .order("sent_at", { ascending: false }).limit(limites.mensagens_brutas);
-    if (erroFontes) {
-      registrar(false);
-      return fail("internal_error", t("Não foi possível ler a conversa para o relatório preliminar."), 500, { requestId });
-    }
-    const janela = (linhas ?? []).slice(0, 200) as Record<string, unknown>[];
-    const deps = requestTurnDeps();
-    const enriquecido = await enriquecerAnexosDaAnalise(janela, orgId!, id, {
-      limites, senhas: senhasPdf,
-      lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
-    });
-    const fontes = fontesDaFicha(enriquecido.linhas);
-    const bloco = blocoDasFontesDaFicha(fontes);
-    if (bloco.length > limites.chars_conjunto) {
-      registrar(false);
-      return fail("validation_error", t("Há documentos demais para conferir de uma vez. Revise os anexos desta conversa."), 422, { requestId });
-    }
-    const { saida } = await gerarRelatorioPreliminarNoPainel(getRequestPool(), deps.llmCfg, {
-      tenantId: orgId!, contactId: contato!.id, fontes: bloco,
-    }, { registry: deps.registry, log: deps.log });
-    const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
-    const ficha = {
-      ...saida.ficha,
-      pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),
-    };
-    const atual = await lerFichaAtual(admin, orgId!, id);
-    const linha = await gravarVersaoDaFicha(admin, {
-      organizationId: orgId!,
-      conversationId: id,
-      ficha,
-      relatorio: saida.relatorio,
-      origem: "preliminar_ia",
-      baseVersao: atual?.versao ?? 0,
-      alteradoPor: auth!.user.id,
-    });
-    registrar(true, { versao: linha.versao, campos: ["*"] });
-    const historico = await listarHistoricoDaFicha(admin, orgId!, id);
+  const senhas = Object.fromEntries((pedido.senhasPdf ?? []).map((s) => [s.nome, s.senha]));
+  const contexto = montarContexto({
+    orgId: orgId!, conversationId: id, contactId: contato!.id, userId: auth!.user.id, requestId,
+    dbSessao: db!, admin, settings: orgLinha?.settings, idioma: auth!.user.idioma, origem: "botao",
+  });
+  const r = await executarFerramenta("gerar_relatorio_preliminar", contexto, { senhas });
+  registrar(r.ok, r.ok ? { versao: r.extra?.versao, campos: ["*"] } : {});
+  if (r.ok) {
     return ok({
-      versao: linha.versao,
-      origem: linha.origem,
-      ficha: linha.ficha,
-      relatorio: linha.relatorio,
-      campos_alterados: linha.campos_alterados,
-      avisos: enriquecido.avisos,
-      historico,
+      versao: r.extra?.versao,
+      origem: r.extra?.origem,
+      ficha: r.extra?.ficha,
+      relatorio: r.extra?.relatorio ?? r.texto,
+      campos_alterados: r.extra?.campos_alterados,
+      avisos: r.avisos,
+      historico: r.extra?.historico,
     }, { requestId });
-  } catch (err) {
-    if (err instanceof FichaConflitoDeVersao) {
-      return fail("idempotency_conflict", t("Outra pessoa alterou a ficha. Recarregue e gere de novo."), 409, { requestId });
-    }
-    registrar(false);
-    return fail("hub_contract_error", t("Não foi possível gerar o relatório preliminar. Confira os documentos e tente novamente."), 422, { requestId });
   }
+  return respostaDaFerramenta(r, t, requestId);
 }

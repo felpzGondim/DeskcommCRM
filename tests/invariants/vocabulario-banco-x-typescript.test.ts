@@ -584,6 +584,9 @@ const PARES: Array<{
   { tabela: "locacao_processo_documentos", coluna: "origem", arquivo: "lib/locacao/vocabulario.ts", simbolo: "ORIGENS_DO_DOCUMENTO" },
   { tabela: "locacao_processo_documentos", coluna: "drive_status", arquivo: "lib/locacao/vocabulario.ts", simbolo: "ESTADOS_DO_DRIVE" },
   { tabela: "locacao_processo_documentos", coluna: "vps_status", arquivo: "lib/locacao/vocabulario.ts", simbolo: "ESTADOS_DA_VPS" },
+  { tabela: "agent_panel_query_log", coluna: "modo", arquivo: "lib/painel/ferramentas/tipos.ts", simbolo: "ModoDaConsulta" },
+  { tabela: "agent_panel_query_log", coluna: "status", arquivo: "lib/painel/ferramentas/tipos.ts", simbolo: "StatusDaConsulta" },
+  { tabela: "agent_panel_query_log", coluna: "parou_por", arquivo: "lib/painel/ferramentas/tipos.ts", simbolo: "ParouPor" },
 ];
 
 /** Tira um nível de parênteses externos, se ele envolver a expressão inteira. */

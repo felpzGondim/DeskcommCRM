@@ -635,6 +635,10 @@ describe("houveEfeito — as duas direções", () => {
     lotes_processos_parados: 0,
     processos_parados_tem_resto: false,
     retencao_processos_parados_dias: 30,
+    consultas_do_painel_apagadas: 0,
+    lotes_consultas_do_painel: 0,
+    consultas_do_painel_tem_resto: false,
+    retencao_consultas_do_painel_dias: 365,
     avisos: [] as string[],
     falhas: [] as string[],
   };
@@ -715,6 +719,7 @@ describe("houveEfeito — as duas direções", () => {
     expect(houveEfeito({ ...base, processos_de_locacao_apagados: 1 })).toBe(true);
     expect(houveEfeito({ ...base, revisoes_de_vinculo_apagadas: 1 })).toBe(true);
     expect(houveEfeito({ ...base, processos_parados_encerrados: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, consultas_do_painel_apagadas: 1 })).toBe(true);
   });
 });
 

@@ -201,6 +201,71 @@ describe("Painel do agente (UI)", () => {
     );
   });
 
+  it("pergunta livre vira sugestão e Usar como resposta só preenche", async () => {
+    postMock.mockResolvedValue({ data: { acao: "pergunta", resposta: "Aluguel 1.200.", sugestao: true, parou_por: "fim" } });
+    const usar = vi.fn();
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
+    fireEvent.change(screen.getByPlaceholderText("Pergunte algo sobre esta conversa…"), {
+      target: { value: "qual o aluguel?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Perguntar" }));
+    await screen.findByText("Aluguel 1.200.");
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente",
+      expect.objectContaining({ acao: "pergunta", pergunta: "qual o aluguel?", consulta_id: expect.any(String) }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Usar como resposta" }));
+    expect(usar).toHaveBeenCalledWith("Aluguel 1.200.");
+    expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mostra o andamento pelo polling e Continuar reenvia a mesma pergunta", async () => {
+    let resolverPost: ((v: unknown) => void) | undefined;
+    postMock.mockImplementationOnce(() => new Promise((resolve) => { resolverPost = resolve; }))
+      .mockResolvedValueOnce({ data: { acao: "pergunta", resposta: "Sigo.", sugestao: true, parou_por: "fim" } });
+    getMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes("consulta_id=")) {
+        return { data: { etapa: "consultando Superlógica…", status: "rodando" } };
+      }
+      return { data: { atual: null, historico: [] } };
+    });
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("Pergunte algo sobre esta conversa…"), {
+      target: { value: "tem boleto atrasado?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Perguntar" }));
+    await waitFor(() => {
+      expect(getMock.mock.calls.some((c) => String(c[0]).includes("consulta_id="))).toBe(true);
+    });
+    await screen.findByText("consultando Superlógica…");
+    resolverPost?.({ data: { acao: "pergunta", resposta: "Parei no limite.", sugestao: true, parou_por: "passos", modo: "normal" } });
+    await screen.findByRole("button", { name: "Continuar" });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));
+    expect(postMock.mock.calls[1]![1]).toEqual(expect.objectContaining({
+      acao: "pergunta", pergunta: "tem boleto atrasado?", modo: "normal",
+    }));
+  });
+
+  it("cartão de propor análise chama o mesmo fluxo do botão", async () => {
+    postMock.mockResolvedValueOnce({ data: {
+      acao: "pergunta", resposta: "Posso preparar a análise.", sugestao: true, parou_por: "fim",
+      propostas: [{ ferramenta: "iniciar_analise", motivo: "Há holerite no anexo." }],
+    } }).mockResolvedValueOnce({ data: { resumo: "Prévia ok", previaToken: "token", pronto: true } });
+    render(<PainelDoAgente conversationId="c1" />);
+    fireEvent.change(screen.getByPlaceholderText("Pergunte algo sobre esta conversa…"), {
+      target: { value: "pode analisar o holerite?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Perguntar" }));
+    await screen.findByText("Há holerite no anexo.");
+    fireEvent.click(screen.getByRole("button", { name: "Preparar análise" }));
+    await screen.findByText("Prévia ok");
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente/acoes",
+      { acao: "analise", etapa: "preparar" },
+    );
+  });
+
   it("mostra link seguro da segunda via na consulta de boletos", async () => {
     postMock.mockResolvedValue({ data: { resumo: "1. Em aberto · 2026-11-05 · R$ 123.00", links: [
       { rotulo: "Abrir 2ª via do boleto 1", url: "https://boletos.exemplo/1" },

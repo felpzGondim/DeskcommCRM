@@ -357,6 +357,14 @@ const DECISOES: Record<string, Decisao> = {
       "(candidatos jsonb com ids Superlógica e chave_hash do telefone); fila de casamento " +
       "não sobrevive ao titular que pediu apagamento.",
   },
+  agent_panel_query_log: {
+    decidida: "redigir",
+    caminho: "gatilho",
+    razao:
+      "0769: pergunta, resposta e json de ferramentas/propostas redigidos na virada de " +
+      "is_anonymized pelo gatilho fn_painel_limpar_contato_anonimizado (INVOKER). A linha " +
+      "fica (custo, passos, atendente) sem o texto da pessoa.",
+  },
 };
 
 /** As 11 tabelas da issue #1504 — nenhuma tem FK DIRETA, por isso medida à parte. */

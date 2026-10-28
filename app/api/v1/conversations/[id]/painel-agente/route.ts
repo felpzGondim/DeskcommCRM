@@ -1,17 +1,17 @@
 /**
  * POST /api/v1/conversations/:id/painel-agente — o painel do agente na coluna
- * direita da conversa (parte 1: resumir e sugerir resposta).
+ * direita da conversa.
  *
  * · Visibilidade: a conversa, o contato e as mensagens são lidos pelo cliente
  *   de SESSÃO — quem decide o que o atendente enxerga é a RLS. Conversa que ele
  *   não vê ⇒ 404.
- * · Nada é gravado: o histórico do painel vive na tela (vai no body, curto) e
- *   some ao trocar de conversa. O custo fica em `llm_calls` com
- *   `purpose = 'painel_atendente'`; a auditoria (`api_audit_log`) leva SÓ a
- *   ação, nunca pergunta nem resposta (é append-only, fora da cascata LGPD).
+ * · Resumir/sugerir e o campo /pergunta com a chave ligada passam por
+ *   `executarFerramenta` — a mesma entrada dos botões.
+ * · Nada vai ao cliente. A auditoria leva SÓ a ação, nunca pergunta nem resposta.
  * · Contato anonimizado ⇒ 422 sem chamar o modelo.
- * · Teto: 10/min por pessoa, 40/min por organização (em memória sem Redis) +
- *   o orçamento da org (`ai_budgets`), que o seam aplica.
+ * · Teto: 10/min por pessoa, 40/min por organização + o orçamento da org.
+ *
+ * GET ?consulta_id= — andamento da pergunta em curso (polling da etapa_atual).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -35,6 +35,12 @@ import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
+import { ferramentasDoPainelLigadas } from "@/lib/painel/chave";
+import { montarContexto } from "@/lib/painel/contexto";
+import { abrirConsulta, atualizarEtapa, fecharConsulta, lerAndamento } from "@/lib/painel/consulta";
+import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
+import { modoDaPergunta, responderComFerramentas } from "@/lib/painel/ferramentas/loop";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -44,13 +50,14 @@ type Ctx = { params: Promise<{ id: string }> };
 const TETO_POR_USUARIO = 10;
 const TETO_POR_ORGANIZACAO = 40;
 const JANELA_SEGUNDOS = 60;
-/** Quantas mensagens da conversa entram no contexto (as mais recentes). */
 const JANELA_DE_MENSAGENS = 60;
 
 const corpoDoPost = z
   .object({
     acao: z.enum(["resumir", "sugerir", "pergunta"]),
     pergunta: z.string().trim().max(1000).optional(),
+    consulta_id: z.string().uuid().optional(),
+    modo: z.enum(["normal", "analise"]).optional(),
     historico: z
       .array(
         z.object({ autor: z.enum(["atendente", "ia"]), texto: z.string().max(4000) }).strict(),
@@ -63,6 +70,22 @@ const corpoDoPost = z
     message: "pergunta obrigatória",
     path: ["pergunta"],
   });
+
+export async function GET(req: NextRequest, ctx: Ctx) {
+  const requestId = randomUUID();
+  const auth = await requireRole("agent", { requestId, resource: "conversations" });
+  if (!auth.ok) return auth.response;
+  const t = (texto: string) => traduzir(texto, auth.user.idioma);
+  const { id } = await ctx.params;
+  const consultaId = new URL(req.url).searchParams.get("consulta_id");
+  if (!consultaId || !z.string().uuid().safeParse(consultaId).success) {
+    return fail("validation_error", t("Pedido inválido."), 400, { requestId });
+  }
+  const db = await createClient();
+  const andamento = await lerAndamento(db, auth.org.orgId, consultaId, id);
+  if (!andamento) return fail("not_found", t("Consulta não encontrada."), 404, { requestId });
+  return ok({ etapa: andamento.etapa, status: andamento.status }, { requestId });
+}
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const denied = await requireSupportWrite();
@@ -81,7 +104,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       details: parsed.error.flatten(),
     });
   }
-  const { acao, pergunta, historico } = parsed.data;
+  const { acao, pergunta, historico, consulta_id: consultaDoCliente, modo: modoForcado } = parsed.data;
 
   const porUsuario = await checkRateLimit(`painel-agente:${auth.user.id}`, TETO_POR_USUARIO, JANELA_SEGUNDOS);
   const porOrganizacao = await checkRateLimit(`painel-agente-org:${orgId}`, TETO_POR_ORGANIZACAO, JANELA_SEGUNDOS);
@@ -106,7 +129,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const { data: contato } = await db
     .from("contacts")
-    .select("name,display_name,is_anonymized")
+    .select("name,display_name,is_anonymized,phone_number")
     .eq("organization_id", orgId)
     .eq("id", contactId)
     .maybeSingle();
@@ -117,6 +140,106 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       422,
       { requestId },
     );
+  }
+
+  const { data: orgLinha } = await db.from("organizations").select("settings")
+    .eq("id", orgId).maybeSingle();
+  const admin = createAdminClient();
+  const contexto = montarContexto({
+    orgId,
+    conversationId: conversa.id,
+    contactId,
+    userId: auth.user.id,
+    requestId,
+    dbSessao: db,
+    admin,
+    settings: orgLinha?.settings,
+    idioma: auth.user.idioma,
+    phoneNumber: contato?.phone_number,
+    origem: "botao",
+  });
+
+  if (acao === "resumir" || acao === "sugerir") {
+    const nome = acao === "resumir" ? "resumir_conversa" : "sugerir_resposta";
+    let r;
+    try {
+      r = await executarFerramenta(nome, contexto, acao === "sugerir" ? { orientacao: pergunta } : {});
+    } catch (erro) {
+      const motivo = motivoDaConversaDoCaso(erro);
+      logger.error("[painel-agente] o modelo não respondeu", {
+        requestId, organizationId: orgId, motivo: motivo.codigo,
+      });
+      void audit({
+        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
+        resourceType: "conversation", resourceId: conversa.id, requestId,
+        metadata: { acao, llm_call_id: null, respondeu: false, error_code: motivo.codigo },
+      });
+      return fail(motivo.codigo, t(motivo.texto), 422, { requestId });
+    }
+    if (!r.ok) {
+      return fail("empty", t(r.texto), 422, { requestId });
+    }
+    void audit({
+      action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
+      resourceType: "conversation", resourceId: conversa.id, requestId,
+      metadata: { acao, llm_call_id: r.extra?.callId ?? null, respondeu: true, error_code: null },
+    });
+    return ok({ acao, resposta: r.texto }, { requestId });
+  }
+
+  const comFerramentas = ferramentasDoPainelLigadas(orgLinha?.settings);
+  if (comFerramentas) {
+    const consultaId = consultaDoCliente ?? randomUUID();
+    const modo = modoForcado ?? modoDaPergunta(pergunta ?? "", historico);
+    const t0 = Date.now();
+    await abrirConsulta(admin, {
+      id: consultaId, orgId, conversationId: conversa.id, contactId,
+      userId: auth.user.id, pergunta: pergunta ?? "", modo,
+    });
+    contexto.onAndamento = (etapa) => atualizarEtapa(admin, orgId, consultaId, etapa);
+    contexto.origem = "agente";
+    try {
+      const r = await responderComFerramentas(contexto, {
+        pergunta: pergunta ?? "",
+        historico,
+        modo,
+      });
+      await fecharConsulta(admin, {
+        id: consultaId, orgId, resposta: r.texto, passos: r.passos, propostas: r.propostas,
+        tokensEntrada: r.tokensEntrada, tokensSaida: r.tokensSaida, custoUsd: r.custoUsd,
+        duracaoMs: Date.now() - t0, parouPor: r.parouPor, llmCallIds: r.callId ? [r.callId] : [],
+        modo: r.modo,
+      });
+      void audit({
+        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
+        resourceType: "conversation", resourceId: conversa.id, requestId,
+        metadata: {
+          acao, llm_call_id: r.callId, respondeu: true, error_code: null,
+          parou_por: r.parouPor, consulta_id: consultaId,
+        },
+      });
+      return ok({
+        acao, resposta: r.texto, consulta_id: consultaId,
+        propostas: r.propostas, parou_por: r.parouPor, modo: r.modo,
+        sugestao: true,
+      }, { requestId });
+    } catch (erro) {
+      const motivo = motivoDaConversaDoCaso(erro);
+      await fecharConsulta(admin, {
+        id: consultaId, orgId, resposta: "", passos: [], propostas: [],
+        tokensEntrada: 0, tokensSaida: 0, custoUsd: 0, duracaoMs: Date.now() - t0,
+        parouPor: "fim", llmCallIds: [], modo, status: "erro",
+      });
+      logger.error("[painel-agente] o modelo não respondeu", {
+        requestId, organizationId: orgId, motivo: motivo.codigo,
+      });
+      void audit({
+        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
+        resourceType: "conversation", resourceId: conversa.id, requestId,
+        metadata: { acao, llm_call_id: null, respondeu: false, error_code: motivo.codigo },
+      });
+      return fail(motivo.codigo, t(motivo.texto), 422, { requestId });
+    }
   }
 
   const { data: linhas, error: erroMsgs } = await db
@@ -167,7 +290,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       requestId,
       organizationId: orgId,
       motivo: erroCodigo,
-      erro: erro instanceof Error ? erro.message : String(erro),
     });
   }
 
@@ -185,5 +307,5 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const m = motivo ?? motivoDaConversaDoCaso(new Error("vazio"));
     return fail(m.codigo, t(m.texto), 422, { requestId });
   }
-  return ok({ acao, resposta: resposta.texto }, { requestId });
+  return ok({ acao, resposta: resposta.texto, sugestao: true }, { requestId });
 }
