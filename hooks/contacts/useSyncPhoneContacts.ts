@@ -15,6 +15,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 export interface ResumoDaAgenda {
   lidos: number;
   importados: number;
+  atualizados: number;
   ja_existentes: number;
   ignorados: number;
   erros: number;

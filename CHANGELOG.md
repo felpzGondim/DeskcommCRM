@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.9] — não publicada
+
+### Corrigido
+
+- **A importação de contatos troca o nome de quem já existia e entende a planilha do Google Contatos** A planilha e a agenda do celular só criavam contato novo; quem já existia (em geral pelo número da mensagem) ficava com o apelido do WhatsApp ou só o número. A opção "Atualizar contatos existentes" (desligada por padrão) mostra antes de gravar quantos serão criados, preenchidos e substituídos; ao confirmar, o nome da planilha substitui o nome principal — inclusive o já preenchido. Esse nome é o que o `{{nome}}` das mensagens automáticas usa. O Importar CSV reconhece a exportação do Google Contatos em inglês e em português (Name/Nome ou a junção das partes, Phone 1 - Value/Telefone 1 - Valor, vários números na mesma célula separados por ` ::: `). A agenda do celular preenche o nome da agenda só quando esse campo está vazio. A correção pontual da base existente continua esperando a planilha e o ok do Felipe.
+
 ## [1.88.0-felpz.8] — 2026-10-28
 
 ### Adicionado

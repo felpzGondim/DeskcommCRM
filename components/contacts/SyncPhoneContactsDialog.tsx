@@ -86,6 +86,7 @@ export function SyncPhoneContactsDialog({ open, onOpenChange }: Props) {
       setResumo(r);
       setRetomada(r.proximo_offset ?? 0);
       if (r.importados > 0) toast.success(`${r.importados} ${t("contato(s) sincronizado(s)")}`);
+      if (r.atualizados > 0) toast.success(`${r.atualizados} ${t("contato(s) com nome da agenda preenchido")}`);
       if (r.ja_existentes > 0) toast.info(`${r.ja_existentes} ${t("contato(s) já existente(s) — nada duplicado")}`);
       if (r.erros > 0) toast.warning(`${r.erros} ${t("contato(s) com erro na gravação")}`);
     } catch (err) {
@@ -120,7 +121,7 @@ export function SyncPhoneContactsDialog({ open, onOpenChange }: Props) {
           <DialogTitle>{t("Sincronizar agenda do celular")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.",
+              "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata; se o nome da agenda na ficha estiver vazio, ele é preenchido. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -201,6 +202,11 @@ export function SyncPhoneContactsDialog({ open, onOpenChange }: Props) {
               <span className="rounded-md px-2 py-1 font-medium">
                 {resumo.importados} {t("importado(s)")}
               </span>
+              {resumo.atualizados > 0 && (
+                <span className="rounded-md px-2 py-1 font-medium">
+                  {resumo.atualizados} {t("atualizado(s)")}
+                </span>
+              )}
               {resumo.ja_existentes > 0 && (
                 <span className="rounded-md bg-surface px-2 py-1">
                   {resumo.ja_existentes} {t("já existente(s)")}
