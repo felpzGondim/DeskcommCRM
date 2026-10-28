@@ -18,7 +18,7 @@ Hoje o atendente já tem, na coluna direita da conversa (Inbox), um **Painel do 
 | 2 | Buscar boletos | Consulta 2ª via no SuperLógica via Hub | Só se o Hub em produção anunciar a ferramenta |
 | 3 | Consultar contrato e inquilino | Lê contrato ativo pelo telefone da conversa | Idem |
 | 4 | Ficha cadastral / pedir documentos | Manda **conteúdo extraído** dos anexos (além de nome e legenda) | Fase 2: lê PDF/foto; Hub ainda classifica do lado dele |
-| 5 | Iniciar análise de inquilino | Lê conversa + anexos (visão/OCR); PDF com senha pede senha; conversa longa usa janela útil | Fase 2 no CRM. Arquivo no job só se o Hub anunciar o campo |
+| 5 | Iniciar análise de inquilino | Lê as 200 mensagens mais recentes + anexos (visão/OCR até 30 páginas); PDF com senha pede senha | Fase 2 no CRM. Arquivo no job: Q7 ainda aberto |
 | 6 | Gerar contrato | Formulário manual → prévia → confirmação → cria locação **ATIVA** no SuperLógica | Código no CRM **existe** (PR #8). Nunca foi testado de ponta a ponta. O Hub precisa estar no ar com a permissão certa |
 | 7 | Chamado de manutenção | — | **Fora deste plano** (Q11). Não implementar nas Fases 1–5 |
 
@@ -458,8 +458,8 @@ Checklist, na ordem. Cada passo tem um “pronto quando”:
 - [x] Foto de holerite (sem PDF) produz valor com `fonte` + trecho, editável. (CRM: visão documental + `fonte` renda aceita imagem)
 - [x] PDF só-imagem passa pelo OCR/visão e não cai no `continue` silencioso.
 - [x] PDF com senha pede a senha no painel; senha errada não derruba o painel.
-- [x] Conversa com >200 mensagens analisa a janela útil e não devolve 422 de tamanho.
-- [ ] Job no Hub lista os arquivos recebidos (log sem PII: nome, mime, bytes). **Pendência do Hub (Q7).** O CRM só anexa URL se o schema tiver o campo.
+- [x] Conversa com >200 mensagens analisa as 200 mais recentes e não devolve 422 de tamanho.
+- [ ] Job no Hub lista os arquivos recebidos (log sem PII: nome, mime, bytes). **Q7 aberto — Felipe ainda não decidiu.** O CRM mantém o comportamento atual (URL só se o schema tiver o campo). Sem multipart novo.
 - [x] Descrição genérica do worker (“parece um extrato”) **não** libera confirmação sozinha.
 
 #### Teste da Fase 2
@@ -684,9 +684,9 @@ Resposta curta basta. Sem resposta, a implementação **não inventa**. As decid
 | 2 | Hub com o PR #22 já está no ar? Quais ferramentas o “Testar conexão” lista? | **Aberta — em verificação à parte** | — |
 | 3 | Um WhatsApp, várias pessoas no contrato? | **Decidida** | Cada pessoa = uma pessoa no SuperLógica; casal no mesmo número não é o caso comum. O contrato pode incluir quem **não** é o contato do WhatsApp (filha fala, pai/mãe aluga). Processo com **N participantes** (locatário / fiador / solidário), cada um opcionalmente ligado a um contato do CRM e a um `superlogica_pessoa_id`. O contato do WhatsApp é só o **interlocutor**. |
 | 4 | CPF de quem não é contato: cifrado no participante, ou redigita na hora do contrato? | Aberta | — |
-| 5 | Teto de OCR: 8 páginas ou 8 MB, o que vier primeiro? | **Provisória (Fase 2)** | 8 páginas **e** 10 MB (o que vier primeiro). Afinável em `settings.locacao.anexos`. |
-| 6 | Conversa longa: 80 úteis ou 400 brutas + 60 mil caracteres? | **Provisória (Fase 2)** | 400 brutas / 80 úteis / 80 mil caracteres. Sem 422 de tamanho. |
-| 7 | Arquivo no Hub: URL assinada ou multipart? | **Parcial** | URL assinada de 15 min **só se** o schema da ferramenta anunciar `arquivos`/`anexos`. Sem campo, não manda. Multipart e endpoint novo = mudar o Hub (fora deste PR). |
+| 5 | Teto de OCR: 8 páginas ou 8 MB, o que vier primeiro? | **Decidida (PR #15)** | 30 páginas. Tamanho 20 MB, 120 mil caracteres/arquivo, 200 mil no conjunto. Afinável em `settings.locacao.anexos`. |
+| 6 | Conversa longa: 80 úteis ou 400 brutas + 60 mil caracteres? | **Decidida (PR #15)** | 200 mensagens mais recentes. Sem filtro de úteis. Sem 422. |
+| 7 | Arquivo no Hub: URL assinada ou multipart? | **Aberta** | Felipe ainda não decidiu. O PR mantém o comportamento atual e **não** inventa contrato. |
 | 8 | Fase 3 e 3b juntas num PR? | Aberta | — |
 | 9 | Gravar `id_pessoa_pes` já na consulta, ou só ao criar o contrato? | Aberta | — |
 | 10 | Gerar contrato só com processo aprovado? | **Decidida** | O botão **sempre** existe; o formulário vazio de hoje continua válido. Aprovação é **decisão manual do Felipe, obrigatória como ato dele**, mesmo se todos os passos de análise disserem ok. O processo só pré-preenche quando existe. **Nada auto-aprova nem auto-cria.** |

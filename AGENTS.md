@@ -533,8 +533,9 @@ atendente: **nunca envia ao cliente** ("Usar como resposta" só preenche o Compo
 conversa do painel (auditoria sem texto). Decisões em
 [`docs/decisoes/painel-agente.md`](docs/decisoes/painel-agente.md).
 
-Neste fork, a Fase 2 do processo de locação lê anexos (visão/OCR, PDF com senha, janela útil)
-e manda o **conteúdo** para a ficha. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md)
+Neste fork, a Fase 2 do processo de locação lê anexos (visão/OCR até 30 páginas, PDF com senha,
+janela das 200 mensagens mais recentes) e manda o **conteúdo** para a ficha. Q7 (arquivo no Hub)
+está pendente — não inventar contrato. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md)
 e [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md). Não criar tabela
 de processo nem bucket sem o dono autorizar a Fase 3.
 

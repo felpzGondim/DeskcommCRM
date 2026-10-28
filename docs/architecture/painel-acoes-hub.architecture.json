@@ -34,7 +34,7 @@
     { "id": "e5", "from": "rota", "to": "recibo", "label": "reserva antes da análise" },
     { "id": "e6", "from": "hub", "to": "botoes", "label": "resumo estruturado ou erro visível" },
     { "id": "e7", "from": "botoes", "to": "composer", "label": "preenche sugestão; atendente decide envio" },
-    { "id": "e8", "from": "rota", "to": "anexos", "label": "janela útil da conversa" },
+    { "id": "e8", "from": "rota", "to": "anexos", "label": "200 mensagens mais recentes" },
     { "id": "e9", "from": "anexos", "to": "visao", "label": "foto e PDF escaneado" },
     { "id": "e10", "from": "anexos", "to": "storage", "label": "reabre original do tenant" },
     { "id": "e11", "from": "anexos", "to": "botoes", "label": "prévia, aviso de senha e limites" },

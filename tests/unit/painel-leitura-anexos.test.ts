@@ -9,6 +9,7 @@ vi.mock("@/lib/ai/rag/extractors/pdf", async (orig) => {
   return { ...real, extractPdfText: (...args: unknown[]) => extractPdfText(...args) };
 });
 
+import { LIMITES_ANEXOS_PADRAO } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { aplicarLeiturasDocumentais, leiturasDocumentais, lerImagensDocumentais, lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 
 const pdf = readFileSync("tests/fixtures/sample-text.pdf");
@@ -86,6 +87,31 @@ describe("leitura original de anexos", () => {
     adminQueEntrega(Buffer.from("img")) as never);
     expect(generica[0]?.leitura_documental).toBeUndefined();
     expect(generica[0]?.pendencia_anexo).toBe("imagem_sem_leitura");
+  });
+
+  it("no fallback do raster, manda páginas em lotes e não uma a uma", async () => {
+    extractPdfText.mockRejectedValue(new PdfExtractError("image-only", undefined, "sem_texto"));
+    const lerDocumento = vi.fn(async (e: { mime: string; mais?: unknown[] }) => (
+      e.mime === "application/pdf"
+        ? { ok: false as const, motivo: "falha" as const }
+        : { ok: true as const, texto: "pagina" }
+    ));
+    const raster = vi.spyOn(await import("@/lib/ai/rag/extractors/pdf-paginas"), "rasterizarPaginasPdf")
+      .mockResolvedValue(Array.from({ length: 12 }, (_, i) => (
+        { pagina: i + 1, mime: "image/png" as const, bytes: Buffer.from(`p${i}`) }
+      )));
+    const linhas = await lerPdfsOriginais([{
+      type: "document", media_mime: "application/pdf",
+      media_storage_path: "org/conversa/extrato.pdf", media_size_bytes: pdf.length,
+    }], "org", "conversa", adminQueEntrega(pdf) as never, {
+      lerDocumento,
+      limites: LIMITES_ANEXOS_PADRAO,
+    });
+    const chamadasPng = lerDocumento.mock.calls.filter((c) => c[0]?.mime === "image/png");
+    expect(chamadasPng).toHaveLength(3);
+    expect(chamadasPng[0]?.[0]?.mais).toHaveLength(4);
+    expect(linhas[0]?.media_derived_text).toContain("pagina");
+    raster.mockRestore();
   });
 
   it("sela o texto extraído para a confirmação não precisar da senha de novo", async () => {

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { apresentarResultado, ferramentaDaAcao, ferramentaDoInquilino, leituraPermitida, montarFichaTemporaria, tresDigitosDoCliente } from "@/lib/agent-engine/agent/painel-acoes-hub";
 import { abrirPrevia, fontesDaAnalise, hashDasFontes, pendenciasDaPrevia, previaSchema, resumoDaPrevia, selarPrevia } from "@/lib/agent-engine/agent/painel-analise-preparo";
-import { janelaUtilDaAnalise, limitesDaAnalise, rotuloDoLimite } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import { TETO_TOKEN_PREVIA, janelaUtilDaAnalise, limitesDaAnalise, rotuloDoLimite } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { assinarAnexosParaOHub, chaveDosArquivos, ferramentaAceitaArquivos } from "@/lib/agent-engine/agent/painel-arquivos-hub";
 import { aplicarLeiturasDocumentais, enriquecerAnexosDaAnalise, frasesDosAvisos, leiturasDocumentais, lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 import { prepararAnaliseNoPainel } from "@/lib/agent-engine/agent/painel-do-atendente";
@@ -30,7 +30,7 @@ type Ctx = { params: Promise<{ id: string }> };
 const corpo = z.discriminatedUnion("acao", [
   z.object({ acao: z.enum(["boletos", "contrato", "ficha"]) }).strict(),
   z.object({ acao: z.literal("analise"), etapa: z.enum(["preparar", "confirmar"]),
-    confirmar: z.literal(true).optional(), pedidoId: z.string().uuid().optional(), previaToken: z.string().max(120000).optional(),
+    confirmar: z.literal(true).optional(), pedidoId: z.string().uuid().optional(), previaToken: z.string().max(TETO_TOKEN_PREVIA).optional(),
     senhasPdf: z.array(z.object({ nome: z.string().trim().min(1).max(120), senha: z.string().min(1).max(200) })).max(12).optional() }).strict()
     .refine((v) => v.etapa === "preparar" ? !v.confirmar && !v.pedidoId && !v.previaToken
       : v.confirmar === true && !!v.pedidoId && !!v.previaToken),

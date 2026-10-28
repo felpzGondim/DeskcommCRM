@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { z } from "zod";
 
 import { isValidCpf } from "@/lib/legal/perfil-do-pais";
-import { ehDescricaoGenericaDeMidia, textoCombinadoDaMensagem } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import { LIMITES_ANEXOS_PADRAO, TETO_TOKEN_PREVIA, ehDescricaoGenericaDeMidia, textoCombinadoDaMensagem } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { scrubMessage } from "@/lib/sentry/scrub";
 
 export { lerPdfsOriginais } from "@/lib/agent-engine/agent/painel-leitura-anexos";
@@ -41,11 +41,12 @@ export function fontesDaAnalise(linhas: readonly Record<string, unknown>[]): Fon
     const corpo = typeof m.body === "string" ? m.body : "";
     const textoFonte = textoCombinadoDaMensagem(corpo, derivado);
     const documental = m.leitura_documental === true && !!derivado && !ehDescricaoGenericaDeMidia(derivado);
-    return { id: `M${i + 1}`, direcao, tipo, nome, texto: textoFonte.slice(0, 42000),
-      legivel: (tipo === "text" && textoFonte.length <= 42000) ||
+    const teto = LIMITES_ANEXOS_PADRAO.chars_por_arquivo;
+    return { id: `M${i + 1}`, direcao, tipo, nome, texto: textoFonte.slice(0, teto),
+      legivel: (tipo === "text" && textoFonte.length <= teto) ||
         (tipo === "audio" && !!derivado && derivado.length < 8000) ||
-        (tipo === "document" && direcao === "cliente" && m.original_completo === true && textoFonte.length <= 42000) ||
-        (tipo === "image" && direcao === "cliente" && documental && textoFonte.length <= 42000) };
+        (tipo === "document" && direcao === "cliente" && m.original_completo === true && textoFonte.length <= teto) ||
+        (tipo === "image" && direcao === "cliente" && documental && textoFonte.length <= teto) };
   });
 }
 
@@ -123,7 +124,7 @@ export function selarPrevia(dados: Cupom, segredo: string, escopo: string): stri
 }
 
 export function abrirPrevia(token: string, segredo: string, escopo: string): Cupom | null {
-  if (!segredo || token.length > 120000) return null;
+  if (!segredo || token.length > TETO_TOKEN_PREVIA) return null;
   try {
     const bytes = Buffer.from(token, "base64url");
     if (bytes.length < 29) return null;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LIMITES_ANEXOS_PADRAO,
   ehDescricaoGenericaDeMidia,
   janelaUtilDaAnalise,
   limitesDaAnalise,
-  mensagemUtilParaAnalise,
   textoCombinadoDaMensagem,
 } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { montarFichaTemporaria } from "@/lib/agent-engine/agent/painel-acoes-hub";
@@ -65,23 +65,34 @@ describe("texto combinado da mensagem (bug da legenda)", () => {
 });
 
 describe("janela e limites", () => {
-  it("não bloqueia conversa com mais de 200 mensagens: recorta as úteis", () => {
+  it("não bloqueia conversa longa: lê as 200 mais recentes, inclusive o papo", () => {
     const linhas = Array.from({ length: 250 }, (_, i) => (
       i === 0
         ? { type: "document", body: "RG", media_mime: "application/pdf" }
         : { type: "text", body: i % 17 === 0 ? `aluguel ${1200 + i}` : "ok" }
     ));
     const janela = janelaUtilDaAnalise(linhas);
-    expect(janela.length).toBeLessThanOrEqual(80);
-    expect(janela.some((l) => l.type === "document")).toBe(true);
-    expect(janela.every(mensagemUtilParaAnalise)).toBe(true);
+    expect(janela).toHaveLength(200);
+    expect(janela[0]?.type).toBe("document");
+    expect(janela.some((l) => l.body === "ok")).toBe(true);
+    expect(janelaUtilDaAnalise(linhas.slice(0, 30))).toHaveLength(30);
   });
 
   it("aceita recorte em organizations.settings.locacao.anexos e ignora lixo", () => {
-    const l = limitesDaAnalise({ locacao: { anexos: { pdfs: 4, mensagens_uteis: 9999, imagens: "x" } } });
+    const l = limitesDaAnalise({ locacao: { anexos: { pdfs: 4, mensagens_brutas: 9999, imagens: "x", paginas_ocr: 30 } } });
     expect(l.pdfs).toBe(4);
-    expect(l.mensagens_uteis).toBe(200);
+    expect(l.mensagens_brutas).toBe(400);
     expect(l.imagens).toBe(8);
+    expect(l.paginas_ocr).toBe(30);
+  });
+
+  it("o padrão cabe um extrato de 30 páginas", () => {
+    expect(LIMITES_ANEXOS_PADRAO.paginas_ocr).toBe(30);
+    expect(LIMITES_ANEXOS_PADRAO.bytes_pdf).toBe(20 * 1024 * 1024);
+    expect(LIMITES_ANEXOS_PADRAO.chars_por_arquivo).toBe(120_000);
+    expect(LIMITES_ANEXOS_PADRAO.chars_conjunto).toBe(200_000);
+    expect(LIMITES_ANEXOS_PADRAO.paginas_por_lote_ocr).toBe(5);
+    expect(LIMITES_ANEXOS_PADRAO.mensagens_brutas).toBe(200);
   });
 });
 

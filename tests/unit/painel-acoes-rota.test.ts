@@ -163,7 +163,7 @@ describe("rota das ações do painel", () => {
     expect(mocks.call).not.toHaveBeenCalled();
   });
 
-  it("conversa com mais de 200 mensagens analisa a janela útil", async () => {
+  it("conversa com mais de 200 mensagens analisa as 200 mais recentes", async () => {
     mocks.linhasFicha.mockReturnValue(Array.from({ length: 220 }, (_, i) => (
       i === 0
         ? { type: "document", body: "", media_derived_status: "ready", media_derived_text: "holerite renda liquida 4000", original_completo: true }

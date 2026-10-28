@@ -49,14 +49,23 @@ async function ocrDePdf(
   lerDocumento: LerDocumentoFn,
   organizationId: string,
 ): Promise<string | null> {
-  // Gemini (e outros) leem PDF direto — sem canvas nativo, sem raster.
+  // Caminho feliz: uma chamada com o PDF inteiro (Gemini lê até 30 páginas).
   const direto = await lerDocumento({ organizationId, buffer, mime: "application/pdf" });
   if (direto.ok && direto.texto.trim()) return direto.texto.trim();
   const paginas = await rasterizarPaginasPdf(buffer, { maxPaginas: limites.paginas_ocr, password: senha });
   if (paginas.length === 0) return null;
+  const lote = Math.max(1, limites.paginas_por_lote_ocr);
   const partes: string[] = [];
-  for (const pagina of paginas) {
-    const lido = await lerDocumento({ organizationId, buffer: pagina.bytes, mime: pagina.mime });
+  for (let i = 0; i < paginas.length; i += lote) {
+    const grupo = paginas.slice(i, i + lote);
+    const primeira = grupo[0];
+    if (!primeira) continue;
+    const lido = await lerDocumento({
+      organizationId,
+      buffer: primeira.bytes,
+      mime: primeira.mime,
+      mais: grupo.slice(1).map((p) => ({ buffer: p.bytes, mime: p.mime })),
+    });
     if (lido.ok && lido.texto.trim()) partes.push(lido.texto.trim());
   }
   const texto = partes.join("\n\n").trim();

@@ -1,49 +1,57 @@
 /**
  * Limites da leitura de anexos no painel (Fase 2 do processo de locação).
  *
- * Os números abaixo substituem o bloqueio duro de 200 mensagens e o silêncio
- * de PDF/imagem. Dá para afinar em `organizations.settings.locacao.anexos`
- * sem migration; valor ausente ou inválido cai no padrão.
+ * Dá para afinar em `organizations.settings.locacao.anexos` sem migration;
+ * valor ausente ou inválido cai no padrão. Decisão do Felipe no PR #15:
+ * 200 mensagens mais recentes (sem filtro de “úteis”, sem 422) e PDF
+ * escaneado até 30 páginas (extrato bancário longo).
  *
- * Justificativa (PR da Fase 2):
- * - 400 brutas / 80 úteis: conversa longa de locação tem ida e volta, mas o
- *   que importa é anexo ou número (CPF, aluguel, renda). 80 úteis cabem no
- *   bloco de 80 mil caracteres.
- * - 12 PDFs / 8 imagens: RG + holerites + extrato + comprovante de 1–2
- *   pessoas, sem abrir a carteira de visão num click.
- * - 10 MB / 8 páginas de OCR: o WhatsApp já corta arquivo grande; 8 páginas
- *   cobrem RG (2) + holerite (1–3) + comprovante. Q5 do plano seguia aberta.
- * - 15 min de URL assinada: o Hub baixa na hora; URL curta reduz vazamento.
+ * Justificativa dos números:
+ * - 200 mensagens: o atendente pediu a janela recente, não um recorte
+ *   “útil”. Conversa maior não bloqueia — só não lê o que passou de 200.
+ * - 20 MB / 30 páginas: extrato escaneado no WhatsApp fica ~0,5–0,7 MB
+ *   por página; 30 páginas cabem em 20 MB. Texto puro é bem menor.
+ * - 120 mil caracteres/arquivo: ~4 mil por página × 30 (tabela de extrato).
+ * - 200 mil no conjunto: um extrato longo + RG + holerites de 1–2 pessoas.
+ *   Gemini Flash (visao_de_imagem) tem contexto de 1M tokens; o teto é o
+ *   token da prévia (500 mil) e o tempo da rota, não o modelo.
+ * - 5 páginas/lote no fallback: o caminho feliz manda o PDF inteiro numa
+ *   chamada. Se a visão no PDF falhar, o raster vai de 5 em 5 (no máximo
+ *   6 chamadas), não 30 — timeout e custo.
+ * - 20 mil na ficha: o Hub classifica; não precisa do extrato inteiro.
  */
 export const LIMITES_ANEXOS_PADRAO = {
-  mensagens_brutas: 400,
-  mensagens_uteis: 80,
+  mensagens_brutas: 200,
   pdfs: 12,
   imagens: 8,
-  bytes_pdf: 10 * 1024 * 1024,
+  bytes_pdf: 20 * 1024 * 1024,
   bytes_imagem: 8 * 1024 * 1024,
-  chars_por_arquivo: 40_000,
-  chars_conjunto: 80_000,
-  chars_ficha_por_anexo: 4_000,
-  paginas_ocr: 8,
+  chars_por_arquivo: 120_000,
+  chars_conjunto: 200_000,
+  chars_ficha_por_anexo: 20_000,
+  paginas_ocr: 30,
+  paginas_por_lote_ocr: 5,
   url_assinada_segundos: 15 * 60,
   tentativas_senha: 3,
   anexos_ficha: 30,
 } as const;
 
+/** Teto do token cifrado da prévia: um extrato de 30 páginas não cabia em 120 mil. */
+export const TETO_TOKEN_PREVIA = 500_000;
+
 export type LimitesAnexos = { [K in keyof typeof LIMITES_ANEXOS_PADRAO]: number };
 
 const TETO: LimitesAnexos = {
-  mensagens_brutas: 800,
-  mensagens_uteis: 200,
+  mensagens_brutas: 400,
   pdfs: 20,
   imagens: 16,
-  bytes_pdf: 20 * 1024 * 1024,
+  bytes_pdf: 30 * 1024 * 1024,
   bytes_imagem: 12 * 1024 * 1024,
-  chars_por_arquivo: 80_000,
-  chars_conjunto: 120_000,
-  chars_ficha_por_anexo: 8_000,
-  paginas_ocr: 12,
+  chars_por_arquivo: 200_000,
+  chars_conjunto: 300_000,
+  chars_ficha_por_anexo: 40_000,
+  paginas_ocr: 40,
+  paginas_por_lote_ocr: 10,
   url_assinada_segundos: 30 * 60,
   tentativas_senha: 3,
   anexos_ficha: 40,
@@ -63,8 +71,7 @@ export function limitesDaAnalise(settings: unknown): LimitesAnexos {
   const o = bruto && typeof bruto === "object" ? bruto as Record<string, unknown> : {};
   const p = LIMITES_ANEXOS_PADRAO;
   return {
-    mensagens_brutas: inteiro(o.mensagens_brutas, 80, TETO.mensagens_brutas, p.mensagens_brutas),
-    mensagens_uteis: inteiro(o.mensagens_uteis, 20, TETO.mensagens_uteis, p.mensagens_uteis),
+    mensagens_brutas: inteiro(o.mensagens_brutas ?? o.mensagens, 50, TETO.mensagens_brutas, p.mensagens_brutas),
     pdfs: inteiro(o.pdfs, 1, TETO.pdfs, p.pdfs),
     imagens: inteiro(o.imagens, 1, TETO.imagens, p.imagens),
     bytes_pdf: inteiro(o.bytes_pdf, 1024 * 1024, TETO.bytes_pdf, p.bytes_pdf),
@@ -73,32 +80,19 @@ export function limitesDaAnalise(settings: unknown): LimitesAnexos {
     chars_conjunto: inteiro(o.chars_conjunto, 10_000, TETO.chars_conjunto, p.chars_conjunto),
     chars_ficha_por_anexo: inteiro(o.chars_ficha_por_anexo, 500, TETO.chars_ficha_por_anexo, p.chars_ficha_por_anexo),
     paginas_ocr: inteiro(o.paginas_ocr, 1, TETO.paginas_ocr, p.paginas_ocr),
+    paginas_por_lote_ocr: inteiro(o.paginas_por_lote_ocr, 1, TETO.paginas_por_lote_ocr, p.paginas_por_lote_ocr),
     url_assinada_segundos: inteiro(o.url_assinada_segundos, 60, TETO.url_assinada_segundos, p.url_assinada_segundos),
     tentativas_senha: inteiro(o.tentativas_senha, 1, TETO.tentativas_senha, p.tentativas_senha),
     anexos_ficha: inteiro(o.anexos_ficha, 5, TETO.anexos_ficha, p.anexos_ficha),
   };
 }
 
-const TEM_NUMERO_OU_ENDERECO =
-  /\d{3,}|cpf|cnpj|rg\b|rua |av\.|avenida|alameda|travessa|apto|apartamento|bloco |aluguel|renda|holerite/i;
-
-export function mensagemUtilParaAnalise(linha: Record<string, unknown>): boolean {
-  if (linha.revoked_at) return false;
-  const tipo = typeof linha.type === "string" ? linha.type : "";
-  if (tipo === "document" || tipo === "image") return true;
-  const corpo = typeof linha.body === "string" ? linha.body : "";
-  const derivado = typeof linha.media_derived_text === "string" ? linha.media_derived_text : "";
-  return TEM_NUMERO_OU_ENDERECO.test(`${corpo}\n${derivado}`);
-}
-
-/** Últimas N úteis dentro do teto bruto. Entrada já vem da mais nova para a mais velha. */
+/** Últimas N mensagens. Entrada já vem da mais nova para a mais velha. Sem filtro. */
 export function janelaUtilDaAnalise(
   linhas: readonly Record<string, unknown>[],
-  limites: Pick<LimitesAnexos, "mensagens_brutas" | "mensagens_uteis"> = LIMITES_ANEXOS_PADRAO,
+  limites: Pick<LimitesAnexos, "mensagens_brutas"> = LIMITES_ANEXOS_PADRAO,
 ): Record<string, unknown>[] {
-  const recorte = linhas.slice(0, limites.mensagens_brutas);
-  const uteis = recorte.filter(mensagemUtilParaAnalise);
-  return (uteis.length > 0 ? uteis : recorte).slice(0, limites.mensagens_uteis);
+  return linhas.slice(0, limites.mensagens_brutas);
 }
 
 /**

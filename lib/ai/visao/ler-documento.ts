@@ -24,10 +24,13 @@ export type ResultadoLeituraDocumental =
   | { ok: true; texto: string }
   | { ok: false; motivo: "sem_provedor" | "falha" };
 
+export type ArquivoDaVisao = { buffer: Buffer; mime: string };
+
 export type LerDocumentoFn = (entrada: {
   organizationId: string;
   buffer: Buffer;
   mime: string;
+  mais?: ArquivoDaVisao[];
 }) => Promise<ResultadoLeituraDocumental>;
 
 async function bindingDeVisao(
@@ -49,6 +52,7 @@ export async function lerDocumentoPorVisao(entrada: {
   organizationId: string;
   buffer: Buffer;
   mime: string;
+  mais?: ArquivoDaVisao[];
   admin?: ReturnType<typeof createAdminClient>;
   llmCfg: LlmEdgeConfig;
 }): Promise<ResultadoLeituraDocumental> {
@@ -65,6 +69,11 @@ export async function lerDocumentoPorVisao(entrada: {
     const factory = createDefaultRegistry()[llm.provider];
     if (!factory) return { ok: false, motivo: "sem_provedor" };
     const inicio = Date.now();
+    const extras = (entrada.mais ?? []).map((a) => ({
+      type: "file" as const,
+      data: a.buffer,
+      mediaType: a.mime.split(";")[0]!.trim().toLowerCase(),
+    }));
     const res = await generateText({
       model: factory(llm.apiKey, modelo, binding?.base_url ?? undefined),
       messages: [{
@@ -72,6 +81,7 @@ export async function lerDocumentoPorVisao(entrada: {
         content: [
           { type: "text", text: PROMPT_LEITURA_DOCUMENTAL },
           { type: "file", data: entrada.buffer, mediaType: mime },
+          ...extras,
         ],
       }],
     });
