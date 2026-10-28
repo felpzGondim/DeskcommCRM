@@ -564,8 +564,10 @@ O `release.yml` oficial está desligado aqui. A revisão `vX.Y.Z-felpz.N` data o
 e a tag anotada nasce no **merge commit dessa feature** — sem PR extra só para datar.
 Depois do merge: `git tag -a vX.Y.Z-felpz.N -m "…" <sha-do-merge> && git push origin vX.Y.Z-felpz.N`.
 O push da tag dispara `publish-image.yml`; se a main já publicou o manifesto
-`sha-<esse commit>` com amd64 e arm64 nas quatro imagens, a tag só retaggeia
-(`docker buildx imagetools create`); senão constrói como hoje. Lei:
+`sha-<esse commit>` com amd64 e arm64 nas quatro imagens, worker/scheduler/voz
+são retag (`docker buildx imagetools create`) e o **app reconstrói** para
+gravar `APP_VERSION` com o número da release; senão constrói as quatro como
+hoje. Lei:
 [`docs/deploy-fork.md`](docs/deploy-fork.md) e
 [`docs/decisoes/release-do-fork.md`](docs/decisoes/release-do-fork.md).
 

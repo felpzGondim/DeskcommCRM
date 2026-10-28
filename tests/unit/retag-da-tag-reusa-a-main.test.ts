@@ -64,6 +64,20 @@ describe("a tag reusa o SHA que a main publicou", () => {
     expect(t).toContain(":sha-${SHA}-${ARCH}");
   });
 
+  it("a imagem do app NÃO entra no retag — APP_VERSION tem de ser o número da release", () => {
+    // rollbackDesmentidoPeloApp compara APP_VERSION (assado no build) com
+    // to_version. A main assa o SHA curto; se a tag retaggeasse o app, um
+    // update.sh --force da mesma versão não desmentiria o rollback.
+    const t = job(publish, "build-and-push");
+    expect(t).toMatch(
+      /reusar != 'sim' \|\| matrix\.name == 'deskcommcrm'/,
+    );
+    expect(t).toMatch(
+      /reusar == 'sim' && matrix\.name != 'deskcommcrm'/,
+    );
+    expect(t).toContain("rollbackDesmentidoPeloApp");
+  });
+
   it("o smoke da tag NÃO espera o retag — promove stable só depois dele", () => {
     expect(corpo("imagem-do-app-sobe")).not.toContain("esperar-sha-da-main");
     expect(corpo("imagens-de-fundo-sobem")).not.toContain("esperar-sha-da-main");

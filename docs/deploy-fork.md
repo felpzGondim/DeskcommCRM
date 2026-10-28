@@ -44,10 +44,13 @@ A data entra no **PR da feature**, e a tag nasce no merge commit dessa feature �
    cada personalização. Não envie todas as tags do original.
 4. O push da tag aciona a publicação. Se a `main` já publicou o manifesto
    `sha-<esse commit>` das quatro imagens com amd64 e arm64, o workflow
-   **retaggeia** (`docker buildx imagetools create`) em vez de construir de
-   novo; senão cai no build atual. Os smokes (`imagem-do-app-sobe`,
-   `imagens-de-fundo-sobem`) continuam rodando antes de promover `stable`.
-   Uma tag sozinha não significa que a versão está disponível.
+   **retaggeia** worker, scheduler e voice-agent (`docker buildx imagetools
+   create`); a imagem do **app** sempre reconstrói, para gravar
+   `APP_VERSION` com o número da release (é o que a tela de atualização
+   compara depois de um rollback). Senão cai no build atual das quatro.
+   Os smokes (`imagem-do-app-sobe`, `imagens-de-fundo-sobem`) continuam
+   rodando antes de promover `stable`. Uma tag sozinha não significa que
+   a versão está disponível.
 5. Aguarde manifests e testes de boot. Só então o job
    `publicar-release-do-fork` cria uma release não marcada como prerelease e a
    indica como latest, para que `/releases/latest` do fork a encontre.
@@ -55,9 +58,10 @@ A data entra no **PR da feature**, e a tag nasce no merge commit dessa feature �
    configurações e confirme que os manifests da versão podem ser baixados sem
    login. Repositório público não torna os pacotes públicos automaticamente.
 
-Como conferir o retag na próxima release: os Digest de
-`ghcr.io/felpzgondim/<img>:<versão>` e `…:<img>:sha-<merge>` têm de ser iguais.
-Comando em [`docs/decisoes/release-do-fork.md`](decisoes/release-do-fork.md) §2.
+Como conferir o retag na próxima release: os Digest de worker, scheduler e
+voice-agent em `:<versão>` e `:sha-<merge>` têm de ser iguais; o do app
+difere (`APP_VERSION`). Comando em
+[`docs/decisoes/release-do-fork.md`](decisoes/release-do-fork.md) §2.
 
 O workflow de release do original usa um GitHub App. Não é necessário copiar
 seus segredos: o caminho deste fork é o push da tag personalizada, seguido da

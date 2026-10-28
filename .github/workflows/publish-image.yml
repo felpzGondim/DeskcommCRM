@@ -348,7 +348,12 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build e push (imagem genérica — sem segredos)
-        if: needs.esperar-sha-da-main.outputs.reusar != 'sim'
+        # O app SEMPRE reconstrói na tag: `APP_VERSION` é assada no build e é o
+        # que `rollbackDesmentidoPeloApp` compara com `to_version`. Retaggear a
+        # imagem da main deixaria o SHA curto; um `update.sh --force` da mesma
+        # versão não desmentiria o rollback e a tela bloquearia a próxima.
+        # Worker/scheduler/voz não servem essa rota — esses sim retaggeiam.
+        if: needs.esperar-sha-da-main.outputs.reusar != 'sim' || matrix.name == 'deskcommcrm'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -371,7 +376,7 @@ jobs:
           # placeholder; valores reais entram em runtime no VPS do usuário).
 
       - name: Retag da imagem que a main já publicou neste SHA
-        if: needs.esperar-sha-da-main.outputs.reusar == 'sim'
+        if: needs.esperar-sha-da-main.outputs.reusar == 'sim' && matrix.name != 'deskcommcrm'
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           SHA: ${{ github.sha }}

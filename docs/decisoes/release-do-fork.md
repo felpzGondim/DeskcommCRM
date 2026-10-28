@@ -53,19 +53,18 @@ duplicados, com a tag saindo 22 s depois do merge.
   3. O manifesto `sha-<esse SHA>` existe no GHCR **para as quatro imagens**,
      cada um com `linux/amd64` **e** `linux/arm64`. Falta uma perna → `nao`.
 - Reuso = `docker buildx imagetools create --tag <tags da versão> <origem sha-arch>`
-  em cada célula da matriz. Não reconstrói.
+  nas células de worker, scheduler e voice-agent. A imagem do **app**
+  (`deskcommcrm`) **sempre reconstrói** na tag, mesmo com `reusar=sim`:
+  `APP_VERSION` é assada no build e é o que `rollbackDesmentidoPeloApp`
+  compara com `to_version`. Retaggear o app deixaria o SHA curto da main;
+  um `update.sh --force` da mesma versão não desmentiria o rollback e a
+  tela bloquearia a próxima atualização.
 - `imagem-do-app-sobe` e `imagens-de-fundo-sobem` **não** esperam esse job:
   o smoke da tag continua em paralelo, construindo local como hoje, e
   `promover-stable` ainda precisa dos dois. Nada de promover `stable` sem smoke.
 
 Nenhuma checagem existente foi removida: pg17, e2e, arm64, `imagens-ok`, a
 trava de procedência e o smoke antes do `stable` continuam.
-
-**Consequência aceita:** a imagem retaggeada é o digest que a `main` publicou,
-cujo `APP_VERSION` interno é o SHA curto (é o que o push da `main` assa). O
-operador instala pela tag `X.Y.Z-felpz.N`, não por esse campo. Quem quiser o
-número no `/health` reconstrói — e o fallback já reconstrói quando o manifesto
-SHA não existe.
 
 ### Como conferir na próxima release
 
@@ -74,21 +73,20 @@ Depois do merge da feature e do push da tag `vX.Y.Z-felpz.N`:
 1. No run de `publish-image` da **tag**, o job `esperar-sha-da-main` deve
    imprimir `reusar=sim` (ou `nao` + o build atual, se a main ainda não
    publicou o SHA — aí não é regressão, é o fallback).
-2. Cada célula de `build-and-push` deve ter o passo
-   **“Retag da imagem que a main já publicou neste SHA”** (e **não** o
-   `Build e push`) quando `reusar=sim`.
-3. Digest da versão = digest de `sha-<merge>`:
+2. Com `reusar=sim`, as células de worker/scheduler/voice-agent mostram
+   **“Retag da imagem que a main já publicou neste SHA”**; as duas do
+   **app** (`deskcommcrm`) mostram **Build e push** — o número da release
+   tem de ir em `APP_VERSION`.
+3. Digest da versão = digest de `sha-<merge>` **nas três imagens de fundo**.
+   O app difere (camada `APP_VERSION`). `stable` continua igual à versão.
 
    ```bash
-   for img in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
+   for img in deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
      echo "== $img =="
      docker buildx imagetools inspect "ghcr.io/felpzgondim/${img}:<X.Y.Z-felpz.N>" | grep Digest
      docker buildx imagetools inspect "ghcr.io/felpzgondim/${img}:sha-<merge SHA>" | grep Digest
    done
    ```
-
-   Os dois Digest de cada imagem têm de ser iguais. `stable` continua igual à
-   versão, como hoje.
 
 ---
 
