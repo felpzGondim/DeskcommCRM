@@ -33,24 +33,30 @@ export function tresDigitosDoCliente(body: unknown, sentAt: unknown, agora = Dat
 }
 
 /** Retrato efêmero da conversa para o Hub; não inclui URL, storage path ou IDs de anexos. */
-export function montarFichaTemporaria(linhas: readonly Record<string, unknown>[]): {
-  anexos: Array<{ nome: string; mime: string; legenda: string }>;
+export function montarFichaTemporaria(
+  linhas: readonly Record<string, unknown>[],
+  tetoConteudo = 4_000,
+  tetoAnexos = 30,
+): {
+  anexos: Array<{ nome: string; mime: string; legenda: string; conteudo: string }>;
 } {
-  const anexos: Array<{ nome: string; mime: string; legenda: string }> = [];
-  for (const linha of linhas.slice(0, 60)) {
+  const anexos: Array<{ nome: string; mime: string; legenda: string; conteudo: string }> = [];
+  for (const linha of linhas) {
     if (linha.revoked_at) continue;
-    const texto = typeof linha.body === "string" ? linha.body.trim().slice(0, 500) : "";
     const tipo = typeof linha.type === "string" ? linha.type : "";
-    if (["document", "image"].includes(tipo)) {
-      const meta = linha.metadata && typeof linha.metadata === "object" ? linha.metadata as Record<string, unknown> : {};
-      anexos.push({
-        nome: typeof meta.media_filename === "string" ? meta.media_filename.slice(0, 120) : "",
-        mime: typeof linha.media_mime === "string" ? linha.media_mime.slice(0, 80) : "",
-        legenda: texto,
-      });
-    }
+    if (!["document", "image"].includes(tipo)) continue;
+    const meta = linha.metadata && typeof linha.metadata === "object" ? linha.metadata as Record<string, unknown> : {};
+    const legenda = typeof linha.body === "string" ? linha.body.trim().slice(0, 500) : "";
+    const derivado = linha.media_derived_status === "ready" && typeof linha.media_derived_text === "string"
+      ? linha.media_derived_text.trim() : "";
+    anexos.push({
+      nome: typeof meta.media_filename === "string" ? meta.media_filename.slice(0, 120) : "",
+      mime: typeof linha.media_mime === "string" ? linha.media_mime.slice(0, 80) : "",
+      legenda,
+      conteudo: derivado.slice(0, tetoConteudo),
+    });
   }
-  return { anexos: anexos.slice(0, 30) };
+  return { anexos: anexos.slice(0, tetoAnexos) };
 }
 
 /** O Hub deve devolver structuredContent. Texto livre não é exibido para evitar PII acidental. */
@@ -131,7 +137,7 @@ export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado
     return "";
   }).filter(Boolean);
   return {
-    resumo: tipos.length ? `Documentos não identificados nos anexos recentes: ${tipos.join(", ")}. Confira a ficha antes de enviar o pedido.` : "Os documentos exigidos foram identificados pelos nomes ou legendas dos anexos. Confira os arquivos antes de prosseguir.",
+    resumo: tipos.length ? `Documentos não identificados no conteúdo dos anexos recentes: ${tipos.join(", ")}. Confira a ficha antes de enviar o pedido.` : "Os documentos exigidos foram identificados pelo conteúdo extraído dos anexos. Confira os arquivos antes de prosseguir.",
     ...(tipos.length ? { sugestao: `Olá! Para dar continuidade ao seu cadastro, por favor envie: ${tipos.join(", ")}. Obrigado!` } : {}),
   };
 }

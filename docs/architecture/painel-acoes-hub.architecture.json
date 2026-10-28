@@ -21,15 +21,23 @@
     { "id": "hub", "lane": "integracao", "col": 4, "type": "external", "label": "Brisa Hub: boletos, contrato, ficha e análise" },
     { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e sucesso, sem PII" },
     { "id": "recibo", "lane": "registro", "col": 3, "type": "database", "label": "idempotency_keys: conversa + pedido" },
-    { "id": "composer", "lane": "inbox", "col": 1, "type": "frontend", "label": "Composer: texto sugerido para revisão humana" }
+    { "id": "composer", "lane": "inbox", "col": 1, "type": "frontend", "label": "Composer: texto sugerido para revisão humana" },
+    { "id": "anexos", "lane": "servidor", "col": 2, "type": "process", "label": "Leitura documental: PDF, OCR/visão e senha" },
+    { "id": "visao", "lane": "integracao", "col": 3, "type": "external", "label": "Ponto visao_de_imagem (Gemini do painel)" },
+    { "id": "storage", "lane": "registro", "col": 4, "type": "database", "label": "whatsapp-media: original e URL assinada curta" }
   ],
   "edges": [
     { "id": "e1", "from": "botoes", "to": "rota", "label": "consulta ou confirmação explícita" },
     { "id": "e2", "from": "rota", "to": "mcp", "label": "credencial da organização e contato verificado" },
-    { "id": "e3", "from": "mcp", "to": "hub", "label": "tools/call com identidade em cabeçalhos" },
+    { "id": "e3", "from": "mcp", "to": "hub", "label": "tools/call com identidade e, se anunciado, arquivos" },
     { "id": "e4", "from": "rota", "to": "audit", "label": "ação e desfecho" },
     { "id": "e5", "from": "rota", "to": "recibo", "label": "reserva antes da análise" },
     { "id": "e6", "from": "hub", "to": "botoes", "label": "resumo estruturado ou erro visível" },
-    { "id": "e7", "from": "botoes", "to": "composer", "label": "preenche sugestão; atendente decide envio" }
+    { "id": "e7", "from": "botoes", "to": "composer", "label": "preenche sugestão; atendente decide envio" },
+    { "id": "e8", "from": "rota", "to": "anexos", "label": "janela útil da conversa" },
+    { "id": "e9", "from": "anexos", "to": "visao", "label": "foto e PDF escaneado" },
+    { "id": "e10", "from": "anexos", "to": "storage", "label": "reabre original do tenant" },
+    { "id": "e11", "from": "anexos", "to": "botoes", "label": "prévia, aviso de senha e limites" },
+    { "id": "e12", "from": "storage", "to": "hub", "label": "URL assinada só se a ferramenta anunciar" }
   ]
 }

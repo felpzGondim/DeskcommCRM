@@ -288,7 +288,7 @@ Por baixo, cada evento vira uma linha em `event_log` — nenhum trigger de banco
 
 | Grupo | Telas |
 |---|---|
-| **Atendimento** | **Inbox** (conversas de WhatsApp, você e a IA lado a lado; **Painel do agente** na coluna direita resume a conversa e sugere resposta, sem enviar — ver `docs/decisoes/painel-agente.md`) · **Radar** (quem esfriou e ainda está aberto) · **Respostas rápidas** |
+| **Atendimento** | **Inbox** (conversas de WhatsApp, você e a IA lado a lado; **Painel do agente** na coluna direita resume a conversa e sugere resposta, sem enviar — ver `docs/decisoes/painel-agente.md`; neste fork a análise também lê anexos — `docs/decisoes/painel-anexos.md`) · **Radar** (quem esfriou e ainda está aberto) · **Respostas rápidas** |
 | **CRM** | **Kanban** (onde cada negócio está no funil) · **Contatos** · **Funis** (etapas, vocabulário do negócio e motivos de perda) |
 | **Agente de IA** | **Agentes** · **Follow-ups** · **Roteadores** · **Provedores** e **Credenciais** · **Conhecimento** (RAG) · **Memória** · **Skills** · **Casos** · **Alertas** · **Propostas** · **Execuções** · **Uso e orçamento** |
 | **Canais** | **Conexões** (QR ou canal oficial da Meta, com saúde, reconexão e templates) · **Nuvemshop** · **Webhooks** |

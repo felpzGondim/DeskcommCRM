@@ -58,11 +58,15 @@ import { pathToFileURL } from "node:url";
 
 import type * as PdfjsDist from "pdfjs-dist";
 
+import { ehErroDeSenhaDePdf } from "@/lib/ai/rag/extractors/pdf-senha";
+
 /**
  * Por que a extração falhou, para quem precisa decidir sem ler a frase.
  *
  * - `sem_texto`: o PDF abriu inteiro e não tem letra selecionável (escaneado).
  *   É conteúdo, não defeito — quem chama não deve alarmar ninguém.
+ * - `protegido`: o arquivo pede senha (ou a senha informada não abriu).
+ *   Quem chama deve avisar a pessoa, nunca engolir o erro.
  * - `falha`: a engine não conseguiu ler (pacote ausente no build, binário
  *   nativo faltando, arquivo corrompido).
  *
@@ -70,7 +74,7 @@ import type * as PdfjsDist from "pdfjs-dist";
  * aqui; traduzir a frase faria todo PDF escaneado ser logado como falha de
  * infraestrutura. A frase é para gente e pode mudar; o motivo não.
  */
-export type MotivoDaFalhaDePdf = "sem_texto" | "falha";
+export type MotivoDaFalhaDePdf = "sem_texto" | "protegido" | "falha";
 
 export class PdfExtractError extends Error {
   constructor(
@@ -99,6 +103,8 @@ export interface OpcoesDeExtracao {
   heapMb?: number;
   /** Depois disto o filho é morto e a extração falha com `PdfExtractError`. */
   timeoutMs?: number;
+  /** Só nesta chamada; nunca gravar. Ausente = PDF sem senha. */
+  password?: string;
 }
 
 const PDFJS_LEGACY = "pdfjs-dist/legacy/build/pdf.mjs";
@@ -137,10 +143,10 @@ export async function extractPdfText(
 ): Promise<string> {
   const estrategia = opcoes.estrategia ?? estrategiaPadrao();
   if (estrategia === "processo-a-parte") return extrairEmProcessoAParte(buffer, opcoes);
-  return extrairEmProcesso(buffer);
+  return extrairEmProcesso(buffer, opcoes);
 }
 
-async function extrairEmProcesso(buffer: Buffer): Promise<string> {
+async function extrairEmProcesso(buffer: Buffer, opcoes: OpcoesDeExtracao = {}): Promise<string> {
   try {
     const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof PdfjsDist;
 
@@ -155,7 +161,10 @@ async function extrairEmProcesso(buffer: Buffer): Promise<string> {
     // Em Node o pdf.js já se auto-configura; as três linhas sobrescreviam justamente
     // o que a lib tinha preparado. Medido nas versões 4.10.38 e 6.2.108: com
     // `workerSrc = ""` falha nas duas; sem tocar, extrai nas duas.
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      ...(opcoes.password ? { password: opcoes.password } : {}),
+    });
     const pdfDocument = await loadingTask.promise;
 
     const pageTexts: string[] = [];
@@ -188,6 +197,9 @@ async function extrairEmProcesso(buffer: Buffer): Promise<string> {
 
 function traduzirErro(err: unknown): PdfExtractError {
   if (err instanceof PdfExtractError) return err;
+  if (ehErroDeSenhaDePdf(err)) {
+    return new PdfExtractError("pdfjs-dist needs a password to open this PDF", err, "protegido");
+  }
 
   // O pdfjs 6 faz `new DOMMatrix()` no topo do módulo e depende do
   // `@napi-rs/canvas` (optionalDependency) para o polyfill. Sem esse binário —
@@ -247,7 +259,8 @@ import { readFileSync } from "node:fs";
 const responder = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 try {
   const pdfjs = await import(process.argv[1]);
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(0)) }).promise;
+  const senha = process.env.PDFJS_PASSWORD || undefined;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(0)), password: senha }).promise;
   const paginas = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const conteudo = await (await doc.getPage(n)).getTextContent();
@@ -300,6 +313,8 @@ async function extrairEmProcessoAParte(
   // voltaria para dentro sem ninguém ver.
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
+  if (opcoes.password) env.PDFJS_PASSWORD = opcoes.password;
+  else delete env.PDFJS_PASSWORD;
 
   const saida = await new Promise<SaidaDoFilho>((resolve, reject) => {
     const filho = spawn(
@@ -363,7 +378,7 @@ async function extrairEmProcessoAParte(
 
   const texto = resposta.texto ?? "";
   if (texto.length === 0) {
-    throw new PdfExtractError("pdfjs-dist extracted no text (possibly image-only PDF)");
+    throw new PdfExtractError("pdfjs-dist extracted no text (possibly image-only PDF)", undefined, "sem_texto");
   }
   return texto;
 }
