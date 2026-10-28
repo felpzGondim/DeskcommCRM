@@ -17960,6 +17960,7 @@ export const DICIONARIO: Traducoes = {
   "Nenhum processo ainda. Abra um a partir da conversa.": { es: "Todavía no hay procesos. Ábrelo desde la conversación." },
   "Processos de locação desta empresa, da conversa até o contrato.": { es: "Procesos de locación de esta empresa, de la conversación al contrato." },
   "Liga e desliga o processo de locação, o vínculo Superlógica e os arquivos.": { es: "Activa y desactiva el proceso de locación, el vínculo Superlógica y los archivos." },
+  "Liga e desliga o processo de locação, as ferramentas do campo de pergunta do painel, o vínculo Superlógica e os arquivos.": { es: "Activa y desactiva el proceso de locación, las herramientas del campo de pregunta del panel, el vínculo Superlógica y los archivos." },
 };
 
 /**
