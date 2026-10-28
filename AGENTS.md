@@ -533,6 +533,8 @@ atendente: **nunca envia ao cliente** ("Usar como resposta" só preenche o Compo
 conversa do painel (auditoria sem texto). Decisões em
 [`docs/decisoes/painel-agente.md`](docs/decisoes/painel-agente.md).
 
+Decisões pendentes da análise completa de inquilino (renda, FC Score+, seguro-fiança, relatório): adendo em [`docs/planos/processo-de-locacao.md`](docs/planos/processo-de-locacao.md) (§ A.9). Plano, só leitura.
+
 ## Critério de conclusão
 
 Vale a **Definition of Done em [`CLAUDE.md`](CLAUDE.md)** — conte lá em vez de confiar num número aqui (`sed -n '/^## Definition of Done/,/^Um staff engineer/p' CLAUDE.md | grep -cE '^[0-9]+\. '`; esta linha já disse 15 quando o DoD tinha 16). A régua tem que DELIMITAR a seção: a primeira versão desta linha oferecia `grep -c '^[0-9]\+\. \*\*' CLAUDE.md`, que devolve **25** — casa toda linha numerada em negrito do arquivo (anti-patterns, packaging, higiene de branches, migrations) e perde os itens 1–10 do próprio DoD, que não são negrito. Trocar o número pelo comando só ajuda se o comando responder à pergunta. Não declare pronto
