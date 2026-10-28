@@ -520,12 +520,18 @@ export async function marcarEstadoAnaliseFc(
     patch.autorizado_por = input.autorizadoPor;
     patch.autorizado_em = new Date().toISOString();
   }
-  if (input.estado === "concluida" || input.estado === "reaproveitada") {
-    patch.concluida_em = new Date().toISOString();
-  }
   const { error } = await tabelaLocacao(admin, "locacao_analises_fc")
     .update(patch).eq("organization_id", input.orgId).eq("pedido_id", input.pedidoId);
   if (error) throw new LocacaoErro("analise_fc_estado", "analise_fc");
+  // A janela de reuso de 90 dias lê concluida_em. Atualizar FC numa linha já
+  // concluída não pode recarregar o prazo — só carimba a primeira virada.
+  if (input.estado === "concluida" || input.estado === "reaproveitada") {
+    const { error: stampErr } = await tabelaLocacao(admin, "locacao_analises_fc")
+      .update({ concluida_em: new Date().toISOString() })
+      .eq("organization_id", input.orgId).eq("pedido_id", input.pedidoId)
+      .is("concluida_em", null);
+    if (stampErr) throw new LocacaoErro("analise_fc_estado", "analise_fc");
+  }
 }
 
 export async function guardarLaudoFc(

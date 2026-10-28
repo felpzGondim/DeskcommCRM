@@ -45,12 +45,14 @@ vi.mock("@/lib/locacao/repositorio", () => ({
   lerParticipanteDoProcesso: (...args: unknown[]) => mocks.participante(...args),
 }));
 
+import { hashCpfDoParticipante } from "@/lib/locacao/cpf";
 import { fichaVazia, pessoaVazia } from "@/lib/locacao/ficha-schema";
 import {
   analisarFcDoPainel,
   confirmarCobrancaFcDoPainel,
   statusFcDoPainel,
   TEXTO_AVISO_CREDITOS,
+  TEXTO_CPF_DIVERGE,
   TEXTO_FC_INCERTA,
   TEXTO_FC_JA_COBRADO,
   TEXTO_FC_REAPROVEITADA,
@@ -152,11 +154,12 @@ describe("analisar FC no painel", () => {
       if (input.documentoId !== undefined) linha.documento_id = input.documentoId;
       if (input.erroCodigo !== undefined) linha.erro_codigo = input.erroCodigo;
     });
+    const hashLocatario = hashCpfDoParticipante("52998224725");
     mocks.participantes.mockResolvedValue([
-      { id: PARTICIPANTE, papel: "locatario", principal: true, cpf_hash: "abc", cpf_mascarado: "***.***.**2-25" },
+      { id: PARTICIPANTE, papel: "locatario", principal: true, cpf_hash: hashLocatario, cpf_mascarado: "***.***.**2-25" },
     ]);
     mocks.participante.mockResolvedValue({
-      id: PARTICIPANTE, papel: "locatario", principal: true, cpf_hash: "abc", cpf_mascarado: "***.***.**2-25",
+      id: PARTICIPANTE, papel: "locatario", principal: true, cpf_hash: hashLocatario, cpf_mascarado: "***.***.**2-25",
     });
     mocks.carregar.mockResolvedValue(hubOk());
     mocks.chamar.mockImplementation(async (_servidor: unknown, nome: string) => {
@@ -287,7 +290,7 @@ describe("analisar FC no painel", () => {
     ficha.pessoas.push(fiador);
     mocks.ficha.mockResolvedValue({ ficha, versao: 2 });
     mocks.participante.mockResolvedValue({
-      id: PARTICIPANTE, papel: "fiador", cpf_hash: "xyz", cpf_mascarado: "***.***.**2-25",
+      id: PARTICIPANTE, papel: "fiador", cpf_hash: hashCpfDoParticipante("11144477735"), cpf_mascarado: "***.***.**2-25",
     });
     const agente = await analisarFcDoPainel(
       { ...ctx, origem: "agente" },
@@ -303,6 +306,23 @@ describe("analisar FC no painel", () => {
     );
     expect(botao.ok).toBe(true);
     expect(mocks.chamar).toHaveBeenCalled();
+  });
+
+  it("CPF da ficha divergente do participante recusa sem Hub nem reuso", async () => {
+    mocks.participantes.mockResolvedValue([
+      { id: PARTICIPANTE, papel: "locatario", principal: true, cpf_hash: "hash-antigo", cpf_mascarado: "***.***.**2-25" },
+    ]);
+    mocks.reuso.mockResolvedValue({
+      id: "old-1",
+      resultado: { score: 640, risco: "baixo" },
+      concluida_em: "2026-10-01T00:00:00Z",
+    });
+    const r = await analisarFcDoPainel(ctx, { processo_id: "proc-1" });
+    expect(r.ok).toBe(false);
+    expect(r.texto).toBe(TEXTO_CPF_DIVERGE);
+    expect(mocks.abrir).not.toHaveBeenCalled();
+    expect(mocks.chamar).not.toHaveBeenCalled();
+    expect(mocks.reuso).not.toHaveBeenCalled();
   });
 
   it("sem renda confirmada não chama Hub", async () => {

@@ -99,8 +99,10 @@ export function pessoaDaFichaParaFc(
   opts: { papelFicha?: PapelDaFicha; cpfHash?: string | null } = {},
 ): PessoaDaFicha | null {
   if (opts.cpfHash) {
-    const match = ficha.pessoas.find((p) => hashCpfDoParticipante(p.cpf.valor ?? "") === opts.cpfHash);
-    if (match) return match;
+    // Hash informado que não casa: recusa. Não escolhe outra pessoa pelo papel —
+    // gravar a ficha não atualiza cpf_hash do participante; misturar identidades
+    // reaproveitaria o FC da pessoa antiga ou gravaria o laudo no hash errado.
+    return ficha.pessoas.find((p) => hashCpfDoParticipante(p.cpf.valor ?? "") === opts.cpfHash) ?? null;
   }
   if (opts.papelFicha) {
     const doPapel = ficha.pessoas.filter((p) => p.papel === opts.papelFicha);

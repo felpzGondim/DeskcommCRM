@@ -77,6 +77,9 @@ export const TEXTOS_PAINEL_FC = {
   "Esta FC já tinha sido cobrada. Nada novo foi disparado.": {
     es: "Esta FC ya había sido cobrada. No se disparó nada nuevo.",
   },
+  "O CPF da ficha não bate com o desta pessoa no processo. Corrija a ficha antes de analisar a FC.": {
+    es: "El CPF de la ficha no coincide con el de esta persona en el proceso. Corrija la ficha antes de analizar FC.",
+  },
   "Informe o celular desta pessoa na ficha antes de analisar a FC.": {
     es: "Informe el celular de esta persona en la ficha antes de analizar FC.",
   },

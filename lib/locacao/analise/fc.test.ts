@@ -66,6 +66,13 @@ describe("mapeamento da análise FC Score+", () => {
     expect(hash).not.toMatch(/529/);
   });
 
+  it("hash informado que não casa não escolhe outra pessoa pelo papel", () => {
+    const ficha = fichaPronta();
+    const outro = hashCpfDoParticipante("11144477735");
+    const pessoa = pessoaDaFichaParaFc(ficha, { cpfHash: outro, papelFicha: "inquilino" });
+    expect(pessoa).toBeNull();
+  });
+
   it("reuso é 90 dias", () => {
     expect(DIAS_REUSO_FC).toBe(90);
   });
