@@ -15,33 +15,49 @@ alterados neste fork quando houver conflitos com o original.
 
 ## Publicar uma versão
 
+A data entra no **PR da feature**, e a tag nasce no merge commit dessa feature —
+**sem PR extra** só para datar o CHANGELOG. Decisão: [`docs/decisoes/release-do-fork.md`](decisoes/release-do-fork.md).
+
 1. Habilite GitHub Actions no fork. O workflow existente **Publicar imagem
    Docker (GHCR)** constrói app, worker, scheduler e voice-agent para amd64 e
    arm64 usando o `GITHUB_TOKEN`, sem credenciais de produção.
-2. Depois de revisar e integrar as mudanças na `main`, execute o CI e confira
-   os resultados. Uma branch de configuração ainda não é uma versão de produção.
-   Antes da próxima publicação, confira os fragmentos já presentes na tag da
-   release anterior. Arquive somente os que continuam idênticos, preservando
-   o texto integral em `docs/releases/fragmentos/<tag>/`; fragmentos novos ou
-   alterados permanecem em `.changes/`. Assim, a guarda do acervo mede apenas
-   mudanças ainda não publicadas neste fork.
-   Acrescente as notas da revisão personalizada ao `CHANGELOG.md` sem mudar
-   os números oficiais do upstream. Preserve um cabeçalho para a revisão
-   anterior: ele permite ao atualizador reconhecer onde termina o histórico
-   de quem já está nela. Confira a extração e o limite em bytes do agente.
-3. Crie uma tag inédita no commit aprovado da `main`, no formato
-   `v<versão-base>-felpz.<revisão>`, por exemplo `v1.66.1-felpz.1`.
-   Use a versão-base REAL do upstream incorporado; o exemplo não recomenda
-   instalar essa versão antiga. Incremente a revisão a cada personalização.
-4. Envie somente essa tag ao fork. Não envie todas as tags do original.
-   O push da tag aciona a publicação existente; uma tag sozinha não significa
-   que a versão está disponível.
-5. Aguarde todos os builds, manifests e testes de boot. Só então o job
+2. No próprio PR da feature (ou no PR que junta as features da revisão),
+   acrescente as notas ao `CHANGELOG.md` já **com a data do dia**, no formato
+   `## [X.Y.Z-felpz.N] — AAAA-MM-DD`, sem mudar os números oficiais do
+   upstream. Preserve um cabeçalho para a revisão anterior: ele permite ao
+   atualizador reconhecer onde termina o histórico de quem já está nela.
+   Confira a extração e o limite em bytes do agente. Uma seção sem data
+   reprova o CI (`tests/unit/changelog-do-fork-nasce-datado.test.ts`).
+   Antes da publicação, confira os fragmentos já presentes na tag da release
+   anterior. Arquive somente os que continuam idênticos, preservando o texto
+   integral em `docs/releases/fragmentos/<tag>/`; fragmentos novos ou
+   alterados permanecem em `.changes/`.
+3. Depois do merge autorizado, crie a tag anotada **no merge commit dessa
+   feature**, no formato `v<versão-base>-felpz.<revisão>`:
+
+   ```bash
+   git tag -a "v1.88.0-felpz.N" -m "Revisão N do fork" <sha-do-merge>
+   git push origin "v1.88.0-felpz.N"
+   ```
+
+   Use a versão-base REAL do upstream incorporado. Incremente a revisão a
+   cada personalização. Não envie todas as tags do original.
+4. O push da tag aciona a publicação. Se a `main` já publicou o manifesto
+   `sha-<esse commit>` das quatro imagens com amd64 e arm64, o workflow
+   **retaggeia** (`docker buildx imagetools create`) em vez de construir de
+   novo; senão cai no build atual. Os smokes (`imagem-do-app-sobe`,
+   `imagens-de-fundo-sobem`) continuam rodando antes de promover `stable`.
+   Uma tag sozinha não significa que a versão está disponível.
+5. Aguarde manifests e testes de boot. Só então o job
    `publicar-release-do-fork` cria uma release não marcada como prerelease e a
    indica como latest, para que `/releases/latest` do fork a encontre.
 6. Na primeira publicação, torne os quatro pacotes GHCR públicos nas suas
    configurações e confirme que os manifests da versão podem ser baixados sem
    login. Repositório público não torna os pacotes públicos automaticamente.
+
+Como conferir o retag na próxima release: os Digest de
+`ghcr.io/felpzgondim/<img>:<versão>` e `…:<img>:sha-<merge>` têm de ser iguais.
+Comando em [`docs/decisoes/release-do-fork.md`](decisoes/release-do-fork.md) §2.
 
 O workflow de release do original usa um GitHub App. Não é necessário copiar
 seus segredos: o caminho deste fork é o push da tag personalizada, seguido da

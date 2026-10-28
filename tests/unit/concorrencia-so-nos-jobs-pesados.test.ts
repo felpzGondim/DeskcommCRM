@@ -33,7 +33,7 @@ const SEM_GRUPO: Record<string, string[]> = {
   "ci.yml": ["verify", "invariants", "invariants-alcance"],
   "e2e.yml": ["e2e", "e2e-alcance"],
   // Publicar metadados de release é curto e idempotente; não cancela builds.
-  "publish-image.yml": ["imagens-ok", "promover-stable", "a-tag-veio-da-main", "publicar-release-do-fork"],
+  "publish-image.yml": ["imagens-ok", "promover-stable", "a-tag-veio-da-main", "esperar-sha-da-main", "publicar-release-do-fork"],
 };
 
 // Todos os jobs declarados de um workflow — o bloco `jobs:`, recortado pela

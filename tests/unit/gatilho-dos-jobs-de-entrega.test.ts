@@ -93,6 +93,14 @@ const GATILHO_ESPERADO: Record<string, { condicao: string | null; efeito: string
       "Ela é SEM `if:` de propósito — pulada, ela deixaria `build-and-push` pulado junto " +
       "e o `imagens-ok` leria `skipped` como reprovação.",
   },
+  "publish-image.yml::esperar-sha-da-main": {
+    condicao: null,
+    efeito:
+      "Decide se a tag reusa o manifesto `sha-<commit>` que a main já publicou. " +
+      "SEM `if:` de propósito — pulado, deixaria `build-and-push` pulado junto. " +
+      "Fora de tag sai `reusar=nao` e o build atual segue; em tag, espera o índice " +
+      "multi-arch ou cai no build. Não promove stable nem substitui o smoke.",
+  },
   // Em pull_request ele só construía e descartava as MESMAS quatro imagens que os
   // dois jobs `*-sobe` já constroem — 4 builds Docker por push de PR sem medir
   // nada a mais. A condição tira só o PR; o `imagens-ok` exige `success` dele

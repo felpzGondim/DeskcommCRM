@@ -163,13 +163,79 @@ jobs:
               ;;
           esac
 
+  # Espera o manifesto `sha-<commit>` que o push da main publica (`type=sha`).
+  # Sem `if:` no job: pulado, `build-and-push` (que passa a depender dele) fica
+  # pulado também — o mesmo motivo de `a-tag-veio-da-main`. Fora de tag sai em
+  # segundos com `reusar=nao`. Em tag, espera até 22 min o índice multi-arch
+  # das quatro imagens; se não aparecer, `nao` e o build atual segue. Os smokes
+  # NÃO dependem deste job: continuam em paralelo com a espera.
+  esperar-sha-da-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      reusar: ${{ steps.decidir.outputs.reusar }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.ref_type == 'tag'
+        with:
+          sparse-checkout: |
+            scripts/retag-se-a-main-publicou.sh
+            hostgator-setup-kit/_manifestos.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Buildx
+        if: github.ref_type == 'tag'
+        id: buildx
+        continue-on-error: true
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.ref_type == 'tag'
+        id: login
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: A main já publicou este SHA com as duas arquiteturas?
+        id: decidir
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          BUILDX_OK: ${{ steps.buildx.outcome }}
+          LOGIN_OK: ${{ steps.login.outcome }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "reusar=nao" >> "$GITHUB_OUTPUT"
+            echo "não é tag — constrói"
+            exit 0
+          fi
+          if [ "${BUILDX_OK:-}" != "success" ] || [ "${LOGIN_OK:-}" != "success" ]; then
+            echo "reusar=nao" >> "$GITHUB_OUTPUT"
+            echo "login/buildx indisponível — cai no build"
+            exit 0
+          fi
+          dono=$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          saida=$(REGISTRY="${REGISTRY}" DONO="$dono" SHA="${GITHUB_SHA}" \
+            TIMEOUT_S=1320 POLL_S=20 \
+            bash scripts/retag-se-a-main-publicou.sh) || saida=nao
+          reusar=$(printf '%s\n' "$saida" | tail -n1)
+          [ "$reusar" = "sim" ] || reusar=nao
+          echo "reusar=${reusar}" >> "$GITHUB_OUTPUT"
+          echo "reusar=${reusar}"
+
   # Em pull_request este job NÃO roda: lá ele só construía e descartava, e as
   # MESMAS quatro imagens já são construídas — com o mesmo Dockerfile e o mesmo
   # contexto — por `imagem-do-app-sobe` e `imagens-de-fundo-sobem`, que ainda
   # as sobem. Eram 4 builds Docker por push de PR sem medir nada a mais. O
   # `imagens-ok` aceita o `skipped` dele SÓ em pull_request.
   build-and-push:
-    needs: [a-tag-veio-da-main]
+    needs: [a-tag-veio-da-main, esperar-sha-da-main]
     if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     concurrency:
@@ -242,6 +308,11 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # Tag imutável do commit. O push da main publica `sha-<commit>`
+            # (com o sufixo de arch desta flavor); o push da tag reusa esse
+            # manifesto via imagetools quando ele já existe com as duas
+            # arquiteturas — ver job `esperar-sha-da-main`.
+            type=sha,format=long
             # `enable={{is_default_branch}}` NÃO basta: o metadata-action o
             # considera verdadeiro também num push de TAG, então toda release
             # movia `latest` junto. Isso apagava a distinção que a doutrina
@@ -277,6 +348,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build e push (imagem genérica — sem segredos)
+        if: needs.esperar-sha-da-main.outputs.reusar != 'sim'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -297,6 +369,26 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }}
           # Sem build-args de segredo: a imagem é genérica (NEXT_PUBLIC_* viram
           # placeholder; valores reais entram em runtime no VPS do usuário).
+
+      - name: Retag da imagem que a main já publicou neste SHA
+        if: needs.esperar-sha-da-main.outputs.reusar == 'sim'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          SHA: ${{ github.sha }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE: ${{ matrix.name }}
+          ARCH: ${{ matrix.arch }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          source hostgator-setup-kit/_manifestos.sh
+          dono=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          origem="${REGISTRY}/${dono}/${IMAGE}:sha-${SHA}-${ARCH}"
+          manifesto_tem_plataforma "$origem" "linux/${ARCH}"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker buildx imagetools create --tag "$tag" "$origem"
+          done <<< "$TAGS"
 
   juntar-manifestos:
     needs: [build-and-push]
@@ -335,6 +427,7 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
             type=raw,value=latest,enable=${{ github.ref_type == 'branch' && github.ref_name == 'main' }}
 
       - name: Unir AMD64 e ARM64 em cada tag
