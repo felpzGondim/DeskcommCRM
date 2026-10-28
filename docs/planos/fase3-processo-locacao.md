@@ -7,7 +7,16 @@
 >
 > **Atualização 28/10 01:05 (Brasília):** o Felipe decidiu que o id da pessoa na Superlógica fica **no contato**
 > do CRM (pergunta 11 respondida: lado do contato). O casamento automático contato ↔ Superlógica pelo telefone
-> virou uma fase própria, a **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)). A Fase 3 só deixa o campo e o gancho prontos.
+> virou uma fase própria, a **Fase 3.5** (`fase3-5-vinculo-superlogica.md`). A Fase 3 só deixa o campo e o gancho prontos.
+>
+> **Decisões finais 28/10/2026 01:15–01:18 (Brasília):** o Felipe respondeu as perguntas da seção 8. Resumo:
+> um PR grande só; quem só conversa entra com papel "contato"; imóvel com cadastro próprio, com chave principal = id do imóvel na Superlógica
+> (o endereço só serve enquanto não há cadastro lá); CPF também criptografado no cadastro da pessoa; as 9 etapas, com "contrato criado";
+> processo parado encerrado em 30 dias; fiador faz FC só quando o atendente pedir; FC reaproveitada sempre que der, até 90 dias;
+> o resumo sem dados pessoais fica como histórico; aprovar só o Felipe, reprovar qualquer atendente com motivo; para desfazer, só desligar a chave e manter as tabelas.
+> O texto do plano já foi ajustado a essas decisões. Continuam como **padrão recomendado, sujeito à revisão do Felipe**: a pergunta 10 (limpeza LGPD), a 14 (onde publicar), as perguntas da Fase 3.5 e as menores.
+>
+> **Implementação da Fase 3 ainda NÃO autorizada.**
 
 ---
 
@@ -41,7 +50,7 @@ Cada processo tem N pessoas. Cada pessoa é **uma linha** em `locacao_processo_p
 |---|---|---|---|
 | `locatario` | Inquilino. Um deles é o **principal**. | Sim | Sim (FC, pago) |
 | `solidario` | Co-locatário ou devedor solidário | Sim, como locatário com fração | Sim (FC). Na Migra entra como solidário. |
-| `fiador` | Fiador | Vai na observação (limite da API) | Opcional (pergunta 7) |
+| `fiador` | Fiador | Vai na observação (limite da API) | Só quando o atendente pedir (pergunta 7, decidido) |
 | `contato` | **Só conversa**: parente, corretor, assistente | Não | Não |
 
 - O campo `relacao` (só para `contato`) aceita: `parente`, `corretor`, `conjuge`, `empresa`, `outro`.
@@ -65,9 +74,9 @@ Cada processo tem N pessoas. Cada pessoa é **uma linha** em `locacao_processo_p
   2. o atendente liga ou desliga à mão (botão no painel do contato e na pessoa do processo), com registro de quem e
      quando, sem valores pessoais no log.
 - O casamento em massa pelo telefone (todos os contatos × pessoas da Superlógica), a lista de revisão de casos ambíguos
-  e o relatório de simulação ficam na **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)).
+  e o relatório de simulação ficam na **Fase 3.5** (`fase3-5-vinculo-superlogica.md`).
 - O CPF fica em `cpf_hash` (para achar duplicados e travar FC dupla) e em `cpf_mascarado` (ex.: `***.***.**9-25`, para a tela).
-  - O CPF completo, se for guardado, fica em `cpf_encrypted`, no mesmo esquema de `contacts.cpf_encrypted` (pergunta 4).
+  - **Decidido (pergunta 4 = b):** o CPF completo também fica criptografado na pessoa, em `cpf_encrypted`, no mesmo esquema de `contacts.cpf_encrypted`. Ele é zerado junto com o resto na retenção de 90 dias e na limpeza LGPD.
   - No dia a dia, o CPF completo vive dentro da ficha versionada (seção 3), sob retenção de 90 dias.
 
 ### 1.3 Uma pessoa em vários processos
@@ -104,12 +113,14 @@ Quem pode: papel `agent` ou superior, com `requireSupportWrite` em toda escrita.
 
 ## 2. Imóvel do processo
 
-### 2.1 Proposta: tabela `locacao_imoveis` (recomendada)
+### 2.1 Tabela `locacao_imoveis` (decidida, pergunta 3)
 
 Um imóvel aparece em vários processos ao longo do tempo (cada novo inquilino, cada tentativa recusada). Por isso ele ganha tabela própria, sem dado pessoal. Endereço de imóvel da carteira não é dado de pessoa.
 
+**Decidido:** a chave principal do imóvel é o **id do imóvel na Superlógica** (`superlogica_imovel_id`). O endereço só serve enquanto o imóvel ainda não tem cadastro lá; quando ganhar o id, a mesma linha recebe o id e passa a ser achada por ele.
+
 Identidade, em ordem de força:
-1. `superlogica_imovel_id` (o `id_imovel` que o Hub aceita no `/contrato/preparar`). É o melhor: elimina a busca por endereço no Hub.
+1. `superlogica_imovel_id` (o `id_imovel` que o Hub aceita no `/contrato/preparar`). É a chave principal: elimina a busca por endereço no Hub.
 2. `catalog_product_id`, quando o imóvel está no catálogo (feed `superlogica_feed` ou manual).
 3. `chave_endereco`: endereço normalizado (veja 2.2).
 
@@ -127,14 +138,14 @@ Uma função TypeScript pura (`lib/locacao/endereco.ts`, com testes) monta `chav
 
 ### 2.3 Duplicados
 
-- Índice único `(organization_id, chave_endereco)`.
-- Índice único `(organization_id, superlogica_imovel_id)` quando preenchido.
+- Índice único `(organization_id, superlogica_imovel_id)` quando preenchido (a chave principal).
+- Índice único `(organization_id, chave_endereco)` **só para imóveis ainda sem id da Superlógica**.
 - Índice único `(organization_id, catalog_product_id)` quando preenchido.
 - Antes de criar, o painel mostra "imóveis parecidos" (mesma rua e número, complemento diferente) e o atendente escolhe: **usar este** ou **é outro**.
 - Se dois cadastros forem o mesmo imóvel, há o botão **"juntar"** (só admin). Ele move os processos para um e apaga o outro, e o histórico registra.
 - Ao ligar com o catálogo, o código procura por `catalog_products.codigo` normalizado, do mesmo jeito que o sync do Hub já faz. Ele **não** altera `catalog_products`.
 
-### 2.4 Alternativa mais simples (se o Felipe preferir)
+### 2.4 Alternativa descartada (pergunta 3 decidida pela tabela própria)
 
 Não criar `locacao_imoveis`. Guardar `imovel_endereco`, `imovel_identidade` e `imovel_codigo_fc` direto no processo, como o plano-mestre previa.
 - Ganho: uma tabela a menos.
@@ -207,7 +218,7 @@ Novidade em relação ao A.6b: entram na ficha os campos que o `dadosContratoSch
 | `candidatos[i].endereco…` | endereço atual | — | — | `dados.endereco/numero/complemento/bairro/cep/cidade/uf` |
 | `candidatos[i].papel = solidario` | marcado como solidário | job próprio, se for fazer FC | `solidarios[]` | entra em `locatarios[]` com fração |
 | participante `principal` / `fracao` | — | — | — | `locatarios[i].principal` / `fracao` |
-| `fiadores[j].cpf` (+dados) | fiador | opcional (pergunta 7) | — | `fiadores[j]` (vai para a observação) |
+| `fiadores[j].cpf` (+dados) | fiador | só se o atendente pedir (pergunta 7) | — | `fiadores[j]` (vai para a observação) |
 | `renda.mensal` / `renda.proposta_fc` | renda | `renda.mensal` | `renda` | — |
 | `imovel` → `locacao_imoveis` | endereço do imóvel | `codigo_fc`, `logradouro`, `apartamento`, `aluguel` | `logradouro`, `numero`, `complemento`, `cep`, `aluguel`, `iptu`, `condominio` | `imovel.id_imovel` **se** houver `superlogica_imovel_id`; senão `imovel.endereco/numero/complemento` |
 | `imovel.aluguel` | aluguel | `aluguel` | `aluguel` | `aluguel` |
@@ -279,7 +290,7 @@ Tabela `locacao_analises_fc`, com uma linha por tentativa de FC de uma pessoa.
 
 1. Ao confirmar "Gerar análise", para cada pessoa o servidor abre uma transação e procura uma linha da **mesma organização + mesmo `cpf_hash`**:
    - **Em andamento** (`solicitada`, `aguardando_cobranca`, `cobrando`): **não cria outra**. Devolve "já existe uma FC em andamento para esta pessoa".
-   - **Concluída há menos de N dias** (pergunta 8; sugestão: 30): **reaproveita** o resultado, inclusive se foi em outro processo, e não cobra. Grava um evento "FC reaproveitada".
+   - **Concluída há menos de N dias** (pergunta 8, decidido: **90 dias**, reaproveitar sempre que der): **reaproveita** o resultado, inclusive se foi em outro processo, e não cobra. Grava um evento "FC reaproveitada".
    - **Nenhuma**: cria a linha com um `pedido_id` (UUID) fixo. Cliques repetidos e reenvios usam esse mesmo `pedido_id`, e o Hub já é idempotente por `(org, conversa, pedido_id)`.
 2. Trava no banco: índice único parcial `(organization_id, cpf_hash) WHERE estado IN ('solicitada','aguardando_cobranca','cobrando')`. Duas abas clicando ao mesmo tempo → a segunda falha.
 3. "Cobrar de novo mesmo assim" (FC vencida ou dado errado): botão só para o Felipe, com motivo, gravado em evento.
@@ -302,7 +313,7 @@ Segue o plano-mestre:
 ### 5.2 Retenção
 
 - **Hub: 5 dias.** Já implementado (`RETENCAO_S = 5 dias` desde a criação do job; apaga o job e a pasta de arquivos). A Fase 3 não mexe nisso.
-- **CRM: 90 dias**, contados de quando o processo entra em estado final (`contrato_assinado`, `reprovado`, `cancelado`). Processo parado sem atividade por X dias é cancelado como "expirado" (pergunta 6).
+- **CRM: 90 dias**, contados de quando o processo entra em estado final (`contrato_assinado`, `reprovado`, `cancelado`). Processo parado sem atividade por **30 dias** é encerrado como cancelado/"expirado" (pergunta 6, decidido).
 - A rotina usa o cron `data-retention` que já existe:
   - uma entrada nova em `lib/retencao/politica.ts`;
   - uma função `fn_expurgar_processos_de_locacao_vencidos` (veja 6.4), seguindo o padrão das 14 `fn_expurgar_*` existentes.
@@ -343,7 +354,7 @@ Convenção:
 - `catalog_product_id uuid references catalog_products(id) on delete set null`
 - `superlogica_imovel_id bigint`, `aluguel_referencia_cents bigint`
 - Índices:
-  - `unique (organization_id, chave_endereco)`
+  - `unique (organization_id, chave_endereco) where superlogica_imovel_id is null`
   - `unique (organization_id, superlogica_imovel_id) where superlogica_imovel_id is not null`
   - `unique (organization_id, catalog_product_id) where catalog_product_id is not null`
 
@@ -363,7 +374,7 @@ Convenção:
 - `papel text check (in ('locatario','solidario','fiador','contato'))`, `relacao text`
 - `principal boolean default false`, `interlocutor_principal boolean default false`, `fracao numeric(5,2)`
 - (sem coluna de id da Superlógica: ele vem do contato, via `contato_superlogica_vinculos`)
-- `nome_exibicao text`, `cpf_hash text`, `cpf_mascarado text`, `cpf_encrypted bytea` (se a pergunta 4 = sim)
+- `nome_exibicao text`, `cpf_hash text`, `cpf_mascarado text`, `cpf_encrypted bytea` (decidido: sim, pergunta 4)
 - `removido_em timestamptz`, `created_by uuid`
 - Índices:
   - `unique (processo_id, contact_id, papel) where contact_id is not null and removido_em is null`
@@ -454,7 +465,7 @@ Não entram, para reduzir divergência:
   - remover os blocos do `baseline.sql`
 - As tabelas são novas e só apontam **para fora** (organizations, contacts, conversations, catalog_products). Se a Fase 3.5 já tiver preenchido vínculos, apagar `contato_superlogica_vinculos` perde esse trabalho: exportar antes (pergunta 12). Apagá-las não toca nenhuma tabela do upstream. A única exceção é o gatilho em `contacts`, que sai primeiro.
 - Botão de desligar sem apagar nada: a chave `organizations.settings.locacao.processos_habilitado` (nova, desligada por padrão). Desligada, o painel volta ao comportamento atual (análise ligada à conversa). Desligar é o primeiro passo de qualquer volta. Apagar tabela só com ok explícito.
-- Antes de apagar em produção: exportar as tabelas (só para o Felipe, fora do Git) ou aceitar a perda, conforme a pergunta 12.
+- **Decidido (pergunta 12 = a):** para desfazer em produção, só desligar a chave e **manter as tabelas**. Os `drop` acima ficam só como referência técnica; apagar tabela exigiria um novo ok explícito do Felipe, com exportação antes.
 
 ### 6.5 Divergência com o upstream sob controle
 
@@ -474,7 +485,7 @@ Não entram, para reduzir divergência:
 
 ## 7. Implantação em passos pequenos e reversíveis
 
-Cada passo vira um PR separado no fork, sem merge automático. Nada vai para produção sem o ok do Felipe.
+**Decidido (pergunta 1 = b): um PR grande só** no fork, com a Fase 3 e a 3b juntas. Os passos P1–P8 abaixo viram etapas (commits) dentro desse PR, sem merge automático. A aplicação no banco e o deploy continuam em etapas, cada uma com ok do Felipe. **Implementação da Fase 3 ainda NÃO autorizada.**
 
 | Passo | O que entra | O Felipe aprova | Como desfazer |
 |---|---|---|---|
@@ -513,7 +524,7 @@ O deploy na VPS segue o fluxo normal de release (felpz.N), com o Felipe autoriza
 - Painel de relatórios e métricas de processos.
 - Juntar contatos duplicados do CRM.
 - Vínculo de fiador direto no contrato da Superlógica (a API não documenta).
-- Casamento em massa contato ↔ Superlógica pelo telefone, lista de revisão e relatório de simulação: **Fase 3.5** ([`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md)), logo depois da Fase 3.
+- Casamento em massa contato ↔ Superlógica pelo telefone, lista de revisão e relatório de simulação: **Fase 3.5** (`fase3-5-vinculo-superlogica.md`), logo depois da Fase 3.
 - Busca de boletos usando o vínculo: fica para depois (o Felipe pediu para não rodar agora).
 - Qualquer chamada automática ao `/contrato/confirmar`.
 
@@ -521,49 +532,65 @@ O deploy na VPS segue o fluxo normal de release (felpz.N), com o Felipe autoriza
 
 ## 8. Perguntas para o Felipe
 
+> **28/10/2026 01:15–01:18 (Brasília):** o Felipe deu as respostas finais às perguntas 1–9, 12 e 13 (marcadas "DECIDIDO"). A 11 já estava respondida. As perguntas 10 e 14 continuam com a opção (a) como padrão recomendado, sujeito à revisão do Felipe. **Implementação da Fase 3 ainda NÃO autorizada.**
+
+
 1. **Fase 3 e 3b juntas?** (pergunta 8 do plano-mestre)
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (b) um PR grande só.**
    - (a) PRs separados, na ordem P1…P8 (recomendado)
    - (b) um PR grande só
 2. **Quem só conversa (parente/corretor):**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) papel "contato" + interlocutor principal.**
    - (a) entra como pessoa do processo com papel "contato" e marca de interlocutor principal (recomendado)
    - (b) fica numa coluna separada `interlocutor_contact_id`, como no plano-mestre
 3. **Imóvel:**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) cadastro próprio `locacao_imoveis`; chave principal = id do imóvel na Superlógica; o endereço só serve quando ainda não há cadastro lá.**
    - (a) tabela própria `locacao_imoveis`, reaproveitada entre processos (recomendado)
    - (b) só colunas dentro do processo
 4. **CPF completo das pessoas:** (pergunta 4 do plano-mestre)
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (b) o CPF também fica criptografado no cadastro da pessoa.**
    - (a) só dentro da ficha (apaga em 90 dias) + hash e máscara na pessoa (recomendado)
    - (b) também criptografado na linha da pessoa
 5. **Etapas:**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) as 9 etapas, com "contrato criado".**
    - (a) as 9 da seção 4.1, com "contrato criado" entre preparado e assinado (recomendado)
    - (b) exatamente as que você listou, sem "contrato criado"
 6. **Processo parado vira "cancelado/expirado" depois de:**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) 30 dias.**
    - (a) 30 dias
    - (b) 60 dias
    - (c) nunca, só à mão
 7. **Fiador faz FC?**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (b) só quando o atendente pedir.**
    - (a) sim, sempre
    - (b) só quando o atendente pedir
    - (c) não
 8. **Reaproveitar FC da mesma pessoa feita há menos de:**
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (c) reaproveitar sempre que der, até 90 dias ("vamos usar de novo quando der").**
    - (a) 30 dias (recomendado)
    - (b) 60 dias
    - (c) 90 dias
    - (d) nunca reaproveitar
 9. **Depois dos 90 dias, o "esqueleto" do processo** (imóvel, etapas, datas, id do contrato, sem dados pessoais):
+   - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) o resumo sem dados pessoais fica como histórico.**
    - (a) fica para histórico e números (recomendado)
    - (b) é apagado também
 10. **Limpeza LGPD:**
+    - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
     - (a) gatilho próprio no fork, sem mexer na função do upstream (recomendado)
     - (b) editar a função LGPD do upstream
 11. ~~**Id da pessoa na Superlógica**~~ **RESPONDIDA (28/10, 01:01–01:04):** fica **no contato** do CRM
     (tabela `contato_superlogica_vinculos`, no fork). A pessoa do processo herda o id pelo contato. O casamento
-    pelo telefone é a Fase 3.5, com perguntas próprias em [`fase3-5-vinculo-superlogica.md`](fase3-5-vinculo-superlogica.md).
+    pelo telefone é a Fase 3.5, com perguntas próprias em `fase3-5-vinculo-superlogica.md`.
 12. **Se um passo precisar ser desfeito em produção:**
+    - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) só desligar a chave e manter as tabelas.**
     - (a) só desligar a chave e manter as tabelas (recomendado)
     - (b) pode apagar as tabelas novas sem exportar
 13. **Quem pode aprovar e reprovar:**
+    - ✅ **DECIDIDO pelo Felipe em 28/10/2026 01:15–01:18: (a) aprovar só o Felipe; reprovar qualquer atendente, com motivo.**
     - (a) aprovar só você; reprovar qualquer atendente com motivo (recomendado)
     - (b) as duas coisas só você
 14. **Onde publicar este plano:**
+    - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
     - (a) adendo no PR #16
     - (b) PR novo só de documentação (sem merge nos dois casos)

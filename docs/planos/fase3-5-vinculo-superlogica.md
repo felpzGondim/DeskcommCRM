@@ -243,44 +243,59 @@ Fora do escopo: busca de boletos, escrita na Superlógica, tela web da Superlóg
 
 ## 10. Perguntas para o Felipe (Fase 3.5)
 
+> **28/10, 01:10 (Brasília):** o Felipe pediu para adotar a opção (a) de todas as perguntas abaixo como "padrão recomendado, sujeito à revisão do Felipe". Cada pergunta está marcada. Nada foi aplicado; ele pode mudar qualquer uma.
+
+
 1. **Ligar sozinho:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) só casamentos únicos e exatos; o resto vai para a revisão (recomendado)
    - (b) tudo para a revisão, nada automático
    - (c) únicos exatos e também os "sem o 9"
 2. **Quem da Superlógica entra:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) locatários e fiadores (recomendado)
    - (b) locatários, fiadores e proprietários
    - (c) só locatários
 3. **Ex-inquilinos (sem contrato ativo):**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) entram, marcados como "ex" (recomendado)
    - (b) só quem tem contrato ativo
 4. **Número sem DDD na Superlógica (vale 11):**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) casa, mas vai para a revisão (recomendado)
    - (b) casa e conta como exato
    - (c) ignorar esses números
 5. **Mesma pessoa com 2 números/contatos:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) pode ligar os dois, depois da revisão (recomendado)
    - (b) só um contato por pessoa
 6. **Um número com várias pessoas (ex.: casal):**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) revisão, e você escolhe uma ou nenhuma (recomendado)
    - (b) não liga nenhuma, nem mostra
 7. **O número do contato mudou:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) mantém o vínculo e manda para a revisão na próxima rodada (recomendado)
    - (b) desliga sozinho
    - (c) mantém sem avisar
 8. **Quem pode ligar e desligar à mão:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) qualquer atendente, com auditoria; a lista de revisão só você (recomendado)
    - (b) só você (ou admin)
 9. **Rodar sozinho depois da primeira vez:**
+   - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
    - (a) não, só à mão (recomendado no começo)
    - (b) uma vez por semana
    - (c) todo dia de madrugada
 10. **Item da revisão sem decisão expira em:**
+    - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
     - (a) 30 dias (recomendado)
     - (b) nunca
 11. **Na revisão, mostrar o nome da Superlógica:**
+    - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
     - (a) sim, buscado na hora e não guardado (recomendado)
     - (b) não, só id e tipo
 12. **Se uma rodada sair errada:**
+    - ✅ **Adotado: (a)**, padrão recomendado, sujeito à revisão do Felipe (28/10, 01:10).
     - (a) desfazer a rodada inteira pelo botão (só você) (recomendado)
     - (b) corrigir um por um
