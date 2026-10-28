@@ -429,6 +429,11 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                       {t("Use Confirmar cobrança da FC no processo. Vai gastar créditos. A IA não confirma sozinha.")}
                     </p>
                   )}
+                  {p.ferramenta === "aprovar_relatorio" && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {t("Use Aprovar relatório no processo. A IA não aprova sozinha.")}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

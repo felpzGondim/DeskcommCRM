@@ -15,6 +15,7 @@ import {
   revelarCpfManualDoPainel,
 } from "@/lib/painel/acoes/manual";
 import { analisarSeguroDoPainel, statusSeguroDoPainel } from "@/lib/painel/acoes/seguro";
+import { aprovarRelatorioDoPainel, gerarRelatorioDoPainel } from "@/lib/painel/acoes/relatorio";
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
 import { lerConversaDoPainel, resumirOuSugerir } from "@/lib/painel/acoes/conversa";
@@ -413,6 +414,34 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
         anexo?: { bytes_b64?: string; mime?: string };
       }),
   },
+  {
+    nome: "gerar_relatorio",
+    descricao: "Monta o relatório financeiro de 6 seções a partir dos blocos já gravados (ficha, renda calculada, FC, seguro). Não calcula extrato. Não recomenda alugar. Mesma ação do botão Gerar relatório.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "gerando relatório financeiro…",
+    acaoDoBotao: "gerar_relatorio",
+    padraoLigada: true,
+    exigeChaveAnalise: "relatorio",
+    executar: (ctx, args) =>
+      gerarRelatorioDoPainel(ctx, (args ?? {}) as { processo_id?: string }),
+  },
+  {
+    nome: "aprovar_relatorio",
+    descricao: "Aprova o rascunho do relatório financeiro. Nível S: o modelo só PROPÕE; qualquer atendente clica no painel. Nada vai ao cliente.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "aprovando relatório…",
+    acaoDoBotao: "aprovar_relatorio",
+    padraoLigada: true,
+    exigeChaveAnalise: "relatorio",
+    executar: (ctx, args) =>
+      aprovarRelatorioDoPainel(ctx, (args ?? {}) as { processo_id?: string }),
+  },
 ];
 
 const POR_NOME = new Map(FERRAMENTAS_DO_PAINEL.map((f) => [f.nome, f]));
@@ -443,4 +472,5 @@ export const FERRAMENTAS_DE_ANALISE = new Set([
   "status_seguro",
   "analisar_fc",
   "status_fc",
+  "gerar_relatorio",
 ]);

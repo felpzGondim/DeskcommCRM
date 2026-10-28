@@ -160,7 +160,7 @@ export async function lerProcesso(
   processoId: string,
 ): Promise<Record<string, unknown> | null> {
   const { data } = await tabelaLocacao(admin, "locacao_processos")
-    .select("id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at,renda_confirmada_em,renda_confirmada_por,renda_confirmada_ficha_versao")
+    .select("id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at,renda_confirmada_em,renda_confirmada_por,renda_confirmada_ficha_versao,relatorio_rascunho,relatorio_rascunho_em,relatorio_rascunho_por,relatorio_aprovado_em,relatorio_aprovado_por,relatorio_documento_id")
     .eq("organization_id", orgId).eq("id", processoId).maybeSingle();
   return data ? asRec(data) : null;
 }
@@ -201,7 +201,7 @@ export async function listarProcessosDaConversa(
   const ids = (ligacoes ?? []).map((l) => String(asRec(l).processo_id));
   if (ids.length === 0) return [];
   const { data } = await tabelaLocacao(admin, "locacao_processos")
-    .select("id,imovel_id,status,encerrado_em,status_mudou_em,renda_confirmada_em")
+    .select("id,imovel_id,status,encerrado_em,status_mudou_em,renda_confirmada_em,relatorio_rascunho,relatorio_rascunho_em,relatorio_aprovado_em,relatorio_documento_id")
     .eq("organization_id", orgId).in("id", ids);
   const porId = new Map((data ?? []).map((p) => [String(asRec(p).id), asRec(p)]));
   return ids.map((id) => porId.get(id)).filter((p): p is Record<string, unknown> => !!p);
@@ -764,20 +764,60 @@ export async function gravarRascunhoRelatorio(
 
 export async function marcarRelatorioAprovado(
   admin: SupabaseClient,
-  input: { orgId: string; processoId: string; userId: string; documentoId: string },
+  input: { orgId: string; processoId: string; userId: string; documentoId?: string | null },
 ): Promise<void> {
-  const { error } = await tabelaLocacao(admin, "locacao_processos").update({
+  const patch: Record<string, unknown> = {
     relatorio_aprovado_em: new Date().toISOString(),
     relatorio_aprovado_por: input.userId,
-    relatorio_documento_id: input.documentoId,
-    relatorio_rascunho: null,
-  }).eq("organization_id", input.orgId).eq("id", input.processoId);
+  };
+  if (input.documentoId) {
+    patch.relatorio_documento_id = input.documentoId;
+    patch.relatorio_rascunho = null;
+  }
+  const { error } = await tabelaLocacao(admin, "locacao_processos").update(patch)
+    .eq("organization_id", input.orgId).eq("id", input.processoId);
   if (error) throw new LocacaoErro("relatorio_aprovacao", "relatorio");
   await gravarEvento(admin, {
     orgId: input.orgId, processoId: input.processoId, tipo: "relatorio",
     atorTipo: "usuario", atorId: input.userId,
-    detalhe: { documento_id: input.documentoId, aprovado: true },
+    detalhe: { documento_id: input.documentoId ?? null, aprovado: true },
   });
+}
+
+export async function guardarDocumentoRelatorio(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    processoId: string;
+    userId: string;
+    bytes: Buffer;
+  },
+): Promise<string> {
+  const docId = randomUUID();
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
+  const md5 = createHash("md5").update(input.bytes).digest("hex");
+  const path = `${input.orgId}/processos/${input.processoId}/relatorio/${docId}.md`;
+  const { error: upErr } = await admin.storage.from("locacao-processos").upload(path, input.bytes, {
+    contentType: "text/markdown",
+    upsert: false,
+  });
+  if (upErr) throw new LocacaoErro("relatorio_documento", "relatorio");
+  const { error } = await tabelaLocacao(admin, "locacao_processo_documentos").insert({
+    id: docId,
+    organization_id: input.orgId,
+    processo_id: input.processoId,
+    participante_id: null,
+    categoria: "relatorio",
+    origem: "relatorio",
+    storage_path: path,
+    mime: "text/markdown",
+    tamanho_bytes: input.bytes.length,
+    sha256,
+    md5,
+    created_by: input.userId,
+  });
+  if (error) throw new LocacaoErro("relatorio_documento", "relatorio");
+  return docId;
 }
 
 export async function ligarVinculoManual(

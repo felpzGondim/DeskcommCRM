@@ -37,6 +37,7 @@ describe("registro único do painel", () => {
 
   it("C e S existem no registro mas o loop do modelo não as coloca no ToolSet", () => {
     expect(NOMES_C_OU_S.sort()).toEqual([
+      "aprovar_relatorio",
       "confirmar_cobranca_fc",
       "confirmar_contrato",
       "confirmar_renda",
@@ -104,6 +105,16 @@ describe("registro único do painel", () => {
     expect(ligada).not.toContain("registrar_manual_seguro");
   });
 
+  it("chave locacao.analise.relatorio desligada: gerar_relatorio some; ligada: L entra, S não", () => {
+    expect(nomesNoToolsetDoLoop({})).not.toContain("gerar_relatorio");
+    expect(nomesNoToolsetDoLoop({})).not.toContain("aprovar_relatorio");
+    const ligada = nomesNoToolsetDoLoop({
+      locacao: { processos_habilitado: true, analise: { relatorio: true } },
+    });
+    expect(ligada).toContain("gerar_relatorio");
+    expect(ligada).not.toContain("aprovar_relatorio");
+  });
+
   it("o loop recusa executar C/S mesmo se alguém chamar a porta com origem agente", async () => {
     const r = await executarFerramenta("iniciar_analise", ctxAgente, {
       pedidoId: "00000000-0000-4000-8000-000000000001",
@@ -133,6 +144,16 @@ describe("registro único do painel", () => {
     const clique = await executarFerramenta("confirmar_renda", ctxChave, {});
     expect(clique.ok).toBe(false);
     expect(clique.texto).toMatch(/exige clique/);
+    const ctxRel: typeof ctxAgente = {
+      ...ctxAgente,
+      settings: { locacao: { processos_habilitado: true, analise: { relatorio: true } } },
+    };
+    const aprovar = await executarFerramenta("aprovar_relatorio", ctxRel, {});
+    expect(aprovar.ok).toBe(false);
+    expect(aprovar.texto).toMatch(/exige clique/);
+    const offRel = await executarFerramenta("gerar_relatorio", ctxAgente, {});
+    expect(offRel.ok).toBe(false);
+    expect(offRel.texto).toMatch(/não está ligada/);
   });
 
   it("botão e agente compartilham a mesma entrada do registro", () => {
@@ -164,6 +185,11 @@ describe("registro único do painel", () => {
     expect(ferramentaDoPainel("registrar_manual_fc")?.nivel).toBe("S");
     expect(ferramentaDoPainel("registrar_manual_seguro")?.nivel).toBe("S");
     expect(ferramentaDoPainel("preparar_manual")?.exigeChaveAnalise).toBe("manual");
+    expect(ferramentaDoPainel("gerar_relatorio")?.acaoDoBotao).toBe("gerar_relatorio");
+    expect(ferramentaDoPainel("aprovar_relatorio")?.acaoDoBotao).toBe("aprovar_relatorio");
+    expect(ferramentaDoPainel("gerar_relatorio")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("aprovar_relatorio")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("gerar_relatorio")?.exigeChaveAnalise).toBe("relatorio");
     const seguroRota = readFileSync(
       "app/api/v1/conversations/[id]/painel-agente/seguro/route.ts",
       "utf8",
@@ -197,6 +223,14 @@ describe("registro único do painel", () => {
     expect(manualRota).toContain("revelar_cpf");
     expect(manualRota).not.toMatch(/confirmar-cobranca-fc|valor_exibido|R\$/);
     expect(manualRota).not.toMatch(/["']Contratar["']/);
+    const relatorioRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/relatorio/route.ts",
+      "utf8",
+    );
+    expect(relatorioRota).toContain('executarFerramenta("gerar_relatorio"');
+    expect(relatorioRota).toContain('executarFerramenta("aprovar_relatorio"');
+    expect(relatorioRota).toContain('origem: "botao"');
+    expect(relatorioRota).not.toMatch(/alugue|Contratar|valor_exibido/);
     const acoes = appApiAcoes();
     expect(acoes).toContain("executarFerramenta");
     expect(acoes).toMatch(/boletos:\s*"buscar_boletos"/);

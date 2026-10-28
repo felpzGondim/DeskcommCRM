@@ -16,6 +16,8 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Manual assistido no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.manual` (desligada). Ligada, quando o robô da FC ou da Migra cai em erro ou pede login, o processo ganha o passo a passo para fazer aquela etapa no site, com os dados da ficha prontos para copiar (CPF mascarado até o atendente revelar, com auditoria). O atendente registra score/risco da FC ou os cards da cotação e pode anexar o laudo ou o print — o mesmo registro que o robô gravaria. Nada vai ao cliente. Nenhum passo pago daqui. Rollback: desligar a chave.
 
+- **Relatório financeiro no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.relatorio` (desligada). Ligada, o processo ganha Gerar relatório (6 seções a partir dos blocos já gravados) e Aprovar relatório (só o atendente clica). Sem renda comprovada pelo extrato a seção fica pendente — o valor declarado não entra no lugar — e o risco não sai baixo. Nada vai ao cliente. Rollback: desligar a chave.
+
 ## [1.88.0-felpz.11] — 2026-10-28
 
 ### Adicionado
