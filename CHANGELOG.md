@@ -12,9 +12,9 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Adicionado
 
-- **Processo de locação, vínculo Superlógica e arquivos do processo (desligados por padrão)** Em Configurações › Locação entram três chaves: processos, arquivos e cópia para o Google Drive. No Painel, Abrir processo cria um registro com as pessoas da conversa (papel contato) e o imóvel. Só quem está na lista de aprovadores (ou o dono da instalação) aprova; qualquer atendente reprova com motivo. Processo parado fecha em 30 dias. A cópia para o Drive lê `DESKCOMM_GOOGLE_SA_JSON` e `DESKCOMM_DRIVE_ID` — vazio, o cron não faz nada; o código nunca apaga arquivo no Drive. Rollback: desligar as chaves; as tabelas ficam. (#20)
+- **Processo de locação, vínculo Superlógica e arquivos (desligados)** Em Configurações › Locação: processos, arquivos e cópia para o Drive. No Painel, Abrir processo; só o aprovador (ou o dono) aprova. Drive lê `DESKCOMM_GOOGLE_SA_JSON` e `DESKCOMM_DRIVE_ID` — vazio, o cron não faz nada; o código nunca apaga. Rollback: desligar as chaves. (#20)
 
-- **O campo de pergunta do Painel do agente pode consultar as mesmas ações dos botões (desligado por padrão)** Em Configurações › Locação há uma chave nova: ferramentas no campo de pergunta. Nasce desligada — o campo continua só conversando, como hoje. Ligada, a pergunta livre consulta conversa, anexo, boletos, contrato, ficha e processo pelas mesmas funções dos botões; análise paga e confirmar contrato só acontecem se o atendente clicar. No limite, a IA diz o que já apurou e oferece Continuar. “Usar como resposta” só preenche a caixa. Rollback: desligar a chave; a tabela de registro fica. (#21)
+- **O campo de pergunta do Painel pode usar as mesmas ações dos botões (desligado)** Chave em Configurações › Locação. Desligada, o campo só conversa. Ligada, consulta conversa, anexo, boletos, contrato, ficha e processo; análise paga e confirmar contrato só no clique. “Usar como resposta” só preenche a caixa. (#21)
 
 ## [1.88.0-felpz.9] — 2026-10-28
 
@@ -46,11 +46,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [1.88.0-felpz.5] — 2026-10-27
 
-### Adicionado
-
-- **O painel do agente permite preparar e confirmar a criação da locação no SuperLógica pelo Brisa Hub** O botão Gerar contrato abre um formulário para os dados da locação, locatários, fiadores, taxas e despesas. O atendente confere o resumo completo retornado pelo Hub antes de confirmar a criação do contrato ativo. Pendências impedem a confirmação. Após falha de conexão, a mesma prévia retoma o mesmo pedido para evitar duplicação; despesas pendentes e ações manuais aparecem no resultado.
-
-  A integração usa o endereço e a credencial do servidor MCP já cadastrado na organização. O serviço de contratos do Brisa Hub precisa estar disponível e autorizar essa credencial. Sem essa permissão, o painel explica a dependência. Nenhuma mensagem é enviada ao cliente.
+As alterações já distribuídas nesta versão estão preservadas integralmente em [fragmentos da versão felpz.5](docs/releases/fragmentos/v1.88.0-felpz.5/). Este cabeçalho permite que o atualizador identifique o limite da versão instalada.
 
 ## [1.88.0-felpz.4] — 2026-10-27
 
