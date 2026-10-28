@@ -13,7 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useImportContacts } from "@/hooks/contacts/useImportContacts";
+import {
+  useImportContacts,
+  type ImportContactsResult,
+} from "@/hooks/contacts/useImportContacts";
 
 interface Props {
   open: boolean;
@@ -22,31 +25,41 @@ interface Props {
 
 /**
  * Diálogo de importação de contatos por CSV. O resumo é mostrado NO diálogo
- * (e não só em toast) porque erros por linha são a parte que interessa —
- * fechar sozinho esconderia o que o usuário veio corrigir na planilha.
+ * (e não só em toast) porque erros por linha são a parte que interessa.
+ *
+ * Com "Atualizar contatos existentes" ligado, o primeiro envio é prévia:
+ * mostra quantos serão criados, preenchidos e substituídos. Um único
+ * "Confirmar importação" grava — o nome da planilha substitui o da ficha.
  */
 export function ImportContactsDialog({ open, onOpenChange }: Props) {
   const t = useT();
   const importar = useImportContacts();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [resumo, setResumo] = useState<Awaited<ReturnType<typeof importar.mutateAsync>> | null>(null);
+  const [atualizarExistentes, setAtualizarExistentes] = useState(false);
+  const [resumo, setResumo] = useState<ImportContactsResult | null>(null);
 
   function reset() {
     setFile(null);
+    setAtualizarExistentes(false);
     setResumo(null);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function enviar(pedido: { confirmar?: boolean }) {
     if (!file || importar.isPending) return;
     try {
-      const r = await importar.mutateAsync(file);
+      const r = await importar.mutateAsync({
+        file,
+        atualizarExistentes,
+        confirmar: pedido.confirmar,
+      });
       setResumo(r);
+      if (r.preview) return;
       if (r.imported > 0) toast.success(`${r.imported} ${t("contato(s) importado(s)")}`);
+      if (r.updated > 0) toast.success(`${r.updated} ${t("contato(s) atualizado(s)")}`);
       if (r.errors.length > 0) toast.warning(`${r.errors.length} ${t("linha(s) com problema")}`);
     } catch (err) {
-      // Falha de requisição (arquivo grande, formato errado…): mostra no rodapé.
       const msg =
         err instanceof Error && err.message
           ? t(err.message)
@@ -54,6 +67,14 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
       toast.error(msg);
     }
   }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await enviar({});
+  }
+
+  const previaPendente =
+    !!resumo?.preview && resumo.imported + resumo.filled + resumo.replaced > 0;
 
   return (
     <Dialog
@@ -68,7 +89,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
           <DialogTitle>{t("Importar contatos de planilha")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
+              "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Também entende a exportação do Google Contatos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -80,6 +101,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                 <Label htmlFor="csv-file">{t("Arquivo CSV")}</Label>
                 <Input
                   id="csv-file"
+                  data-testid="arquivo-de-contatos"
                   ref={inputRef}
                   type="file"
                   accept=".csv,text/csv"
@@ -91,6 +113,23 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   </p>
                 )}
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  data-testid="atualizar-existentes"
+                  checked={atualizarExistentes}
+                  onChange={(e) => setAtualizarExistentes(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">{t("Atualizar contatos existentes")}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t(
+                      "O nome da planilha substitui o nome da ficha, inclusive o apelido do WhatsApp. Antes de gravar, mostramos quantos serão criados, preenchidos e substituídos.",
+                    )}
+                  </span>
+                </span>
+              </label>
               <DialogFooter>
                 <Button
                   type="button"
@@ -109,13 +148,26 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
 
           {resumo && (
             <div className="space-y-3">
-              <div className="flex flex-wrap gap-2 text-sm">
+              <div className="flex flex-wrap gap-2 text-sm" data-testid="resumo-da-importacao">
                 <span className="rounded-md bg-surface px-2 py-1">
                   {resumo.total_linhas} {t("linha(s) lidas")}
                 </span>
                 <span className="rounded-md px-2 py-1 font-medium">
-                  {resumo.imported} {t("importado(s)")}
+                  {resumo.imported}{" "}
+                  {resumo.preview ? t("serão criado(s)") : t("importado(s)")}
                 </span>
+                {(resumo.preview || resumo.filled > 0) && (
+                  <span className="rounded-md px-2 py-1 font-medium">
+                    {resumo.filled}{" "}
+                    {resumo.preview ? t("serão preenchido(s)") : t("preenchido(s)")}
+                  </span>
+                )}
+                {(resumo.preview || resumo.replaced > 0) && (
+                  <span className="rounded-md px-2 py-1 font-medium">
+                    {resumo.replaced}{" "}
+                    {resumo.preview ? t("serão substituído(s)") : t("substituído(s)")}
+                  </span>
+                )}
                 {resumo.skipped_duplicates > 0 && (
                   <span className="rounded-md bg-surface px-2 py-1">
                     {resumo.skipped_duplicates} {t("já existente(s)")}
@@ -139,12 +191,30 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
               )}
 
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={reset}>
-                  {t("Importar outro arquivo")}
-                </Button>
-                <Button type="button" onClick={() => onOpenChange(false)}>
-                  {t("Concluir")}
-                </Button>
+                {previaPendente ? (
+                  <>
+                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                      {t("Cancelar")}
+                    </Button>
+                    <Button
+                      type="button"
+                      data-testid="confirmar-importacao"
+                      onClick={() => enviar({ confirmar: true })}
+                      disabled={importar.isPending}
+                    >
+                      {importar.isPending ? t("Importando…") : t("Confirmar importação")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="ghost" onClick={reset}>
+                      {t("Importar outro arquivo")}
+                    </Button>
+                    <Button type="button" onClick={() => onOpenChange(false)}>
+                      {t("Concluir")}
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </div>
           )}

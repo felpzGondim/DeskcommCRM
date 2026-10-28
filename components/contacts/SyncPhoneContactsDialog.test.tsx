@@ -54,6 +54,7 @@ function resumo(parcial: Partial<ResumoDaAgenda>): ResumoDaAgenda {
   return {
     lidos: 0,
     importados: 0,
+    atualizados: 0,
     ja_existentes: 0,
     ignorados: 0,
     erros: 0,

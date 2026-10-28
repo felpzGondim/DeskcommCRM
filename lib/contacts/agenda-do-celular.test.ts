@@ -31,6 +31,8 @@ function fakeDeps(opcoes: {
   paginas?: ContatoDoAparelho[][];
   /** Telefones já gravados no CRM (como `contacts.phone_number` guarda). */
   existentes?: string[];
+  /** `address_book_name` já gravado, chaveado pelo telefone de `existentes`. */
+  nomeDaAgenda?: Record<string, string | null>;
   /** Telefones cuja RPC lança — a falha de um não pode matar o lote. */
   falhaUpsertEm?: string[];
   /** A RPC devolve null (anomalia — conta como erro, não como importado). */
@@ -43,7 +45,14 @@ function fakeDeps(opcoes: {
   falhaNome?: boolean;
 } = {}) {
   const paginas = opcoes.paginas ?? [[]];
-  const variantesNoBanco = new Set((opcoes.existentes ?? []).flatMap(phoneLookupVariants));
+  const existentesNoBanco = new Map<string, { id: string; address_book_name: string | null }>();
+  (opcoes.existentes ?? []).forEach((tel, i) => {
+    const contato = {
+      id: `existente-${i + 1}`,
+      address_book_name: opcoes.nomeDaAgenda?.[tel] ?? null,
+    };
+    for (const v of phoneLookupVariants(tel)) existentesNoBanco.set(v, contato);
+  });
   const offsets: number[] = [];
   const upserts: Array<{ telefone: string; chatId: string; notify: string | null }> = [];
   const emits: string[] = [];
@@ -55,8 +64,14 @@ function fakeDeps(opcoes: {
       offsets.push(pagina.offset);
       return paginas[pagina.offset / TAMANHO_DA_PAGINA] ?? [];
     },
-    telefonesExistentes: async (_org, variantes) =>
-      new Set(variantes.filter((v) => variantesNoBanco.has(v))),
+    telefonesExistentes: async (_org, variantes) => {
+      const achados = new Map<string, { id: string; address_book_name: string | null }>();
+      for (const v of variantes) {
+        const c = existentesNoBanco.get(v);
+        if (c) achados.set(v, c);
+      }
+      return achados;
+    },
     upsertContato: async (e) => {
       upserts.push(e);
       if (opcoes.falhaUpsertEm?.includes(e.telefone)) throw new Error("rpc indisponível");
@@ -64,7 +79,8 @@ function fakeDeps(opcoes: {
       // A RPC grava de verdade: o telefone criado EXISTE no próximo clique.
       // Sem isto o dublê mentiria que todo clique reencontra um banco vazio, e
       // a retomada (que depende de "já existente" ser barato) não seria medida.
-      for (const v of phoneLookupVariants(e.telefone)) variantesNoBanco.add(v);
+      const recem = { id: `contato-${upserts.length + 1}`, address_book_name: null as string | null };
+      for (const v of phoneLookupVariants(e.telefone)) existentesNoBanco.set(v, recem);
       return `contato-${upserts.length}`;
     },
     emitirContatoCriado: async (e) => {
@@ -185,6 +201,7 @@ describe("sincronizarAgendaDoCelular", () => {
     expect(resumo).toEqual({
       lidos: 5,
       importados: 1,
+      atualizados: 0,
       ja_existentes: 0,
       ignorados: 4,
       erros: 0,
@@ -212,6 +229,7 @@ describe("sincronizarAgendaDoCelular", () => {
     expect(resumo).toEqual({
       lidos: 2,
       importados: 1,
+      atualizados: 0,
       ja_existentes: 0,
       ignorados: 1,
       erros: 0,
@@ -398,6 +416,7 @@ describe("sincronizarAgendaDoCelular", () => {
     expect(resumo).toMatchObject({
       lidos: 12,
       importados: 12,
+      atualizados: 0,
       ja_existentes: 0,
       truncado: false,
       proximo_offset: null,
@@ -467,8 +486,29 @@ describe("sincronizarAgendaDoCelular", () => {
       organizationId: ORG,
       resourceType: "contact",
       requestId: "req-1",
-      metadata: { lidos: 1, importados: 1, ja_existentes: 0 },
+      metadata: { lidos: 1, importados: 1, atualizados: 0, ja_existentes: 0 },
     });
+  });
+
+  it("contato existente sem nome da agenda recebe o nome do celular; com nome, não toca", async () => {
+    const f = fakeDeps({
+      paginas: [[
+        agenda("5511999990001@c.us", { name: "Maria da Agenda" }),
+        agenda("5511999990002@c.us", { name: "João da Agenda" }),
+      ]],
+      existentes: ["+5511999990001", "+5511999990002"],
+      nomeDaAgenda: { "+5511999990002": "João já salvo" },
+    });
+    const resumo = await sincronizar(f);
+    expect(resumo).toMatchObject({ importados: 0, atualizados: 1, ja_existentes: 1 });
+    expect(f.upserts).toHaveLength(0);
+    expect(f.nomes).toEqual([{ contactId: "existente-1", nome: "Maria da Agenda" }]);
+    const doUpdate = f.audits.find((a) => a.action === "contact.updated");
+    expect(doUpdate).toMatchObject({
+      resourceId: "existente-1",
+      metadata: { origem: "whatsapp_agenda", campo: "address_book_name" },
+    });
+    expect(JSON.stringify(doUpdate?.metadata)).not.toMatch(/Maria|99999/);
   });
 
   it("agenda vazia (NOWEB sem store) devolve zeros sem tocar em nada", async () => {
@@ -477,6 +517,7 @@ describe("sincronizarAgendaDoCelular", () => {
     expect(resumo).toEqual({
       lidos: 0,
       importados: 0,
+      atualizados: 0,
       ja_existentes: 0,
       ignorados: 0,
       erros: 0,

@@ -9220,6 +9220,7 @@ export const DICIONARIO: Traducoes = {
   "Sincronizar de novo": { es: "Sincronizar de nuevo" },
   "contato(s) sincronizado(s)": { es: "contacto(s) sincronizado(s)" },
   "contato(s) já existente(s) — nada duplicado": { es: "contacto(s) ya existente(s) — nada duplicado" },
+  "contato(s) com nome da agenda preenchido": { es: "contacto(s) con el nombre de la agenda rellenado" },
   "contato(s) com erro na gravação": { es: "contacto(s) con error al guardar" },
   "lido(s) no aparelho": { es: "leído(s) en el aparato" },
   "ignorado(s)": { es: "ignorado(s)" },
@@ -9228,8 +9229,8 @@ export const DICIONARIO: Traducoes = {
   "Nenhum número conectado. Conecte um número em Conexões para sincronizar a agenda.": {
     es: "Ningún número conectado. Conecta un número en Conexiones para sincronizar la agenda.",
   },
-  "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.": {
-    es: "Importa al CRM los contactos guardados en la agenda del aparato conectado. Los números que ya están en el CRM no se duplican. Si el aparato tiene más contactos que el tope de una sincronización, haz clic de nuevo para continuar donde ibas.",
+  "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata; se o nome da agenda na ficha estiver vazio, ele é preenchido. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.": {
+    es: "Importa al CRM los contactos guardados en la agenda del aparato conectado. Los números que ya están en el CRM no se duplican; si el nombre de la agenda en la ficha está vacío, se rellena. Si el aparato tiene más contactos que el tope de una sincronización, haz clic de nuevo para continuar donde ibas.",
   },
   "A sincronização bateu no teto de uma passada. Clique em Continuar de onde parou para seguir do próximo contato — o que já entrou não duplica.": {
     es: "La sincronización llegó al tope de una pasada. Haz clic en Continuar donde ibas para seguir desde el próximo contacto: lo que ya entró no se duplica.",
@@ -9353,11 +9354,23 @@ export const DICIONARIO: Traducoes = {
   "Sugestões de etiquetas": { es: "Sugerencias de etiquetas" },
   "Criar etiqueta": { es: "Crear etiqueta" },
   "contato(s) importado(s)": { es: "contacto(s) importado(s)" },
+  "contato(s) atualizado(s)": { es: "contacto(s) actualizado(s)" },
+  "Atualizar contatos existentes": { es: "Actualizar contactos existentes" },
+  "O nome da planilha substitui o nome da ficha, inclusive o apelido do WhatsApp. Antes de gravar, mostramos quantos serão criados, preenchidos e substituídos.": {
+    es: "El nombre de la hoja sustituye el nombre de la ficha, incluso el apodo de WhatsApp. Antes de guardar, mostramos cuántos se crearán, se rellenarán y se sustituirán.",
+  },
+  "atualizado(s)": { es: "actualizado(s)" },
+  "serão criado(s)": { es: "se crearán" },
+  "serão preenchido(s)": { es: "se rellenarán" },
+  "serão substituído(s)": { es: "se sustituirán" },
+  "preenchido(s)": { es: "rellenado(s)" },
+  "substituído(s)": { es: "sustituido(s)" },
+  "Confirmar importação": { es: "Confirmar importación" },
   "linha(s) com problema": { es: "fila(s) con problema" },
   "Não foi possível importar o arquivo.": { es: "No se pudo importar el archivo." },
   "Importar contatos de planilha": { es: "Importar contactos de una hoja de cálculo" },
-  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.": {
-    es: "Envía un archivo .csv con encabezado — columnas reconocidas: nombre, teléfono, email, cpf, nacimiento, tags. Excel: usa “Guardar como” → “CSV UTF-8”. Máximo 500 líneas por archivo.",
+  "Envie um arquivo .csv com cabeçalho — colunas reconhecidas: nome, telefone, email, cpf, nascimento, tags. Também entende a exportação do Google Contatos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: use “Salvar como” → “CSV UTF-8”. Máximo de 500 linhas por arquivo.": {
+    es: "Envía un archivo .csv con encabezado — columnas reconocidas: nombre, teléfono, email, cpf, nacimiento, tags. También entiende la exportación de Google Contactos (Name/Nome, Phone 1 - Value/Telefone 1 - Valor). Excel: usa “Guardar como” → “CSV UTF-8”. Máximo 500 líneas por archivo.",
   },
   "Este arquivo não parece ser um CSV de texto. No Excel use “Salvar como” → “CSV UTF-8 (delimitado por vírgulas)”.": {
     es: "Este archivo no parece ser un CSV de texto. En Excel usa “Guardar como” → “CSV UTF-8 (delimitado por comas)”.",

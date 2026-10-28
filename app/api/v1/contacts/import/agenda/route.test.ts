@@ -82,6 +82,7 @@ function requisicao(corpo: unknown): NextRequest {
 const RESUMO = {
   lidos: 320,
   importados: 40,
+  atualizados: 0,
   ja_existentes: 270,
   ignorados: 10,
   erros: 0,

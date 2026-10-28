@@ -26,11 +26,15 @@
  * bloco dos telefones já cadastrados (para contar "já existia" sem pagar uma
  * RPC por contato inútil) e o resumo que a tela mostra.
  *
- * ─── Contato que já está no CRM não é tocado ────────────────────────────────
+ * ─── Contato que já está no CRM: só o nome da agenda, e só se estiver vazio ─
  *
- * Quem já existe é CONTADO e pulado — sem UPDATE: o nome salvo à mão no CRM
- * vale mais que o da agenda do aparelho, e o vínculo de identidade WhatsApp
- * (`wa_identity`) a própria mensagem seguinte faz, pelo caminho de sempre.
+ * Quem já existe não vira duplicata e o `name` da ficha NÃO é reescrito — o
+ * nome salvo à mão no CRM vale mais que o da agenda do aparelho. O que esta
+ * sincronização preenche, quando o campo da equipe está vazio, é
+ * `address_book_name`: é ele que a lista mostra depois do nome principal e
+ * antes do pushName. Quem já tem nome da agenda fica como está. O vínculo
+ * de identidade WhatsApp (`wa_identity`) a própria mensagem seguinte faz,
+ * pelo caminho de sempre.
  *
  * ─── Dois tetos, e a leitura RETOMA de onde parou ───────────────────────────
  *
@@ -63,6 +67,7 @@
 import { audit as auditReal } from "@/lib/audit";
 import type { ContatoDoAparelho } from "@/lib/channels";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
+import { nomePrincipalVazio } from "@/lib/contacts/atualizar-nome-na-importacao";
 import { nomeGravavel } from "@/lib/contacts/nome-da-agenda";
 import { ORIGEM_AGENDA_DO_CELULAR } from "@/lib/leads/origem-do-contato";
 import { logger } from "@/lib/logger";
@@ -100,11 +105,21 @@ export const TETO_DE_IMPORTACOES = 500;
  */
 const TELEFONES_POR_CONSULTA = 100;
 
+export interface ContatoExistenteDaAgenda {
+  id: string;
+  address_book_name: string | null;
+}
+
 export interface ResumoDaAgenda {
   /** Contatos lidos na agenda do aparelho (todas as páginas). */
   lidos: number;
   /** Criados no CRM nesta sincronização. */
   importados: number;
+  /**
+   * Já estavam no CRM, com `address_book_name` vazio, e receberam o nome
+   * salvo no celular. O nome principal da ficha não muda.
+   */
+  atualizados: number;
   /** Já estavam no CRM pelo mesmo telefone — nada foi reescrito nem duplicado. */
   ja_existentes: number;
   /** Fora da régua (não salvo na agenda, número do operador, grupo, sem WhatsApp ou sem número utilizável) ou repetido na própria agenda. */
@@ -157,10 +172,14 @@ export interface AgendaDeps {
   listarPagina(session: string, pagina: { limit: number; offset: number }): Promise<ContatoDoAparelho[]>;
   /**
    * Telefones da organização que já batem com estas variantes. Devolve o
-   * CONJUNTO de variantes achadas (as duas grafias de cada linha), para o
-   * mesmo `Set` decidir tanto o pré-filtro quanto o dedup dentro do lote.
+   * mapa variante → {id, address_book_name} (as duas grafias de cada linha),
+   * para o mesmo Map decidir o pré-filtro, o dedup dentro do lote e se o
+   * nome da agenda ainda está vazio.
    */
-  telefonesExistentes(organizationId: string, variantes: string[]): Promise<Set<string>>;
+  telefonesExistentes(
+    organizationId: string,
+    variantes: string[],
+  ): Promise<Map<string, ContatoExistenteDaAgenda>>;
   /** O upsert ATÔMICO do webhook (`fn_upsert_wa_contact`). Devolve o id do contato. */
   upsertContato(e: { organizationId: string; telefone: string; chatId: string; notify: string | null }): Promise<string | null>;
   /** `contact.created` para o contato que NASCEU agora — o mesmo evento do import de planilha. */
@@ -172,7 +191,11 @@ export interface AgendaDeps {
    * e o filtro de origem não teriam como separar os dois (decisão do doc 158).
    */
   marcarOrigem(organizationId: string, contactIds: string[]): Promise<void>;
-  /** Grava o nome da agenda em `address_book_name` do contato que NASCEU agora. */
+  /**
+   * Grava o nome da agenda em `address_book_name` — só quando o campo está
+   * vazio (o UPDATE do banco também recusa se já houver valor). Vale para
+   * contato que nasceu agora e para o que já existia sem esse nome.
+   */
   gravarNomeDaAgenda(organizationId: string, contactId: string, nome: string): Promise<void>;
   /**
    * A trilha do gesto — o MESMO `audit()` que o resto do sistema escreve.
@@ -292,13 +315,13 @@ async function telefonesExistentesEmBlocos(
   deps: AgendaDeps,
   organizationId: string,
   candidatos: Candidato[],
-): Promise<Set<string>> {
-  const achados = new Set<string>();
+): Promise<Map<string, ContatoExistenteDaAgenda>> {
+  const achados = new Map<string, ContatoExistenteDaAgenda>();
   for (let i = 0; i < candidatos.length; i += TELEFONES_POR_CONSULTA) {
     const bloco = candidatos.slice(i, i + TELEFONES_POR_CONSULTA);
     const variantes = [...new Set(bloco.flatMap((c) => phoneLookupVariants(c.telefone)))];
     const doBanco = await deps.telefonesExistentes(organizationId, variantes);
-    for (const v of doBanco) achados.add(v);
+    for (const [v, contato] of doBanco) achados.set(v, contato);
   }
   return achados;
 }
@@ -317,6 +340,7 @@ export async function sincronizarAgendaDoCelular(
   const resumo: ResumoDaAgenda = {
     lidos: 0,
     importados: 0,
+    atualizados: 0,
     ja_existentes: 0,
     ignorados: 0,
     erros: 0,
@@ -347,9 +371,34 @@ export async function sincronizarAgendaDoCelular(
       break;
     }
     const variantes = phoneLookupVariants(candidato.telefone);
-    // No CRM (pela pré-leitura) ou recém-criado neste mesmo lote: não toca.
-    if (variantes.some((v) => existentes.has(v))) {
-      resumo.ja_existentes += 1;
+    const jaNoCrm = variantes.map((v) => existentes.get(v)).find((c): c is ContatoExistenteDaAgenda => !!c);
+    // No CRM (pela pré-leitura) ou recém-criado neste mesmo lote.
+    if (jaNoCrm) {
+      if (candidato.agenda && nomePrincipalVazio(jaNoCrm.address_book_name)) {
+        try {
+          await deps.gravarNomeDaAgenda(e.organizationId, jaNoCrm.id, candidato.agenda);
+          jaNoCrm.address_book_name = candidato.agenda;
+          resumo.atualizados += 1;
+          await deps.audit({
+            action: "contact.updated",
+            actorUserId: e.actorUserId,
+            organizationId: e.organizationId,
+            resourceType: "contact",
+            resourceId: jaNoCrm.id,
+            requestId: e.requestId,
+            metadata: { actor_type: "user", origem: "whatsapp_agenda", campo: "address_book_name" },
+          });
+        } catch (err) {
+          resumo.ja_existentes += 1;
+          logger.warn("contacts.sync-agenda: contato existente sem o nome da agenda", {
+            organization_id: e.organizationId,
+            request_id: e.requestId,
+            detail: err instanceof Error ? err.message.slice(0, 160) : String(err),
+          });
+        }
+      } else {
+        resumo.ja_existentes += 1;
+      }
       continue;
     }
     try {
@@ -367,7 +416,11 @@ export async function sincronizarAgendaDoCelular(
       criados.push(id);
       // Reserva as variantes ANTES do evento: a próxima entrada de mesmo número
       // neste lote cai em "já existente" em vez de pagar a RPC de novo.
-      for (const v of variantes) existentes.add(v);
+      const recem: ContatoExistenteDaAgenda = {
+        id,
+        address_book_name: candidato.agenda,
+      };
+      for (const v of variantes) existentes.set(v, recem);
       if (candidato.agenda) {
         try {
           await deps.gravarNomeDaAgenda(e.organizationId, id, candidato.agenda);
@@ -449,7 +502,7 @@ export function criarDepsDeAgenda(
     telefonesExistentes: async (organizationId, variantes) => {
       const { data, error } = await admin
         .from("contacts")
-        .select("phone_number")
+        .select("id, phone_number, address_book_name")
         .eq("organization_id", organizationId)
         .not("phone_number", "is", null)
         // Mesma régua do `on conflict`/select da RPC e do índice parcial
@@ -458,9 +511,14 @@ export function criarDepsDeAgenda(
         .is("is_merged_into", null)
         .in("phone_number", variantes);
       if (error) throw new Error(error.message);
-      const achados = new Set<string>();
+      const achados = new Map<string, ContatoExistenteDaAgenda>();
       for (const r of data ?? []) {
-        for (const v of phoneLookupVariants((r as { phone_number: string }).phone_number)) achados.add(v);
+        const row = r as { id: string; phone_number: string; address_book_name: string | null };
+        const contato: ContatoExistenteDaAgenda = {
+          id: row.id,
+          address_book_name: row.address_book_name,
+        };
+        for (const v of phoneLookupVariants(row.phone_number)) achados.set(v, contato);
       }
       return achados;
     },

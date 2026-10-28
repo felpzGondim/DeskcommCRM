@@ -13,13 +13,25 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 export interface ImportContactsResult {
   total_linhas: number;
   imported: number;
+  filled: number;
+  replaced: number;
+  updated: number;
   skipped_duplicates: number;
+  preview: boolean;
   errors: Array<{ linha: number; motivo: string }>;
 }
 
-async function importarCsv(file: File): Promise<ImportContactsResult> {
+export interface PedidoDeImportacao {
+  file: File;
+  atualizarExistentes?: boolean;
+  confirmar?: boolean;
+}
+
+async function importarCsv(pedido: PedidoDeImportacao): Promise<ImportContactsResult> {
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", pedido.file);
+  if (pedido.atualizarExistentes) form.append("atualizar_existentes", "true");
+  if (pedido.confirmar) form.append("confirmar", "true");
   const res = await fetch("/api/v1/contacts/import", {
     method: "POST",
     headers: { "Idempotency-Key": randomId() },
@@ -46,8 +58,8 @@ export function useImportContacts() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: importarCsv,
-    onSuccess: () => {
-      // A lista pode ter crescido em qualquer página/filtro — invalida tudo.
+    onSuccess: (data) => {
+      if (data.preview) return;
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
