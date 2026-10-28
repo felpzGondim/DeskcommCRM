@@ -337,6 +337,14 @@ const PARES: Array<{
     simbolo: "CASE_CHAT_AUTHOR_KINDS",
   },
   {
+    tabela: "locacao_fichas_preliminares",
+    coluna: "origem",
+    // A1 do fork: versão gerada pela IA ou corrigida pelo atendente. Sem
+    // SECURITY DEFINER. O par aponta para a tupla, não para o type alias.
+    arquivo: "lib/locacao/ficha-schema.ts",
+    simbolo: "ORIGENS_DA_FICHA",
+  },
+  {
     tabela: "knowledge_searches",
     coluna: "author_kind",
     // lib/ai/knowledge/busca.ts → KNOWLEDGE_SEARCH_AUTHOR_KINDS (tupla `as const`).

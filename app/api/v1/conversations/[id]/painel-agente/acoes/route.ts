@@ -20,6 +20,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { chamarFerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
 import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar";
+import { telefoneDoInquilinoPrincipal } from "@/lib/locacao/ficha-telefone";
+import { lerFichaAtual } from "@/lib/locacao/ficha-repositorio";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
@@ -64,7 +66,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (!conversa?.contact_id) return fail("not_found", t("Conversa não encontrada."), 404, { requestId });
   const { data: contato } = await db.from("contacts").select("id,is_anonymized,phone_number")
     .eq("organization_id", orgId).eq("id", conversa.contact_id).maybeSingle();
-  if (!contato || contato.is_anonymized || !contato.phone_number) {
+  if (!contato || contato.is_anonymized) {
+    return fail("reply_context_unavailable", t("O contato desta conversa não está disponível."), 422, { requestId });
+  }
+  if (pedido.acao !== "analise" && !contato.phone_number) {
     return fail("reply_context_unavailable", t("O contato não tem telefone disponível para esta consulta."), 422, { requestId });
   }
 
@@ -159,6 +164,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (pedido.acao === "analise") {
       const previa = previaConfirmada!.previa;
       const pedidoId = pedido.pedidoId!;
+      const fichaAtual = await lerFichaAtual(createAdminClient(), orgId, id);
+      const telefoneInquilino = telefoneDoInquilinoPrincipal(fichaAtual?.ficha);
+      if (!telefoneInquilino) {
+        return fail("validation_error", t("Informe o celular do inquilino principal na ficha preliminar antes de iniciar a análise."), 422, { requestId });
+      }
       const recibo = await comIdempotencia({
         db, organizationId: orgId, endpoint: `/api/v1/conversations/${id}/painel-agente/acoes/analise`,
         exigirReserva: true,
@@ -167,7 +177,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const argumentos: Record<string, unknown> = {
             pedido_id: pedidoId, conversa_id: id, organization_id: orgId,
             candidato: { nome: previa.candidato.nome.valor, cpf: previa.candidato.cpf.valor,
-              email: previa.candidato.email.valor, telefone: contato.phone_number },
+              email: previa.candidato.email.valor, telefone: telefoneInquilino },
             imovel: { codigo_fc: previa.imovel.codigo_fc.valor, logradouro: previa.imovel.logradouro.valor,
               apartamento: previa.imovel.apartamento.valor, aluguel: previa.imovel.aluguel.valor },
             renda: { mensal: previa.renda.mensal.valor },

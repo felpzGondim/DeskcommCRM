@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   role: vi.fn(), support: vi.fn(), rate: vi.fn(), client: vi.fn(), admin: vi.fn(),
   load: vi.fn(), call: vi.fn(), idem: vi.fn(), audit: vi.fn(), ultimaMensagem: vi.fn(), linhasFicha: vi.fn(),
-  preparar: vi.fn(), deps: vi.fn(), pool: vi.fn(),
+  preparar: vi.fn(), deps: vi.fn(), pool: vi.fn(), lerFicha: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -19,8 +19,20 @@ vi.mock("@/lib/agent-engine/agent/painel-do-atendente", () => ({ prepararAnalise
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({ requestTurnDeps: mocks.deps }));
 vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: mocks.pool }));
 vi.mock("@/lib/env", () => ({ env: { INTERNAL_SECRET: "segredo-de-teste-para-a-previa" } }));
+vi.mock("@/lib/locacao/ficha-repositorio", () => ({ lerFichaAtual: mocks.lerFicha }));
 
 import { POST } from "@/app/api/v1/conversations/[id]/painel-agente/acoes/route";
+import { fichaVazia, pessoaVazia } from "@/lib/locacao/ficha-schema";
+
+function fichaDoInquilino(celular: string) {
+  const ficha = fichaVazia();
+  ficha.pessoas = [{
+    ...pessoaVazia("inquilino"),
+    principal: true,
+    celular: { valor: celular, fonte: "M1", trecho: celular, confianca: 1, message_id: null },
+  }];
+  return ficha;
+}
 
 const pedidoId = "fd9997f2-b3b1-48fd-82b6-f24445017a53";
 const ctx = { params: Promise.resolve({ id: "conversa-1" }) };
@@ -37,6 +49,7 @@ describe("rota das ações do painel", () => {
     mocks.ultimaMensagem.mockReturnValue({ body: "123", sent_at: new Date().toISOString() });
     mocks.linhasFicha.mockReturnValue([]);
     mocks.deps.mockReturnValue({ llmCfg: {}, registry: {}, log: {} });
+    mocks.lerFicha.mockResolvedValue({ ficha: fichaDoInquilino("11970001111") });
     mocks.preparar.mockResolvedValue({ texto: JSON.stringify({
       candidato: { nome: { valor: "Maria", fonte: "M1", trecho: "Maria" }, cpf: { valor: "52998224725", fonte: "M1", trecho: "52998224725" },
         email: { valor: "maria@example.com", fonte: "M1", trecho: "maria@example.com" } },
@@ -139,8 +152,9 @@ describe("rota das ações do painel", () => {
     expect(r.status).toBe(200);
     expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "brisa_hub_analise", expect.objectContaining({
       pedido_id: pedidoId, conversa_id: "conversa-1", candidato: { nome: "Maria", cpf: "52998224725",
-        email: "maria@example.com", telefone: "+5511999999999" },
+        email: "maria@example.com", telefone: "11970001111" },
     }), expect.anything());
+    expect(JSON.stringify(mocks.call.mock.calls)).not.toContain("+5511999999999");
     mocks.call.mockClear();
     mocks.idem.mockResolvedValue({ tipo: "replay", resposta: { resumo: "Pedido de análise enviado." }, status: 200 });
     const repetido = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId, previaToken }), ctx);
@@ -203,6 +217,20 @@ describe("rota das ações do painel", () => {
     expect(mocks.call).toHaveBeenCalledWith(expect.anything(), "brisa_hub_analise", expect.objectContaining({
       arquivos: [expect.objectContaining({ nome: "h.pdf", url: "https://storage.test/h.pdf?s=1" })],
     }), expect.anything());
+  });
+
+  it("sem celular do inquilino na ficha pede o atendente e não chama o Hub", async () => {
+    mocks.lerFicha.mockResolvedValue(null);
+    mocks.linhasFicha.mockReturnValue([
+      { type: "document", body: "", media_derived_status: "ready", media_derived_text: "holerite renda liquida 4000", original_completo: true },
+      { type: "text", body: "Maria 52998224725 maria@example.com APT10 aluguel 1200" },
+    ]);
+    const preparo = await POST(req({ acao: "analise", etapa: "preparar" }), ctx);
+    const previaToken = (await preparo.json()).data.previaToken;
+    const r = await POST(req({ acao: "analise", etapa: "confirmar", confirmar: true, pedidoId, previaToken }), ctx);
+    expect(r.status).toBe(422);
+    expect(JSON.stringify(await r.json())).toContain("celular do inquilino principal");
+    expect(mocks.call).not.toHaveBeenCalled();
   });
 
   it("ferramenta ausente vira mensagem clara", async () => {

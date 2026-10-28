@@ -1,9 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const postMock = vi.fn();
+const getMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { post: (...args: unknown[]) => postMock(...args) as Promise<unknown> },
+  apiClient: {
+    post: (...args: unknown[]) => postMock(...args) as Promise<unknown>,
+    get: (...args: unknown[]) => getMock(...args) as Promise<unknown>,
+  },
 }));
 
 import { PainelDoAgente } from "@/components/inbox/PainelDoAgente";
@@ -11,6 +15,8 @@ import { PainelDoAgente } from "@/components/inbox/PainelDoAgente";
 describe("Painel do agente (UI)", () => {
   beforeEach(() => {
     postMock.mockReset();
+    getMock.mockReset();
+    getMock.mockResolvedValue({ data: { atual: null, historico: [] } });
   });
 
   it("sugerir resposta → 'Usar como resposta' só preenche, não envia", async () => {
@@ -51,6 +57,7 @@ describe("Painel do agente (UI)", () => {
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Gerar contrato" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeDisabled();
   });
 
   it("oferece Gerar contrato no painel e abre a preparação sem gravar", () => {
@@ -102,6 +109,96 @@ describe("Painel do agente (UI)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Usar como resposta" }));
     expect(preencher).toHaveBeenCalledWith("Envie o RG, por favor.");
     expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("gera o relatório preliminar e deixa salvar a ficha sem enviar ao cliente", async () => {
+    postMock.mockResolvedValue({ data: {
+      versao: 1, origem: "preliminar_ia", relatorio: "Maria quer o apto 10.",
+      ficha: {
+        versao: "preliminar-v1",
+        pessoas: [{
+          papel: "inquilino", principal: true, relacao: null,
+          nome: { valor: "Maria", fonte: "M1", trecho: "Maria", confianca: 0.9, message_id: null },
+          cpf: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          email: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          celular: { valor: "11970001111", fonte: "M1", trecho: "11", confianca: 0.8, message_id: null },
+          nascimento: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          rg: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          profissao: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          empregador: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          endereco: {
+            logradouro: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            numero: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            complemento: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            bairro: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            cep: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            cidade: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+            uf: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          },
+          renda_individual: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+        }],
+        renda: { mensal: { valor: 4000, fonte: "M2", trecho: "4000", confianca: 0.7, message_id: null },
+          proposta_fc: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          documentos: [], alertas: [] },
+        imovel: {
+          codigo_fc: { valor: "Rua10", fonte: "M1", trecho: "Rua", confianca: 0.5, message_id: null },
+          tipo: "residencial",
+          logradouro: { valor: "Rua das Flores", fonte: "M1", trecho: "Flores", confianca: 0.6, message_id: null },
+          numero: { valor: "100", fonte: null, trecho: null, confianca: null, message_id: null },
+          complemento: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          bairro: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          cep: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          cidade: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          uf: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          aluguel: { valor: 2500, fonte: "M1", trecho: "2500", confianca: 0.8, message_id: null },
+          iptu: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          condominio: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+        },
+        garantia: {
+          tipo: null,
+          caucao_valor: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          seguradora_preferida: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          apolice: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          valor_mensal: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+        },
+        vigencia: {
+          inicio: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          fim: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          prazo_meses: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          dia_vencimento: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+        },
+        contrato: {
+          indice_reajuste: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          split: null,
+          isencao_multa_meses: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          taxa_adm: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          taxa_locacao: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          observacao: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          iptu_mensal: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+          seguro_fianca_mensal: { valor: null, fonte: null, trecho: null, confianca: null, message_id: null },
+        },
+        documentos: { encontrados: [], faltantes: ["comprovante de renda"] },
+        pendencias: ["Falta holerite"],
+      },
+      historico: [{ versao: 1, origem: "preliminar_ia", campos_alterados: ["*"], alterado_em: "2026-10-28" }],
+    } });
+    const usar = vi.fn();
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Gerar relatório preliminar" }));
+    await screen.findByDisplayValue("Maria quer o apto 10.");
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente/ficha",
+      { etapa: "gerar" },
+      expect.objectContaining({ timeoutMs: 120000 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Salvar ficha" }));
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));
+    expect(usar).not.toHaveBeenCalled();
+    expect(postMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/c1/painel-agente/ficha",
+      expect.objectContaining({ etapa: "salvar", base_versao: 1, relatorio: "Maria quer o apto 10." }),
+    );
   });
 
   it("mostra link seguro da segunda via na consulta de boletos", async () => {
