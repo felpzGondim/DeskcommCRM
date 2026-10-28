@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.9] — não publicada
+
+### Corrigido
+
+- **A importação de contatos preenche o nome de quem chegou pelo WhatsApp sem nome na ficha** A planilha e a agenda do celular só criavam contato novo; quem já existia (em geral pelo número da mensagem) ficava com o apelido do WhatsApp ou só o número. A opção "Atualizar contatos existentes" (desligada por padrão) preenche o nome principal quando ele está vazio. Se a ficha já tem um nome diferente, a importação lista o conflito e só substitui depois da confirmação. A agenda do celular preenche o nome da agenda só quando esse campo está vazio. A correção pontual da base existente continua esperando a planilha e o ok do Felipe.
+
 ## [1.88.0-felpz.8] — 2026-10-28
 
 ### Adicionado

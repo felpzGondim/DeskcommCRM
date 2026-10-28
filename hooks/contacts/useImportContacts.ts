@@ -7,19 +7,34 @@
  */
 import { ApiError } from "@/lib/api/types";
 import type { ApiErrorBody } from "@/lib/api/types";
+import type { ConflitoDeNome } from "@/lib/contacts/atualizar-nome-na-importacao";
 import { randomId } from "@/lib/random-id";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+export type { ConflitoDeNome };
 
 export interface ImportContactsResult {
   total_linhas: number;
   imported: number;
+  updated: number;
   skipped_duplicates: number;
+  conflicts: ConflitoDeNome[];
   errors: Array<{ linha: number; motivo: string }>;
 }
 
-async function importarCsv(file: File): Promise<ImportContactsResult> {
+export interface PedidoDeImportacao {
+  file: File;
+  atualizarExistentes?: boolean;
+  substituirContactIds?: string[];
+}
+
+async function importarCsv(pedido: PedidoDeImportacao): Promise<ImportContactsResult> {
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", pedido.file);
+  if (pedido.atualizarExistentes) form.append("atualizar_existentes", "true");
+  if (pedido.substituirContactIds && pedido.substituirContactIds.length > 0) {
+    form.append("substituir_contact_ids", JSON.stringify(pedido.substituirContactIds));
+  }
   const res = await fetch("/api/v1/contacts/import", {
     method: "POST",
     headers: { "Idempotency-Key": randomId() },

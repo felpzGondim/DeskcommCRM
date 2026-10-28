@@ -10,7 +10,11 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * Desfecho POR LINHA, nunca do lote inteiro:
  *   - linha inválida é pulada com motivo nominal (vem no response);
  *   - contato que já existe (telefone/e-mail/CPF da org) é contado como
- *     duplicado, não como erro;
+ *     duplicado, não como erro — A MENOS que o operador ligue
+ *     `atualizar_existentes` (off por padrão, o comportamento de sempre);
+ *   - com a opção ligada, telefone já cadastrado PREENCHE o nome principal
+ *     só quando ele está vazio; nome preenchido e diferente vira conflito e
+ *     só substitui com `substituir_contact_ids` (confirmação explícita);
  *   - as demais linhas seguem mesmo se uma falhar — uma planilha de 400 nomes
  *     não pode morrer inteira pelo telefone malformado da linha 7.
  *
@@ -37,6 +41,13 @@ import {
 import { contactCreateSchemaDoPais } from "@/lib/schemas";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
+import {
+  type ConflitoDeNome,
+  decidirAtualizacaoDeNome,
+  formMarcouAtualizar,
+  lerIdsDeSubstituicao,
+  nomePrincipalVazio,
+} from "@/lib/contacts/atualizar-nome-na-importacao";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +62,17 @@ interface LinhaErro {
 interface ImportSummary {
   total_linhas: number;
   imported: number;
+  updated: number;
   skipped_duplicates: number;
+  conflicts: ConflitoDeNome[];
   errors: LinhaErro[];
+}
+
+interface ContatoExistente {
+  id: string;
+  name: string | null;
+  is_merged_into: string | null;
+  is_anonymized: boolean;
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -76,11 +96,18 @@ export async function POST(req: NextRequest): Promise<Response> {
   const schemaDoPais = contactCreateSchemaDoPais(perfil);
 
   let file: File;
+  let atualizarExistentes = false;
+  let substituirIds = new Set<string>();
   try {
     const form = await req.formData();
     const f = form.get("file");
     if (!(f instanceof File)) throw new Error("sem arquivo");
     file = f;
+    atualizarExistentes = formMarcouAtualizar(form.get("atualizar_existentes"));
+    substituirIds = lerIdsDeSubstituicao(form.get("substituir_contact_ids"));
+    // Confirmação explícita de conflito é mais forte que o checkbox: quem
+    // manda os ids já viu a lista e pediu para substituir.
+    if (substituirIds.size > 0) atualizarExistentes = true;
   } catch {
     return fail(
       "validation_failed",
@@ -174,7 +201,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     const resumo: ImportSummary = {
       total_linhas: dataRows.length,
       imported: 0,
+      updated: 0,
       skipped_duplicates: 0,
+      conflicts: [],
       errors,
     };
     return ok(resumo, { requestId });
@@ -184,7 +213,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   //
   // Os índices únicos são parciais (excluem mesclados/anonimizados), então a
   // busca espelha o WHERE do índice — filtrar pelo que o índice não cobre
-  // produziria "duplicado" imaginário.
+  // produziria "duplicado" imaginário. A organização vem da sessão, nunca do
+  // arquivo: um telefone igual em outra org não aparece aqui.
   const phones = candidatos
     .map((c) => c.contato.phone_number as string | undefined)
     .filter((p): p is string => typeof p === "string");
@@ -193,17 +223,32 @@ export async function POST(req: NextRequest): Promise<Response> {
     .filter((e): e is string => typeof e === "string");
 
   const existentes = new Set<string>();
+  const porTelefone = new Map<string, ContatoExistente>();
   if (phones.length > 0) {
     const lookup = [...new Set(phones.flatMap((p) => phoneLookupVariants(p)))];
     const { data } = await supabase
       .from("contacts")
-      .select("phone_number")
+      .select("id, name, phone_number, is_merged_into, is_anonymized")
       .eq("organization_id", orgId)
       .not("phone_number", "is", null)
       .in("phone_number", lookup);
     for (const r of data ?? []) {
-      for (const v of phoneLookupVariants((r as { phone_number: string }).phone_number)) {
+      const row = r as {
+        id: string;
+        name: string | null;
+        phone_number: string;
+        is_merged_into: string | null;
+        is_anonymized: boolean | null;
+      };
+      const existente: ContatoExistente = {
+        id: row.id,
+        name: row.name,
+        is_merged_into: row.is_merged_into,
+        is_anonymized: row.is_anonymized === true,
+      };
+      for (const v of phoneLookupVariants(row.phone_number)) {
         existentes.add(`tel:${v}`);
+        porTelefone.set(v, existente);
       }
     }
   }
@@ -216,20 +261,54 @@ export async function POST(req: NextRequest): Promise<Response> {
     for (const r of data ?? []) existentes.add(`email:${(r as { email_normalized: string }).email_normalized}`);
   }
 
-  // ─── Insert linha a linha com desfecho individual ─────────────────────────
+  // ─── Insert/atualização linha a linha com desfecho individual ─────────────
   let imported = 0;
+  let updated = 0;
   let skippedDuplicates = 0;
+  const conflicts: ConflitoDeNome[] = [];
+  // Passo de confirmação: só aplica os ids que a tela listou. Não cria de
+  // novo nem preenche nome vazio — isso já rodou no primeiro envio.
+  const soConfirmacao = substituirIds.size > 0;
 
   for (const { linha, contato } of candidatos) {
     const phone = contato.phone_number as string | undefined;
     const email = contato.email as string | undefined;
+    const existentePorTel = phone
+      ? phoneLookupVariants(phone).map((v) => porTelefone.get(v)).find((c): c is ContatoExistente => !!c)
+      : undefined;
+
+    if (existentePorTel) {
+      const desfecho = await aplicarNomeEmExistente({
+        supabase,
+        orgId,
+        userId: user.id,
+        requestId,
+        linha,
+        existente: existentePorTel,
+        nomePlanilha: typeof contato.name === "string" ? contato.name : null,
+        atualizarExistentes,
+        substituirIds,
+        soConfirmacao,
+        conflicts,
+      });
+      if (desfecho === "updated") updated += 1;
+      else if (desfecho === "skipped" || desfecho === "conflict") {
+        if (desfecho === "skipped") skippedDuplicates += 1;
+      } else if (desfecho === "erro") {
+        errors.push({ linha, motivo: "Não foi possível atualizar o nome deste contato." });
+      }
+      continue;
+    }
+
+    if (soConfirmacao) {
+      // Confirmação não cria contato novo: o primeiro passo já o teria criado.
+      continue;
+    }
+
     // Só contatos existentes ou gravados com sucesso reservam identificadores.
     // Cada repetição chega aqui para ter desfecho; uma linha inválida ou que
     // falhou no insert não pode descartar outra válida do mesmo arquivo.
-    if (
-      (phone && phoneLookupVariants(phone).some((v) => existentes.has(`tel:${v}`))) ||
-      (email && existentes.has(`email:${email.toLowerCase()}`))
-    ) {
+    if (email && existentes.has(`email:${email.toLowerCase()}`)) {
       skippedDuplicates += 1;
       continue;
     }
@@ -272,7 +351,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     imported += 1;
-    if (phone) existentes.add(`tel:${phone}`);
+    if (phone) {
+      existentes.add(`tel:${phone}`);
+      const recem: ContatoExistente = {
+        id: (criado as { id: string }).id,
+        name: typeof contato.name === "string" ? contato.name : null,
+        is_merged_into: null,
+        is_anonymized: false,
+      };
+      for (const v of phoneLookupVariants(phone)) porTelefone.set(v, recem);
+    }
     if (email) existentes.add(`email:${email.toLowerCase()}`);
 
     // Mesmo evento do create unitário — quem consome `contact.created`
@@ -307,7 +395,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       actor_type: "user",
       total_linhas: dataRows.length,
       imported,
+      updated,
       skipped_duplicates: skippedDuplicates,
+      conflicts: conflicts.length,
       erros: errors.length,
     },
   });
@@ -315,8 +405,101 @@ export async function POST(req: NextRequest): Promise<Response> {
   const resumo: ImportSummary = {
     total_linhas: dataRows.length,
     imported,
+    updated,
     skipped_duplicates: skippedDuplicates,
+    conflicts,
     errors,
   };
   return ok(resumo, { requestId });
+}
+
+type ClienteDaSessao = Awaited<ReturnType<typeof createClient>>;
+
+async function aplicarNomeEmExistente(e: {
+  supabase: ClienteDaSessao;
+  orgId: string;
+  userId: string;
+  requestId: string;
+  linha: number;
+  existente: ContatoExistente;
+  nomePlanilha: string | null;
+  atualizarExistentes: boolean;
+  substituirIds: Set<string>;
+  soConfirmacao: boolean;
+  conflicts: ConflitoDeNome[];
+}): Promise<"updated" | "skipped" | "conflict" | "erro"> {
+  // Mesclado ou anonimizado não é identidade viva — não reescreve.
+  if (e.existente.is_merged_into || e.existente.is_anonymized) return "skipped";
+
+  if (e.soConfirmacao) {
+    if (!e.substituirIds.has(e.existente.id)) return "skipped";
+    const nomeConfirmado = e.nomePlanilha;
+    if (nomePrincipalVazio(nomeConfirmado) || !nomeConfirmado) return "skipped";
+    const gravou = await gravarNomePrincipal(e.supabase, e.orgId, e.existente.id, nomeConfirmado);
+    if (!gravou) return "erro";
+    e.existente.name = nomeConfirmado;
+    await auditarAtualizacaoDeNome(e);
+    return "updated";
+  }
+
+  if (!e.atualizarExistentes) return "skipped";
+
+  const decisao = decidirAtualizacaoDeNome(e.existente.name, e.nomePlanilha);
+  if (decisao.tipo === "sem_nome_novo" || decisao.tipo === "mesmo") return "skipped";
+  if (decisao.tipo === "conflito") {
+    e.conflicts.push({
+      linha: e.linha,
+      contact_id: e.existente.id,
+      nome_atual: (e.existente.name ?? "").trim(),
+      nome_planilha: (e.nomePlanilha ?? "").trim(),
+    });
+    return "conflict";
+  }
+
+  const nomeNovo = e.nomePlanilha;
+  if (!nomeNovo) return "skipped";
+  const gravou = await gravarNomePrincipal(e.supabase, e.orgId, e.existente.id, nomeNovo);
+  if (!gravou) return "erro";
+  e.existente.name = nomeNovo;
+  await auditarAtualizacaoDeNome(e);
+  return "updated";
+}
+
+async function gravarNomePrincipal(
+  supabase: ClienteDaSessao,
+  orgId: string,
+  contactId: string,
+  nome: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("contacts")
+    .update({ name: nome })
+    .eq("organization_id", orgId)
+    .eq("id", contactId)
+    .is("is_merged_into", null)
+    .eq("is_anonymized", false)
+    .select("id")
+    .maybeSingle();
+  return !error && !!data;
+}
+
+async function auditarAtualizacaoDeNome(e: {
+  userId: string;
+  orgId: string;
+  existente: ContatoExistente;
+  requestId: string;
+}): Promise<void> {
+  await audit({
+    action: "contact.updated",
+    actorUserId: e.userId,
+    organizationId: e.orgId,
+    resourceType: "contact",
+    resourceId: e.existente.id,
+    requestId: e.requestId,
+    metadata: {
+      actor_type: "user",
+      origem: "import_csv",
+      campo: "name",
+    },
+  });
 }

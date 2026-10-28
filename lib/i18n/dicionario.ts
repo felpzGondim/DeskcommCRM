@@ -9218,6 +9218,7 @@ export const DICIONARIO: Traducoes = {
   "Sincronizar de novo": { es: "Sincronizar de nuevo" },
   "contato(s) sincronizado(s)": { es: "contacto(s) sincronizado(s)" },
   "contato(s) já existente(s) — nada duplicado": { es: "contacto(s) ya existente(s) — nada duplicado" },
+  "contato(s) com nome da agenda preenchido": { es: "contacto(s) con el nombre de la agenda rellenado" },
   "contato(s) com erro na gravação": { es: "contacto(s) con error al guardar" },
   "lido(s) no aparelho": { es: "leído(s) en el aparato" },
   "ignorado(s)": { es: "ignorado(s)" },
@@ -9226,8 +9227,8 @@ export const DICIONARIO: Traducoes = {
   "Nenhum número conectado. Conecte um número em Conexões para sincronizar a agenda.": {
     es: "Ningún número conectado. Conecta un número en Conexiones para sincronizar la agenda.",
   },
-  "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.": {
-    es: "Importa al CRM los contactos guardados en la agenda del aparato conectado. Los números que ya están en el CRM no se duplican. Si el aparato tiene más contactos que el tope de una sincronización, haz clic de nuevo para continuar donde ibas.",
+  "Importa para o CRM os contatos salvos na agenda do aparelho conectado. Números que já estão no CRM não viram duplicata; se o nome da agenda na ficha estiver vazio, ele é preenchido. Se o aparelho tiver mais contatos que o teto de uma sincronização, clique de novo para continuar de onde parou.": {
+    es: "Importa al CRM los contactos guardados en la agenda del aparato conectado. Los números que ya están en el CRM no se duplican; si el nombre de la agenda en la ficha está vacío, se rellena. Si el aparato tiene más contactos que el tope de una sincronización, haz clic de nuevo para continuar donde ibas.",
   },
   "A sincronização bateu no teto de uma passada. Clique em Continuar de onde parou para seguir do próximo contato — o que já entrou não duplica.": {
     es: "La sincronización llegó al tope de una pasada. Haz clic en Continuar donde ibas para seguir desde el próximo contacto: lo que ya entró no se duplica.",
@@ -9351,6 +9352,18 @@ export const DICIONARIO: Traducoes = {
   "Sugestões de etiquetas": { es: "Sugerencias de etiquetas" },
   "Criar etiqueta": { es: "Crear etiqueta" },
   "contato(s) importado(s)": { es: "contacto(s) importado(s)" },
+  "contato(s) atualizado(s)": { es: "contacto(s) actualizado(s)" },
+  "Atualizar contatos existentes": { es: "Actualizar contactos existentes" },
+  "Preenche o nome principal só quando a ficha está sem nome. Se o nome da ficha for diferente do da planilha, pedimos confirmação antes de substituir.": {
+    es: "Rellena el nombre principal solo cuando la ficha no tiene nombre. Si el nombre de la ficha es distinto al de la hoja, pedimos confirmación antes de sustituirlo.",
+  },
+  "atualizado(s)": { es: "actualizado(s)" },
+  "conflito(s)": { es: "conflicto(s)" },
+  "Estes contatos já têm um nome diferente na ficha. Confirme para substituir pelos nomes da planilha.": {
+    es: "Estos contactos ya tienen un nombre distinto en la ficha. Confirma para sustituirlo por los nombres de la hoja.",
+  },
+  "Manter os nomes da ficha": { es: "Conservar los nombres de la ficha" },
+  "Substituir estes nomes": { es: "Sustituir estos nombres" },
   "linha(s) com problema": { es: "fila(s) con problema" },
   "Não foi possível importar o arquivo.": { es: "No se pudo importar el archivo." },
   "Importar contatos de planilha": { es: "Importar contactos de una hoja de cálculo" },

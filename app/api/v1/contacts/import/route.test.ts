@@ -23,13 +23,28 @@ const PHONE = "+5511999998888";
 interface Resumo {
   total_linhas: number;
   imported: number;
+  updated: number;
   skipped_duplicates: number;
+  conflicts: Array<{ linha: number; contact_id: string; nome_atual: string; nome_planilha: string }>;
   errors: Array<{ linha: number; motivo: string }>;
 }
 
+const VAZIO = {
+  updated: 0,
+  conflicts: [] as Resumo["conflicts"],
+};
+
 /** Só as fronteiras externas são dubladas; multipart, CSV e schemas são reais. */
 function banco(opcoes: {
-  existentes?: Array<{ phone_number?: string; email_normalized?: string }>;
+  existentes?: Array<{
+    id?: string;
+    phone_number?: string;
+    email_normalized?: string;
+    name?: string | null;
+    is_merged_into?: string | null;
+    is_anonymized?: boolean;
+    organization_id?: string;
+  }>;
   falhas?: Array<{ code: string; message: string } | null>;
   /** O país declarado pela organização; ausente/`null` é o Brasil. */
   pais?: string | null;
@@ -37,6 +52,7 @@ function banco(opcoes: {
   cifraIndisponivel?: boolean;
 } = {}) {
   const tentativas: Record<string, unknown>[] = [];
+  const atualizacoes: Array<{ id: string; organizationId: string; patch: Record<string, unknown> }> = [];
   // `encrypt_cpf` (migration 0597) devolve o ciphertext; sem ele,
   // `camposCpfParaGravar` grava a linha SEM CPF. `cifraIndisponivel` encena o
   // banco em que a RPC ainda não existe ou a chave não foi semeada (#2522).
@@ -57,14 +73,25 @@ function banco(opcoes: {
       };
     }
     expect(tabela).toBe("contacts");
+    let idPendente: string | null = null;
+    let orgPendente: string | null = null;
+    let patchPendente: Record<string, unknown> | null = null;
     const consulta = {
       select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
+      eq: vi.fn((coluna: string, valor: unknown) => {
+        if (coluna === "organization_id") orgPendente = String(valor);
+        if (coluna === "id") idPendente = String(valor);
+        return consulta;
+      }),
       not: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       in: vi.fn(async (coluna: "phone_number" | "email_normalized", valores: string[]) => {
         expect(consulta.eq).toHaveBeenCalledWith("organization_id", ORG);
         return {
-          data: (opcoes.existentes ?? []).filter((r) => valores.includes(r[coluna] ?? "")),
+          data: (opcoes.existentes ?? []).filter((r) => {
+            if (r.organization_id && r.organization_id !== ORG) return false;
+            return valores.includes((r[coluna] as string | undefined) ?? "");
+          }),
           error: null,
         };
       }),
@@ -72,24 +99,42 @@ function banco(opcoes: {
         tentativas.push(linha);
         return consulta;
       }),
+      update: vi.fn((patch: Record<string, unknown>) => {
+        patchPendente = patch;
+        return consulta;
+      }),
       single: vi.fn(async () => ({
         data: { id: `contato-${tentativas.length}` },
         error: opcoes.falhas?.[tentativas.length - 1] ?? null,
       })),
+      maybeSingle: vi.fn(async () => {
+        if (patchPendente && idPendente && orgPendente) {
+          atualizacoes.push({ id: idPendente, organizationId: orgPendente, patch: patchPendente });
+        }
+        const id = idPendente;
+        patchPendente = null;
+        idPendente = null;
+        return { data: id ? { id } : null, error: null };
+      }),
     };
     return consulta;
   });
   vi.mocked(createClient).mockResolvedValue({ from, rpc } as never);
-  return { tentativas, rpc };
+  return { tentativas, atualizacoes, rpc };
 }
 
-async function importar(linhas: string[]): Promise<Resumo> {
+async function importar(
+  linhas: string[],
+  extra: { atualizar?: boolean; substituir?: string[] } = {},
+): Promise<Resumo> {
   const form = new FormData();
   form.set("file", new File(
     [["nome,telefone,email", ...linhas].join("\n")],
     "contatos.csv",
     { type: "text/csv" },
   ));
+  if (extra.atualizar) form.set("atualizar_existentes", "true");
+  if (extra.substituir) form.set("substituir_contact_ids", JSON.stringify(extra.substituir));
   const resposta = await POST(new NextRequest("http://localhost/api/v1/contacts/import", {
     method: "POST",
     body: form,
@@ -130,7 +175,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     const db = banco();
     const resumo = await importar(linhas);
 
-    expect(resumo).toEqual({ total_linhas: 3, imported: 1, skipped_duplicates: 2, errors: [] });
+    expect(resumo).toEqual({ total_linhas: 3, imported: 1, skipped_duplicates: 2, errors: [], ...VAZIO });
     expect(db.tentativas).toHaveLength(1);
     expect(db.tentativas[0]).toMatchObject({
       organization_id: ORG, created_by_user_id: USER, source: "import_csv",
@@ -141,7 +186,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     expect(audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       action: "contacts.imported",
       organizationId: ORG,
-      metadata: { actor_type: "user", total_linhas: 3, imported: 1, skipped_duplicates: 2, erros: 0 },
+      metadata: { actor_type: "user", total_linhas: 3, imported: 1, updated: 0, skipped_duplicates: 2, conflicts: 0, erros: 0 },
     }));
   });
 
@@ -155,6 +200,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     expect(resumo).toEqual({
       total_linhas: 2, imported: 1, skipped_duplicates: 0,
       errors: [{ linha: 2, motivo: expect.any(String) }],
+      ...VAZIO,
     });
     expect(db.tentativas).toHaveLength(1);
     expect(db.tentativas[0]).toMatchObject({ name: "Corrigida", email: "ana.silva@example.com" });
@@ -168,6 +214,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     expect(resumo).toEqual({
       total_linhas: 2, imported: 1, skipped_duplicates: 0,
       errors: [{ linha: 2, motivo: "Falha de gravação" }],
+      ...VAZIO,
     });
     expect(db.tentativas).toHaveLength(2);
     expect(db.tentativas[1]).toMatchObject({ name: "Segunda", phone_number: PHONE });
@@ -183,7 +230,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
       `Nova,${PHONE},nova@example.com`,
     ]);
 
-    expect(resumo).toEqual({ total_linhas: 2, imported: 1, skipped_duplicates: 1, errors: [] });
+    expect(resumo).toEqual({ total_linhas: 2, imported: 1, skipped_duplicates: 1, errors: [], ...VAZIO });
     expect(db.tentativas).toHaveLength(1);
     expect(db.tentativas[0]).toMatchObject({ name: "Nova", email: "nova@example.com" });
   });
@@ -192,7 +239,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     const db = banco({ existentes: [{ phone_number: PHONE }] });
     const resumo = await importar([`Ana,${PHONE},`, `Ana,${PHONE},`]);
 
-    expect(resumo).toEqual({ total_linhas: 2, imported: 0, skipped_duplicates: 2, errors: [] });
+    expect(resumo).toEqual({ total_linhas: 2, imported: 0, skipped_duplicates: 2, errors: [], ...VAZIO });
     expect(db.tentativas).toHaveLength(0);
     expect(db.rpc).not.toHaveBeenCalled();
   });
@@ -201,7 +248,7 @@ describe("POST /api/v1/contacts/import — desfecho por linha", () => {
     const db = banco({ falhas: [{ code: "23505", message: "Conflito" }, null] });
     const resumo = await importar([`Ana,${PHONE},`, "Bia,+5521999998888,"]);
 
-    expect(resumo).toEqual({ total_linhas: 2, imported: 1, skipped_duplicates: 1, errors: [] });
+    expect(resumo).toEqual({ total_linhas: 2, imported: 1, skipped_duplicates: 1, errors: [], ...VAZIO });
     expect(db.tentativas).toHaveLength(2);
     expect(db.rpc).toHaveBeenCalledTimes(1);
   });
@@ -266,7 +313,7 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
     const { status, corpo } = await importarCom("nome,telefone,bilhete", [`Ana,${PHONE},123456789xi000`]);
 
     expect(status).toBe(200);
-    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [], ...VAZIO });
     // O documento não é gravado em claro: o que prova o valor (e a normalização
     // do país) é o hash — `hashCpf("123456789XI000")`, com o valor já em
     // maiúsculas e sem o que não é dígito nem letra.
@@ -285,6 +332,7 @@ describe("POST /api/v1/contacts/import — a planilha segue o PAÍS da organiza�
       imported: 0,
       skipped_duplicates: 0,
       errors: [{ linha: 2, motivo: expect.stringContaining("Bilhete inválido") }],
+      ...VAZIO,
     });
     expect(corpo.data?.errors[0]?.motivo).not.toContain("CPF");
     expect(db.tentativas).toHaveLength(0);
@@ -322,7 +370,7 @@ describe("POST /api/v1/contacts/import — o CPF grava os DOIS campos ou nenhum 
     const { status, corpo } = await importarCpf([`Ana,${PHONE},${CPF}`]);
 
     expect(status).toBe(200);
-    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [], ...VAZIO });
     expect(db.tentativas[0]).toMatchObject({
       cpf_hash: hashCpf(CPF),
       cpf_encrypted: expect.anything(),
@@ -336,9 +384,169 @@ describe("POST /api/v1/contacts/import — o CPF grava os DOIS campos ou nenhum 
     // O defeito reportado: a linha voltava em `errors` com
     // `violates check constraint "contacts_cpf_consistency"`. Agora ela entra.
     expect(status).toBe(200);
-    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [] });
+    expect(corpo.data).toEqual({ total_linhas: 1, imported: 1, skipped_duplicates: 0, errors: [], ...VAZIO });
     // Os DOIS ausentes: é a paridade que o CHECK cobra.
     expect(db.tentativas[0]).not.toHaveProperty("cpf_hash");
     expect(db.tentativas[0]).not.toHaveProperty("cpf_encrypted");
+  });
+});
+
+const CONTATO_VAZIO = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CONTATO_CHEIO = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const CONTATO_OUTRA_ORG = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const ORG_B = "33333333-3333-4333-8333-333333333333";
+
+describe("POST /api/v1/contacts/import — atualizar nome de quem já existe", () => {
+  it("sem a opção, o nome da planilha é descartado — o comportamento de sempre", async () => {
+    const db = banco({
+      existentes: [{ id: CONTATO_VAZIO, phone_number: PHONE, name: null }],
+    });
+    const resumo = await importar([`Maria da Silva,${PHONE},`]);
+
+    expect(resumo).toEqual({
+      total_linhas: 1, imported: 0, skipped_duplicates: 1, errors: [], ...VAZIO,
+    });
+    expect(db.atualizacoes).toHaveLength(0);
+    expect(db.tentativas).toHaveLength(0);
+  });
+
+  it("com a opção, preenche o nome principal só quando ele está vazio", async () => {
+    const db = banco({
+      existentes: [{ id: CONTATO_VAZIO, phone_number: PHONE, name: null }],
+    });
+    const resumo = await importar([`Maria da Silva,${PHONE},`], { atualizar: true });
+
+    expect(resumo).toMatchObject({
+      total_linhas: 1, imported: 0, updated: 1, skipped_duplicates: 0, conflicts: [], errors: [],
+    });
+    expect(db.atualizacoes).toEqual([
+      { id: CONTATO_VAZIO, organizationId: ORG, patch: { name: "Maria da Silva" } },
+    ]);
+    expect(db.tentativas).toHaveLength(0);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "contact.updated",
+      actorUserId: USER,
+      organizationId: ORG,
+      resourceId: CONTATO_VAZIO,
+      metadata: { actor_type: "user", origem: "import_csv", campo: "name" },
+    }));
+    // A trilha não leva nome, telefone nem e-mail.
+    const doUpdate = vi.mocked(audit).mock.calls
+      .map((c) => c[0])
+      .find((e) => e.action === "contact.updated");
+    expect(JSON.stringify(doUpdate)).not.toMatch(/Maria|99999|@/);
+  });
+
+  it("com a opção, nome já preenchido e igual é pulado; diferente vira conflito sem UPDATE", async () => {
+    const outro = "+5521999998888";
+    const db = banco({
+      existentes: [
+        { id: CONTATO_CHEIO, phone_number: PHONE, name: "Carlos" },
+        { id: CONTATO_VAZIO, phone_number: outro, name: "Ana" },
+      ],
+    });
+    const resumo = await importar(
+      [`Carlos Silva,${PHONE},`, `ana,${outro},`],
+      { atualizar: true },
+    );
+
+    expect(resumo.imported).toBe(0);
+    expect(resumo.updated).toBe(0);
+    expect(resumo.skipped_duplicates).toBe(1);
+    expect(resumo.conflicts).toEqual([
+      {
+        linha: 2,
+        contact_id: CONTATO_CHEIO,
+        nome_atual: "Carlos",
+        nome_planilha: "Carlos Silva",
+      },
+    ]);
+    expect(db.atualizacoes).toHaveLength(0);
+  });
+
+  it("conflito só substitui depois da confirmação explícita dos ids", async () => {
+    const db = banco({
+      existentes: [{ id: CONTATO_CHEIO, phone_number: PHONE, name: "Carlos" }],
+    });
+    const primeiro = await importar([`Carlos Silva,${PHONE},`], { atualizar: true });
+    expect(primeiro.conflicts).toHaveLength(1);
+    expect(db.atualizacoes).toHaveLength(0);
+
+    const segundo = await importar([`Carlos Silva,${PHONE},`], {
+      atualizar: true,
+      substituir: [CONTATO_CHEIO],
+    });
+    expect(segundo).toMatchObject({
+      imported: 0, updated: 1, conflicts: [], skipped_duplicates: 0,
+    });
+    expect(db.atualizacoes).toEqual([
+      { id: CONTATO_CHEIO, organizationId: ORG, patch: { name: "Carlos Silva" } },
+    ]);
+  });
+
+  it("o resumo conta criado, atualizado, pulado e conflito no mesmo arquivo", async () => {
+    const novo = "+5531999990001";
+    const vazio = "+5531999990002";
+    const conflito = "+5531999990003";
+    const igual = "+5531999990004";
+    banco({
+      existentes: [
+        { id: CONTATO_VAZIO, phone_number: vazio, name: null },
+        { id: CONTATO_CHEIO, phone_number: conflito, name: "Bia" },
+        { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", phone_number: igual, name: "Duda" },
+      ],
+    });
+    const resumo = await importar(
+      [
+        `Nova,${novo},`,
+        `Preenchida,${vazio},`,
+        `Beatriz,${conflito},`,
+        `duda,${igual},`,
+      ],
+      { atualizar: true },
+    );
+
+    expect(resumo).toMatchObject({
+      total_linhas: 4,
+      imported: 1,
+      updated: 1,
+      skipped_duplicates: 1,
+    });
+    expect(resumo.conflicts).toEqual([
+      { linha: 4, contact_id: CONTATO_CHEIO, nome_atual: "Bia", nome_planilha: "Beatriz" },
+    ]);
+  });
+
+  it("não atualiza contato de outra organização — o filtro é o da sessão", async () => {
+    const db = banco({
+      existentes: [
+        {
+          id: CONTATO_OUTRA_ORG,
+          phone_number: PHONE,
+          name: null,
+          organization_id: ORG_B,
+        },
+      ],
+    });
+    const resumo = await importar([`Maria,${PHONE},`], { atualizar: true });
+
+    // A linha da outra org some no filtro; esta org cria um contato novo.
+    expect(resumo.imported).toBe(1);
+    expect(resumo.updated).toBe(0);
+    expect(db.atualizacoes).toHaveLength(0);
+    expect(db.tentativas[0]).toMatchObject({ organization_id: ORG, name: "Maria" });
+  });
+
+  it("id de confirmação que não é desta org (nem desta planilha) é ignorado", async () => {
+    const db = banco({
+      existentes: [{ id: CONTATO_CHEIO, phone_number: PHONE, name: "Carlos" }],
+    });
+    const resumo = await importar([`Carlos Silva,${PHONE},`], {
+      substituir: [CONTATO_OUTRA_ORG],
+    });
+
+    expect(resumo.updated).toBe(0);
+    expect(resumo.conflicts).toHaveLength(0);
+    expect(db.atualizacoes).toHaveLength(0);
   });
 });

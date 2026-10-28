@@ -13,7 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useImportContacts } from "@/hooks/contacts/useImportContacts";
+import {
+  useImportContacts,
+  type ImportContactsResult,
+} from "@/hooks/contacts/useImportContacts";
 
 interface Props {
   open: boolean;
@@ -24,29 +27,48 @@ interface Props {
  * Diálogo de importação de contatos por CSV. O resumo é mostrado NO diálogo
  * (e não só em toast) porque erros por linha são a parte que interessa —
  * fechar sozinho esconderia o que o usuário veio corrigir na planilha.
+ *
+ * Com "Atualizar contatos existentes" ligado, um segundo passo lista os
+ * conflitos (ficha já tem nome diferente) e só substitui depois do clique
+ * em "Substituir estes nomes".
  */
 export function ImportContactsDialog({ open, onOpenChange }: Props) {
   const t = useT();
   const importar = useImportContacts();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [resumo, setResumo] = useState<Awaited<ReturnType<typeof importar.mutateAsync>> | null>(null);
+  const [atualizarExistentes, setAtualizarExistentes] = useState(false);
+  const [resumo, setResumo] = useState<ImportContactsResult | null>(null);
 
   function reset() {
     setFile(null);
+    setAtualizarExistentes(false);
     setResumo(null);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function enviar(pedido: { substituir?: string[] }) {
     if (!file || importar.isPending) return;
     try {
-      const r = await importar.mutateAsync(file);
-      setResumo(r);
+      const r = await importar.mutateAsync({
+        file,
+        atualizarExistentes: atualizarExistentes || (pedido.substituir?.length ?? 0) > 0,
+        substituirContactIds: pedido.substituir,
+      });
+      if (pedido.substituir && resumo) {
+        setResumo({
+          ...r,
+          imported: resumo.imported + r.imported,
+          updated: resumo.updated + r.updated,
+          total_linhas: resumo.total_linhas,
+        });
+      } else {
+        setResumo(r);
+      }
       if (r.imported > 0) toast.success(`${r.imported} ${t("contato(s) importado(s)")}`);
+      if (r.updated > 0) toast.success(`${r.updated} ${t("contato(s) atualizado(s)")}`);
       if (r.errors.length > 0) toast.warning(`${r.errors.length} ${t("linha(s) com problema")}`);
     } catch (err) {
-      // Falha de requisição (arquivo grande, formato errado…): mostra no rodapé.
       const msg =
         err instanceof Error && err.message
           ? t(err.message)
@@ -54,6 +76,13 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
       toast.error(msg);
     }
   }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await enviar({});
+  }
+
+  const conflitos = resumo?.conflicts ?? [];
 
   return (
     <Dialog
@@ -80,6 +109,7 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                 <Label htmlFor="csv-file">{t("Arquivo CSV")}</Label>
                 <Input
                   id="csv-file"
+                  data-testid="arquivo-de-contatos"
                   ref={inputRef}
                   type="file"
                   accept=".csv,text/csv"
@@ -91,6 +121,23 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   </p>
                 )}
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  data-testid="atualizar-existentes"
+                  checked={atualizarExistentes}
+                  onChange={(e) => setAtualizarExistentes(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">{t("Atualizar contatos existentes")}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t(
+                      "Preenche o nome principal só quando a ficha está sem nome. Se o nome da ficha for diferente do da planilha, pedimos confirmação antes de substituir.",
+                    )}
+                  </span>
+                </span>
+              </label>
               <DialogFooter>
                 <Button
                   type="button"
@@ -109,16 +156,26 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
 
           {resumo && (
             <div className="space-y-3">
-              <div className="flex flex-wrap gap-2 text-sm">
+              <div className="flex flex-wrap gap-2 text-sm" data-testid="resumo-da-importacao">
                 <span className="rounded-md bg-surface px-2 py-1">
                   {resumo.total_linhas} {t("linha(s) lidas")}
                 </span>
                 <span className="rounded-md px-2 py-1 font-medium">
                   {resumo.imported} {t("importado(s)")}
                 </span>
+                {resumo.updated > 0 && (
+                  <span className="rounded-md px-2 py-1 font-medium">
+                    {resumo.updated} {t("atualizado(s)")}
+                  </span>
+                )}
                 {resumo.skipped_duplicates > 0 && (
                   <span className="rounded-md bg-surface px-2 py-1">
                     {resumo.skipped_duplicates} {t("já existente(s)")}
+                  </span>
+                )}
+                {conflitos.length > 0 && (
+                  <span className="rounded-md bg-surface px-2 py-1">
+                    {conflitos.length} {t("conflito(s)")}
                   </span>
                 )}
                 {resumo.errors.length > 0 && (
@@ -127,6 +184,24 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
                   </span>
                 )}
               </div>
+
+              {conflitos.length > 0 && (
+                <div
+                  className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm"
+                  data-testid="conflitos-de-nome"
+                >
+                  <p className="text-muted-foreground">
+                    {t(
+                      "Estes contatos já têm um nome diferente na ficha. Confirme para substituir pelos nomes da planilha.",
+                    )}
+                  </p>
+                  {conflitos.map((c) => (
+                    <p key={`${c.contact_id}-${c.linha}`}>
+                      {t("Linha")} {c.linha}: “{c.nome_atual}” → “{c.nome_planilha}”
+                    </p>
+                  ))}
+                </div>
+              )}
 
               {resumo.errors.length > 0 && (
                 <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
@@ -139,12 +214,30 @@ export function ImportContactsDialog({ open, onOpenChange }: Props) {
               )}
 
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={reset}>
-                  {t("Importar outro arquivo")}
-                </Button>
-                <Button type="button" onClick={() => onOpenChange(false)}>
-                  {t("Concluir")}
-                </Button>
+                {conflitos.length > 0 ? (
+                  <>
+                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                      {t("Manter os nomes da ficha")}
+                    </Button>
+                    <Button
+                      type="button"
+                      data-testid="substituir-nomes"
+                      onClick={() => enviar({ substituir: conflitos.map((c) => c.contact_id) })}
+                      disabled={importar.isPending}
+                    >
+                      {importar.isPending ? t("Importando…") : t("Substituir estes nomes")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="ghost" onClick={reset}>
+                      {t("Importar outro arquivo")}
+                    </Button>
+                    <Button type="button" onClick={() => onOpenChange(false)}>
+                      {t("Concluir")}
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </div>
           )}
