@@ -68,16 +68,18 @@ describe("locacao analises: cascata LGPD", () => {
   });
 
   it("a função é DEFINER e authenticated não tem EXECUTE", () => {
+    // `boolean::text` é `t`/`f` num major e `true`/`false` no outro.
+    // `::int` (1/0) é a mesma string nos dois.
     expect(
-      sql(`select p.prosecdef::text
-                || '|' || has_function_privilege('anon', p.oid, 'EXECUTE')::text
-                || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::text
-                || '|' || has_function_privilege('service_role', p.oid, 'EXECUTE')::text
+      sql(`select p.prosecdef::int
+                || '|' || has_function_privilege('anon', p.oid, 'EXECUTE')::int
+                || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')::int
+                || '|' || has_function_privilege('service_role', p.oid, 'EXECUTE')::int
            from pg_proc p
            join pg_namespace n on n.oid = p.pronamespace
           where n.nspname = 'public'
             and p.proname = 'fn_locacao_limpar_contato_anonimizado';`),
-    ).toBe("t|f|f|t");
+    ).toBe("1|0|0|1");
   });
 
   it("anonimizar o locatário zera cotação, FC e rascunho só daquele processo", () => {
