@@ -87,13 +87,14 @@ describe("rota da análise de renda", () => {
     );
   });
 
-  it("a tela some quando a chave está desligada; o botão antigo não some neste PR", () => {
+  it("a tela some quando a chave está desligada; o botão antigo some só com seguro e fc", () => {
     const painel = readFileSync("components/locacao/ProcessoDeLocacaoPainel.tsx", "utf8");
     expect(painel).toContain("analiseRenda");
     expect(painel).toContain('data-testid="analise-renda"');
     const agente = readFileSync("components/inbox/PainelDoAgente.tsx", "utf8");
     expect(agente).toContain("ACOES_HUB.analise.rotulo");
-    expect(agente).not.toMatch(/analiseLigada\([^)]*"seguro"|analiseLigada\([^)]*"fc"/);
+    expect(agente).toContain("esconderAnaliseAntiga");
+    expect(agente).toMatch(/analise\?\.seguro === true && r\.data\?\.analise\?\.fc === true/);
     const hub = readFileSync("lib/agent-engine/agent/painel-acoes-hub.ts", "utf8");
     expect(hub).toContain("Iniciar análise de inquilino");
     const config = readFileSync("components/locacao/PainelConfigLocacao.tsx", "utf8");

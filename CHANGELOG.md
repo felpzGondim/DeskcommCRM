@@ -16,6 +16,8 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Analisar renda no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.renda` (desligada). Ligada, o processo da conversa ganha Analisar renda e Confirmar renda: lê a conversa e reabre os PDFs originais (o texto derivado corta em 8 mil caracteres), exclui autotransferência, poupança e Rende Fácil, e deixa PIX de terceiros à parte. A IA só propõe confirmar; qualquer atendente clica. Sem renda confirmada, seguro e FC (ainda por vir) ficam recusados. Nada vai ao cliente. Rollback: desligar a chave.
 
+- **Cotação de seguro-fiança no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.seguro` (desligada). Ligada e com renda confirmada, o processo ganha Analisar seguro-fiança: dispara a cotação gratuita no Hub (nunca Contratar), acompanha o status a cada 15 s e guarda o print se os arquivos do processo estiverem ligados. Cada cotação usa um pedido próprio — o mesmo só se reaproveita para repetir essa cotação. Se o Hub ainda não anunciar as ferramentas novas, o botão avisa e não dispara a análise antiga. Nada vai ao cliente. Rollback: desligar a chave.
+
 ## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado

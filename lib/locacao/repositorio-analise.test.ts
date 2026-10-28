@@ -10,6 +10,10 @@ describe("acesso mínimo da análise (4.0, sem tela)", () => {
     const src = readFileSync(join(process.cwd(), "lib/locacao/repositorio.ts"), "utf8");
     expect(src).toContain("export async function abrirAnaliseSeguro");
     expect(src).toContain("export async function seguroEmAndamento");
+    expect(src).toContain("export async function lerAnaliseSeguroEmAndamento");
+    expect(src).toContain("export async function lerAnaliseSeguroMaisRecente");
+    expect(src).toContain("export async function guardarPrintMigra");
+    expect(src).toContain("23505");
     expect(src).toContain("export async function confirmarRendaDoProcesso");
     expect(src).toContain("export async function lerFichaAtualDoProcesso");
     expect(src).toContain("export async function gravarRascunhoRelatorio");

@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cotação de seguro-fiança no Painel (PR 4.2)",
+    "subtitle": "Chave off; pedido_id próprio; Hub H1/H2 em lista fechada; print base64; score/risco só no tipo",
+    "output": "painel-analise-seguro.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "inbox", "label": "Inbox" },
+    { "id": "servidor", "label": "Servidor" },
+    { "id": "hub", "label": "Hub" },
+    { "id": "registro", "label": "Registro" }
+  ],
+  "mainPath": ["botao", "chave", "trava", "lista", "iniciar", "status", "print"],
+  "nodes": [
+    {
+      "id": "botao",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Analisar seguro-fiança no processo da conversa"
+    },
+    {
+      "id": "pergunta",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "/pergunta: analisar_seguro e status_seguro (L, agente executa)"
+    },
+    {
+      "id": "config",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Configurações › Locação: locacao.analise.seguro off"
+    },
+    {
+      "id": "chave",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "analiseLigada: processos + analise.seguro"
+    },
+    {
+      "id": "trava",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "exigirRendaConfirmada antes de qualquer efeito"
+    },
+    {
+      "id": "rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente/seguro: agent+, org, rate limit"
+    },
+    {
+      "id": "executar",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "executarFerramenta: mesmo caminho do botão e do loop"
+    },
+    {
+      "id": "lista",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "Lista fechada H1/H2; iniciar só com campo acao; senão ferramenta inexistente"
+    },
+    {
+      "id": "pedido",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "locacao_analises_seguro: pedido_id único por ação; 23505 reusa o em andamento"
+    },
+    {
+      "id": "iniciar",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "iniciar_analise_inquilino acao=seguro; trio org+conversa+pedido_id"
+    },
+    {
+      "id": "status",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "status_analise_inquilino: cards; score/risco opcionais (4.3), não na tela"
+    },
+    {
+      "id": "print",
+      "lane": "hub",
+      "col": 3,
+      "type": "external",
+      "label": "baixar_resultado_analise tipo=print_migra; base64 até 2 MB"
+    },
+    {
+      "id": "arquivo",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "cotacao_seguro origem hub_migra; arquivos off = cards sem print"
+    },
+    {
+      "id": "audit",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "api_audit_log: pedido_id e estado, sem PII nem base64"
+    },
+    {
+      "id": "legado",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Botão antigo some só com seguro E fc ligados (9a)"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "config", "to": "chave", "label": "admin liga; ausente = off" },
+    { "id": "e2", "from": "chave", "to": "botao", "label": "off: o botão não aparece" },
+    { "id": "e3", "from": "chave", "to": "pergunta", "label": "off: some do ToolSet" },
+    { "id": "e4", "from": "botao", "to": "rota", "label": "clique do atendente" },
+    { "id": "e5", "from": "pergunta", "to": "executar", "label": "L executa a cotação gratuita" },
+    { "id": "e6", "from": "rota", "to": "executar", "label": "origem botao" },
+    { "id": "e7", "from": "executar", "to": "trava", "label": "sem renda confirmada, recusa" },
+    { "id": "e8", "from": "trava", "to": "lista", "label": "confere H1/H2 antes do INSERT" },
+    { "id": "e9", "from": "lista", "to": "pedido", "label": "pedido_id novo; reusa só a mesma ação" },
+    { "id": "e10", "from": "pedido", "to": "iniciar", "label": "acao seguro, nunca fc_salvar" },
+    { "id": "e11", "from": "iniciar", "to": "status", "label": "poll 15s enquanto cotando" },
+    { "id": "e12", "from": "status", "to": "print", "label": "print_disponivel e sem documento_id" },
+    { "id": "e13", "from": "print", "to": "arquivo", "label": "falha do print não derruba a cotação" },
+    { "id": "e14", "from": "rota", "to": "audit", "label": "mutação com efeito" },
+    { "id": "e15", "from": "chave", "to": "legado", "label": "9a: esconde o antigo só com as duas chaves" },
+    { "id": "e16", "from": "status", "to": "botao", "label": "cards sanitizados; score/risco ficam de fora" }
+  ]
+}

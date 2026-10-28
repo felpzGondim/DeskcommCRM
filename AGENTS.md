@@ -550,6 +550,16 @@ grava processo, pessoas e imóvel; `processo_id` na ficha preliminar passou a te
 opcional. A análise paga usa o celular do inquilino principal da ficha, nunca o de quem
 só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
 [`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md).
+Fase 4.1 (renda) e 4.2 (cotação de seguro-fiança) ficam atrás de
+`locacao.analise.{renda,seguro}` (desligadas). A 4.2 chama Hub H1/H2
+(`iniciar_analise_inquilino` com `acao`, `status_analise_inquilino`,
+`baixar_resultado_analise`) por lista fechada; ferramenta ausente vira aviso,
+não o caminho antigo. Cada ação tem `pedido_id` próprio. Status parseia
+`score`/`risco` opcionais (`lib/locacao/analise/status-hub.ts`; a 4.3
+reusa) e a tela do seguro não os mostra. Decisões:
+[`docs/decisoes/locacao-fase4-analise.md`](docs/decisoes/locacao-fase4-analise.md),
+[`docs/decisoes/locacao-fase4-renda.md`](docs/decisoes/locacao-fase4-renda.md),
+[`docs/decisoes/locacao-fase4-seguro.md`](docs/decisoes/locacao-fase4-seguro.md).
 Não chamar FC, Migra nem `/contrato/confirmar` a partir do relatório preliminar. Não
 pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superlógica
 é só GET. Drive atrás de `locacao.drive_habilitado` (desligado) e das variáveis

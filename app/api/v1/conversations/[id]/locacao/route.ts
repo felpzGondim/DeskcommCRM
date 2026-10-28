@@ -5,7 +5,12 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { analiseLigada, processosLigados } from "@/lib/locacao/chaves";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
-import { lerFichaAtualDoProcesso, listarProcessosDaConversa } from "@/lib/locacao/repositorio";
+import {
+  lerAnaliseSeguroMaisRecente,
+  lerFichaAtualDoProcesso,
+  listarProcessosDaConversa,
+} from "@/lib/locacao/repositorio";
+import { sanitizarCards } from "@/lib/locacao/analise/seguro";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +31,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     .eq("id", auth.org.orgId).maybeSingle();
   const habilitado = processosLigados(org?.settings);
   const rendaLigada = analiseLigada(org?.settings, "renda");
-  if (!habilitado) return ok({ habilitado: false, analise: { renda: false }, processos: [] }, { requestId });
+  const seguroLigada = analiseLigada(org?.settings, "seguro");
+  const fcLigada = analiseLigada(org?.settings, "fc");
+  const analise = { renda: rendaLigada, seguro: seguroLigada, fc: fcLigada };
+  if (!habilitado) return ok({ habilitado: false, analise, processos: [] }, { requestId });
   const admin = createAdminClient();
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
   const imoveisIds = [...new Set(processos.map((p) => String(p.imovel_id ?? "")))].filter(Boolean);
@@ -51,12 +59,30 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     };
   }));
   const rendaPorId = new Map(fichas.map((f) => [f.id, f]));
+  const seguros = await Promise.all(processos.slice(0, 5).map(async (p) => {
+    const idProc = String(p.id ?? "");
+    const linha = idProc && seguroLigada
+      ? await lerAnaliseSeguroMaisRecente(admin, auth.org.orgId, idProc)
+      : null;
+    const resultado = linha?.resultado && typeof linha.resultado === "object"
+      ? (linha.resultado as Record<string, unknown>)
+      : {};
+    return {
+      id: idProc,
+      pedido_id: typeof linha?.pedido_id === "string" ? linha.pedido_id : null,
+      estado: typeof linha?.estado === "string" ? linha.estado : null,
+      cards: sanitizarCards(resultado.cards),
+      documento_id: typeof linha?.documento_id === "string" ? linha.documento_id : null,
+    };
+  }));
+  const seguroPorId = new Map(seguros.map((s) => [s.id, s]));
   return ok({
     habilitado: true,
-    analise: { renda: rendaLigada },
+    analise,
     processos: processos.map((p) => {
       const idProc = String(p.id ?? "");
       const extra = rendaPorId.get(idProc);
+      const seguro = seguroPorId.get(idProc);
       return {
         id: p.id,
         status: p.status,
@@ -66,6 +92,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         renda_mensal: extra?.renda_mensal ?? null,
         renda_proposta_fc: extra?.renda_proposta_fc ?? null,
         alertas: extra?.alertas ?? [],
+        seguro_pedido_id: seguro?.pedido_id ?? null,
+        seguro_estado: seguro?.estado ?? null,
+        seguro_cards: seguro?.cards ?? [],
+        seguro_documento_id: seguro?.documento_id ?? null,
       };
     }),
   }, { requestId });

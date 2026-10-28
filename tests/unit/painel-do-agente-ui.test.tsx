@@ -268,6 +268,19 @@ describe("Painel do agente (UI)", () => {
     );
   });
 
+  it("esconde o botão antigo só quando seguro e fc estão ligados", async () => {
+    getMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes("/locacao")) {
+        return { data: { analise: { seguro: true, fc: true } } };
+      }
+      return { data: { atual: null, historico: [] } };
+    });
+    render(<PainelDoAgente conversationId="c1" />);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Iniciar análise de inquilino" })).toBeNull();
+    });
+  });
+
   it("mostra link seguro da segunda via na consulta de boletos", async () => {
     postMock.mockResolvedValue({ data: { resumo: "1. Em aberto · 2026-11-05 · R$ 123.00", links: [
       { rotulo: "Abrir 2ª via do boleto 1", url: "https://boletos.exemplo/1" },

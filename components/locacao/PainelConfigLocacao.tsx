@@ -106,6 +106,17 @@ export function PainelConfigLocacao() {
             })} />
           {t("Ligar análise de renda (desligada por padrão)")}
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={estado.locacao.analise?.seguro === true}
+            disabled={salvando || !estado.locacao.processos_habilitado}
+            onChange={(e) => void gravar({
+              locacao: {
+                ...estado.locacao,
+                analise: { ...estado.locacao.analise, seguro: e.target.checked },
+              },
+            })} />
+          {t("Ligar cotação de seguro-fiança (desligada por padrão)")}
+        </label>
       </fieldset>
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">{t("Painel do agente")}</legend>

@@ -44,6 +44,7 @@ describe("registro único do painel", () => {
     expect(noLoop).not.toContain("confirmar_contrato");
     expect(noLoop).not.toContain("confirmar_renda");
     expect(noLoop).not.toContain("analisar_renda");
+    expect(noLoop).not.toContain("analisar_seguro");
     for (const nome of NOMES_C_OU_S) expect(noLoop).not.toContain(nome);
   });
 
@@ -54,6 +55,18 @@ describe("registro único do painel", () => {
     });
     expect(ligada).toContain("analisar_renda");
     expect(ligada).not.toContain("confirmar_renda");
+    expect(ligada).not.toContain("analisar_seguro");
+  });
+
+  it("chave locacao.analise.seguro desligada: analisar_seguro some; ligada: entra no ToolSet (L)", () => {
+    expect(nomesNoToolsetDoLoop({})).not.toContain("analisar_seguro");
+    expect(nomesNoToolsetDoLoop({})).not.toContain("status_seguro");
+    const ligada = nomesNoToolsetDoLoop({
+      locacao: { processos_habilitado: true, analise: { seguro: true } },
+    });
+    expect(ligada).toContain("analisar_seguro");
+    expect(ligada).toContain("status_seguro");
+    expect(ligada).not.toContain("iniciar_analise");
   });
 
   it("o loop recusa executar C/S mesmo se alguém chamar a porta com origem agente", async () => {
@@ -93,6 +106,19 @@ describe("registro único do painel", () => {
     expect(ferramentaDoPainel("confirmar_renda")?.acaoDoBotao).toBe("confirmar_renda");
     expect(ferramentaDoPainel("analisar_renda")?.nivel).toBe("L");
     expect(ferramentaDoPainel("confirmar_renda")?.nivel).toBe("S");
+    expect(ferramentaDoPainel("analisar_seguro")?.acaoDoBotao).toBe("analisar_seguro");
+    expect(ferramentaDoPainel("status_seguro")?.acaoDoBotao).toBe("status_seguro");
+    expect(ferramentaDoPainel("analisar_seguro")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("status_seguro")?.nivel).toBe("L");
+    expect(ferramentaDoPainel("analisar_seguro")?.exigeChaveAnalise).toBe("seguro");
+    const seguroRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/seguro/route.ts",
+      "utf8",
+    );
+    expect(seguroRota).toContain('executarFerramenta(ferramenta');
+    expect(seguroRota).toContain('origem: "botao"');
+    expect(seguroRota).not.toMatch(/["']Contratar["']/);
+    expect(seguroRota).not.toMatch(/acao:\s*"fc_salvar"/);
     const rendaRota = readFileSync(
       "app/api/v1/conversations/[id]/painel-agente/renda/route.ts",
       "utf8",
@@ -121,6 +147,9 @@ describe("registro único do painel", () => {
     const texto = mascararPessoaNoTexto("CPF 529.982.247-25 e 52998224725");
     expect(temCpfCompleto(texto)).toBe(false);
     expect(texto).not.toContain("529");
+    const comEmail = mascararPessoaNoTexto("fale com ana@imobiliaria.com");
+    expect(comEmail).not.toContain("ana@");
+    expect(comEmail).toContain("[email]");
   });
 });
 

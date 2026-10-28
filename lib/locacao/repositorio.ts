@@ -2,7 +2,7 @@
  * Persistência do processo de locação. Service role + organization_id da sessão.
  * Audit e logs nunca levam CPF, nome, telefone ou valores da ficha.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chaveEndereco, codigoFc, type PartesDoEndereco } from "@/lib/locacao/endereco";
@@ -412,16 +412,42 @@ export async function abrirAnaliseFc(
   return pedidoId;
 }
 
+const COLUNAS_SEGURO =
+  "id,processo_id,participante_id,pedido_id,hub_job_id,estado,origem,documento_id,resultado,erro_codigo,hub_estado,concluida_em,ficha_versao";
+
+export async function lerAnaliseSeguroEmAndamento(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
+    .select(COLUNAS_SEGURO)
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .in("estado", ["solicitada", "cotando"])
+    .maybeSingle();
+  return data ? asRec(data) : null;
+}
+
+export async function lerAnaliseSeguroMaisRecente(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
+    .select(COLUNAS_SEGURO)
+    .eq("organization_id", orgId).eq("processo_id", processoId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? asRec(data) : null;
+}
+
 export async function seguroEmAndamento(
   admin: SupabaseClient,
   orgId: string,
   processoId: string,
 ): Promise<boolean> {
-  const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
-    .select("id").eq("organization_id", orgId).eq("processo_id", processoId)
-    .in("estado", ["solicitada", "cotando"])
-    .maybeSingle();
-  return !!data;
+  return !!(await lerAnaliseSeguroEmAndamento(admin, orgId, processoId));
 }
 
 export async function lerAnaliseSeguro(
@@ -430,7 +456,7 @@ export async function lerAnaliseSeguro(
   pedidoId: string,
 ): Promise<Record<string, unknown> | null> {
   const { data } = await tabelaLocacao(admin, "locacao_analises_seguro")
-    .select("id,processo_id,participante_id,pedido_id,hub_job_id,estado,origem,documento_id,resultado,erro_codigo,hub_estado,concluida_em,ficha_versao")
+    .select(COLUNAS_SEGURO)
     .eq("organization_id", orgId).eq("pedido_id", pedidoId).maybeSingle();
   return data ? asRec(data) : null;
 }
@@ -442,7 +468,11 @@ export async function abrirAnaliseSeguro(
     participanteId?: string | null; fichaVersao?: number | null;
     origem?: OrigemDaAnalise;
   },
-): Promise<string> {
+): Promise<{ pedidoId: string; reusou: boolean }> {
+  const existente = await lerAnaliseSeguroEmAndamento(admin, input.orgId, input.processoId);
+  const pedidoExistente = typeof existente?.pedido_id === "string" ? existente.pedido_id : "";
+  if (pedidoExistente) return { pedidoId: pedidoExistente, reusou: true };
+
   const pedidoId = randomUUID();
   const { error } = await tabelaLocacao(admin, "locacao_analises_seguro").insert({
     organization_id: input.orgId,
@@ -455,13 +485,58 @@ export async function abrirAnaliseSeguro(
     autorizado_por: input.userId,
     autorizado_em: new Date().toISOString(),
   });
+  if (error?.code === "23505") {
+    const corrida = await lerAnaliseSeguroEmAndamento(admin, input.orgId, input.processoId);
+    const reuso = typeof corrida?.pedido_id === "string" ? corrida.pedido_id : "";
+    if (reuso) return { pedidoId: reuso, reusou: true };
+    throw new LocacaoErro("analise_seguro_gravacao", "analise_seguro");
+  }
   if (error) throw new LocacaoErro("analise_seguro_gravacao", "analise_seguro");
   await gravarEvento(admin, {
     orgId: input.orgId, processoId: input.processoId, tipo: "migra",
     atorTipo: "usuario", atorId: input.userId,
     detalhe: { pedido_id: pedidoId, origem: input.origem ?? "hub" },
   });
-  return pedidoId;
+  return { pedidoId, reusou: false };
+}
+
+export async function guardarPrintMigra(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    processoId: string;
+    userId: string;
+    participanteId?: string | null;
+    bytes: Buffer;
+    mime: string;
+    ext: "png" | "jpg" | "webp" | "pdf";
+  },
+): Promise<string> {
+  const docId = randomUUID();
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
+  const md5 = createHash("md5").update(input.bytes).digest("hex");
+  const path = `${input.orgId}/processos/${input.processoId}/cotacao_seguro/${docId}.${input.ext}`;
+  const { error: upErr } = await admin.storage.from("locacao-processos").upload(path, input.bytes, {
+    contentType: input.mime,
+    upsert: false,
+  });
+  if (upErr) throw new LocacaoErro("analise_seguro_print", "analise_seguro");
+  const { error } = await tabelaLocacao(admin, "locacao_processo_documentos").insert({
+    id: docId,
+    organization_id: input.orgId,
+    processo_id: input.processoId,
+    participante_id: input.participanteId ?? null,
+    categoria: "cotacao_seguro",
+    origem: "hub_migra",
+    storage_path: path,
+    mime: input.mime,
+    tamanho_bytes: input.bytes.length,
+    sha256,
+    md5,
+    created_by: input.userId,
+  });
+  if (error) throw new LocacaoErro("analise_seguro_print", "analise_seguro");
+  return docId;
 }
 
 export async function marcarEstadoAnaliseSeguro(
