@@ -375,9 +375,9 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 20 drenos: 18 pelo rpc (15 anteriores + 3 da locação, 0767) + a mídia +
-    // a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(20);
+    // 21 drenos: 19 pelo rpc (15 anteriores + 3 da locação, 0767 + consultas
+    // do painel, 0769) + a mídia + a décima poda (o DELETE do admin).
+    expect(r.falhas).toHaveLength(21);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -431,8 +431,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 18 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
-    expect(r.falhas).toHaveLength(18);
+    // Só os 19 drenos do rpc falham nesta rodada (mídia e rascunhos vão bem).
+    expect(r.falhas).toHaveLength(19);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 });
@@ -635,6 +635,10 @@ describe("houveEfeito — as duas direções", () => {
     lotes_processos_parados: 0,
     processos_parados_tem_resto: false,
     retencao_processos_parados_dias: 30,
+    consultas_do_painel_apagadas: 0,
+    lotes_consultas_do_painel: 0,
+    consultas_do_painel_tem_resto: false,
+    retencao_consultas_do_painel_dias: 365,
     avisos: [] as string[],
     falhas: [] as string[],
   };
@@ -715,6 +719,7 @@ describe("houveEfeito — as duas direções", () => {
     expect(houveEfeito({ ...base, processos_de_locacao_apagados: 1 })).toBe(true);
     expect(houveEfeito({ ...base, revisoes_de_vinculo_apagadas: 1 })).toBe(true);
     expect(houveEfeito({ ...base, processos_parados_encerrados: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, consultas_do_painel_apagadas: 1 })).toBe(true);
   });
 });
 

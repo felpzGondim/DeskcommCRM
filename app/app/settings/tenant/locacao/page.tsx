@@ -18,7 +18,7 @@ export default async function Page() {
       <div>
         <h1 className="text-xl font-semibold">{t("Locação")}</h1>
         <p className="text-sm text-text-muted">
-          {t("Chaves do processo de locação, vínculo Superlógica e arquivos. Tudo desligado por padrão.")}
+          {t("Chaves do processo de locação, do campo de pergunta do painel, vínculo Superlógica e arquivos. Tudo desligado por padrão.")}
         </p>
       </div>
       <PainelConfigLocacao />

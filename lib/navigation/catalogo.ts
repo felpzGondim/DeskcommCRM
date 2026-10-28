@@ -1175,7 +1175,7 @@ export const NAV_CATALOG = [
   {
     href: "/app/settings/tenant/locacao",
     label: "Locação",
-    description: "Liga e desliga o processo de locação, o vínculo Superlógica e os arquivos.",
+    description: "Liga e desliga o processo de locação, as ferramentas do campo de pergunta do painel, o vínculo Superlógica e os arquivos.",
     icon: "Key",
     group: "organizacao",
     section: "Sua empresa",

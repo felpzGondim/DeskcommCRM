@@ -1344,6 +1344,7 @@ export const AUDIT_ACTIONS = [
   "locacao.documento_anexado",
   "locacao.documento_removido",
   "locacao.config_alterada",
+  "painel_agente.config_alterada",
   "locacao.vinculo_simulado",
   "locacao.vinculo_executado",
   "locacao.vinculo_revisao",
