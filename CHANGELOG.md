@@ -22,6 +22,8 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **O painel deixa de tratar extrato cortado em 8000 caracteres como ausência de crédito** A derivação do WhatsApp continua no teto de 8000. No relatório, na análise e nas ferramentas do painel, texto exatamente nesse teto vem marcado para a IA não concluir que não há depósitos. PDF da análise/relatório já reabre o original. Quem já instalou não precisa fazer nada.
 
+- **A pergunta do Painel reabre o PDF original quando o texto derivado corta em 8000** Anexo e conversa usam os mesmos limites da análise (30 páginas, teto de caracteres, senha vira pendência). Se a reabertura falhar, vale o recorte com o aviso. Foto no teto só leva o aviso. O WhatsApp não muda. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.10] — 2026-10-28
 
 ### Adicionado

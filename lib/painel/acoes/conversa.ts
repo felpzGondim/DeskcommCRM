@@ -2,6 +2,7 @@
  * Leitura da conversa e os atalhos Resumir / Sugerir — o mesmo caminho do botão
  * e da ferramenta do agente.
  */
+import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import {
   montarBlocoDaConversa,
   montarMensagensDoPainel,
@@ -14,6 +15,7 @@ import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
+import { reabrirPdfsTruncados } from "@/lib/painel/reabrir-pdfs-truncados";
 import { comAvisoSeTruncado, derivadoEstaTruncado } from "@/lib/painel/texto-derivado";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
@@ -27,7 +29,9 @@ export async function lerFalasDaConversa(
   const limite = Math.min(Math.max(opts?.limite ?? JANELA_PADRAO, 1), JANELA_MAX);
   let q = ctx.dbSessao
     .from("messages")
-    .select("direction,body,media_derived_text,sent_at,revoked_at")
+    .select(
+      "id,direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,sent_at,revoked_at",
+    )
     .eq("organization_id", ctx.orgId)
     .eq("conversation_id", ctx.conversationId)
     .order("sent_at", { ascending: false })
@@ -35,18 +39,23 @@ export async function lerFalasDaConversa(
   if (opts?.aPartirDe) q = q.gte("sent_at", opts.aPartirDe);
   const { data: linhas, error } = await q;
   if (error) throw new Error("message_read_failed");
-  return ((linhas ?? []) as Record<string, unknown>[])
+  const { linhas: lidas } = await reabrirPdfsTruncados(
+    (linhas ?? []) as Record<string, unknown>[],
+    ctx,
+  );
+  return lidas
     .filter((m) => !m.revoked_at)
     .reverse()
     .map((m) => {
       const derivado = typeof m.media_derived_text === "string" ? m.media_derived_text : "";
       const corpo = typeof m.body === "string" ? m.body : "";
-      const truncado = !corpo && derivadoEstaTruncado(derivado);
+      const truncado = !corpo && derivadoEstaTruncado(derivado, m.original_completo === true);
       const texto = comAvisoSeTruncado(corpo || derivado, truncado);
       return {
         direcao: m.direction === "inbound" ? "inbound" : "outbound",
         texto,
         em: (m.sent_at as string | null) ?? null,
+        originalCompleto: m.original_completo === true,
       };
     });
 }
@@ -65,7 +74,18 @@ export async function lerConversaDoPainel(
   const primeiroNome =
     (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
   const bloco = montarBlocoDaConversa(falas, primeiroNome);
-  return { ok: true, texto: mascararPessoaNoTexto(bloco) };
+  const limites = limitesDaAnalise(ctx.settings);
+  const reabertos = falas.filter((f) => f.originalCompleto === true && f.texto.length > 0);
+  let resto = limites.chars_conjunto;
+  const extras: string[] = [];
+  for (const fala of reabertos) {
+    if (resto <= 0) break;
+    const recorte = fala.texto.slice(0, Math.min(limites.chars_por_arquivo, resto));
+    resto -= recorte.length;
+    extras.push(recorte);
+  }
+  const texto = extras.length > 0 ? `${bloco}\n${extras.join("\n")}` : bloco;
+  return { ok: true, texto: mascararPessoaNoTexto(texto) };
 }
 
 export async function resumirOuSugerir(

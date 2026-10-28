@@ -93,6 +93,13 @@
       "label": "executarFerramenta: porta única L/C/S"
     },
     {
+      "id": "reabrir_pdf",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "PDF no teto 8000: reabre original (limites da análise)"
+    },
+    {
       "id": "query_log",
       "lane": "registro",
       "col": 4,
@@ -133,6 +140,13 @@
       "label": "ligada: tools; desligada: system antigo"
     },
     { "id": "e4", "from": "loop", "to": "executar", "label": "L com origem agente" },
+    { "id": "e24", "from": "executar", "to": "reabrir_pdf", "label": "ler_anexo e ler_conversa" },
+    {
+      "id": "e25",
+      "from": "reabrir_pdf",
+      "to": "loop",
+      "label": "texto completo ou recorte com aviso"
+    },
     { "id": "e5", "from": "botoes", "to": "rota_botao", "label": "atalho sem modelo" },
     { "id": "e6", "from": "rota_botao", "to": "executar", "label": "mesma entrada, origem botao" },
     { "id": "e7", "from": "executar", "to": "query_log", "label": "etapa_atual a cada ferramenta" },

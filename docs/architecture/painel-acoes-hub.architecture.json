@@ -188,7 +188,7 @@
       "id": "e20",
       "from": "aviso_teto",
       "to": "botoes",
-      "label": "ler_anexo e ler_conversa avisam"
+      "label": "PDF reabre; senão recorte com aviso"
     }
   ]
 }
