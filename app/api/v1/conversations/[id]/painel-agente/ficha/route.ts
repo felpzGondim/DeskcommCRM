@@ -48,11 +48,7 @@ const corpo = z.discriminatedUnion("etapa", [
   }).strict(),
 ]);
 
-async function autenticar(requestId: string, id: string, escrita = false) {
-  if (escrita) {
-    const denied = await requireSupportWrite();
-    if (denied) return { erro: denied };
-  }
+async function autenticar(requestId: string, id: string) {
   const auth = await requireRole("agent", { requestId, resource: "conversations" });
   if (!auth.ok) return { erro: auth.response };
   const orgId = auth.org.orgId;
@@ -73,7 +69,7 @@ async function autenticar(requestId: string, id: string, escrita = false) {
 export async function GET(req: NextRequest, ctx: Ctx) {
   const requestId = randomUUID();
   const { id } = await ctx.params;
-  const gate = await autenticar(requestId, id, false);
+  const gate = await autenticar(requestId, id);
   if ("erro" in gate && gate.erro) return gate.erro;
   const { auth, orgId } = gate;
   const t = (s: string) => traduzir(s, auth!.user.idioma);
@@ -104,8 +100,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const requestId = randomUUID();
+  const denied = await requireSupportWrite();
+  if (denied) return denied;
   const { id } = await ctx.params;
-  const gate = await autenticar(requestId, id, true);
+  const gate = await autenticar(requestId, id);
   if ("erro" in gate && gate.erro) return gate.erro;
   const { auth, orgId, db, contato } = gate;
   const t = (s: string) => traduzir(s, auth!.user.idioma);

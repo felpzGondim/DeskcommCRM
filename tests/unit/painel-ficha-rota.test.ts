@@ -121,7 +121,8 @@ describe("rota da ficha preliminar", () => {
     expect(mocks.gravar).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       origem: "atendente", baseVersao: 1, relatorio: "Texto conferido.",
     }));
-    expect(JSON.stringify(mocks.audit.mock.calls[0][0].metadata)).not.toMatch(/11977776666|Texto conferido/);
+    const auditado = mocks.audit.mock.calls[0]?.[0] as { metadata?: unknown } | undefined;
+    expect(JSON.stringify(auditado?.metadata)).not.toMatch(/11977776666|Texto conferido/);
   });
 
   it("GET devolve a ficha atual sem gerar de novo", async () => {

@@ -184,6 +184,7 @@ describe("Painel do agente (UI)", () => {
     } });
     const usar = vi.fn();
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Gerar relatório preliminar" }));
     await screen.findByDisplayValue("Maria quer o apto 10.");
     expect(postMock).toHaveBeenCalledWith(

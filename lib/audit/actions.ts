@@ -932,6 +932,12 @@ export const AUDIT_ACTIONS = [
   "ai.painel_atendente.contrato_preparado",
   "ai.painel_atendente.contrato_confirmado",
   /**
+   * A1: relatório preliminar gerado ou ficha corrigida pelo atendente.
+   * ⚠️ SEM VALORES — só versão, origem e caminhos de campo.
+   */
+  "ai.painel_atendente.ficha_preliminar",
+  "ai.painel_atendente.ficha_salva",
+  /**
    * O aviso de caso no WhatsApp da equipe (migration 0292).
    *
    * Três códigos e não um: "saiu", "não saiu em definitivo" e "alguém mudou a
