@@ -160,7 +160,7 @@ export function montarRelatorioFinanceiro(bloco: BlocoDoRelatorio): RelatorioFin
     : secao("renda", [
       `Renda comprovada (extrato): ${dinheiro(renda.comprovada)}`,
       `Renda declarada: ${dinheiro(renda.declarada)}`,
-      `Pacote (aluguel + condomínio + IPTU): ${dinheiro(renda.pacote)}`,
+      `Pacote (aluguel + condomínio + IPTU + seguro-incêndio): ${dinheiro(renda.pacote)}`,
       `3× o pacote: ${dinheiro(renda.tres_vezes_pacote)}`,
       renda.abaixo_de_3x === true ? "A comprovada ficou abaixo de 3× o pacote." : "",
       renda.declarada !== null && renda.comprovada !== null && renda.comprovada < renda.declarada

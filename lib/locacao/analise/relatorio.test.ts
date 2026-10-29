@@ -87,6 +87,7 @@ describe("relatório financeiro de 6 seções", () => {
     expect(comBloco.renda.comprovada).not.toBe(8000);
     expect(comBloco.risco).toBe("alto");
     expect(comBloco.texto).toMatch(/4500/);
+    expect(comBloco.texto).toMatch(/aluguel \+ condomínio \+ IPTU \+ seguro-incêndio/);
   });
 
   it("risco só baixo/moderado/alto; sem comprovada não sai baixo", () => {

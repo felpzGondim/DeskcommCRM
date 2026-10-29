@@ -1,7 +1,8 @@
 /**
  * Relatório financeiro no Painel (PR 4.5). Monta as 6 seções a partir
  * dos blocos já gravados. Sem Hub, sem passo pago, sem envio ao cliente.
- * A renda vem de um bloco já calculado (motor em PR separado).
+ * A renda sai do motor do extrato e do pacote do #31 (ou do
+ * `bloco_calculado` que o 4.1 já gravou com o mesmo motor).
  */
 import { lerBlocoDeRendaSalvo } from "@/lib/locacao/analise/bloco-de-renda";
 import { sanitizarResultadoFc } from "@/lib/locacao/analise/fc";

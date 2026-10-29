@@ -13,15 +13,14 @@ Nada disto manda mensagem a contato. Nada escreve na Superlógica. Nenhum passo 
 - Ferramentas no registro único: `gerar_relatorio` (L) e `aprovar_relatorio` (S, só com clique de qualquer atendente — decisão 8a).
 - Montagem **determinística** de 6 seções (identificação, resumo, crédito, renda, financeira, risco) a partir dos blocos já gravados (ficha/preliminar, FC, seguro, manual). Bloco faltando → seção pendente, sem inventar número.
 - Risco só baixo / moderado / alto. Nunca "alugue" / "não alugue". Sem comprovada, o risco **não** sai baixo.
-- A seção de renda **consome** um bloco já calculado (tabela mensal + comprovada, ou motivo de não comprovação). Sem bloco, fica pendente. A renda declarada **nunca** vira comprovada.
-- O motor que lê o extrato (lançamentos, exclusões, tabela mensal) **não entra neste PR**. Ele mora em `lib/locacao/extrato/` num PR separado sobre a `main`, junto com a correção do relatório preliminar. Este PR lê `ficha.renda.bloco_calculado` ou `ficha.renda.extrato`. Quando aquele PR mesclar, o 4.5 rebaseia para a função canônica.
+- A seção de renda monta o bloco a partir da análise de extrato e do pacote do #31 (`lib/locacao/extrato`, 3× = aluguel+condomínio+IPTU+seguro-incêndio). Sem análises, lê `ficha.renda.bloco_calculado` gravado pelo 4.1 (mesmo motor). Sem os dois, fica pendente. A renda declarada **nunca** vira comprovada.
 - Aprovar: qualquer atendente. Se arquivos do processo estiverem desligados, o rascunho permanece (o texto não some) e a aprovação não exige documento.
 - Chave `locacao.analise.relatorio` desligada por padrão. Sem ela, o Painel da conversa fica como hoje.
 - CPF, telefone, e-mail e RG saem mascarados. Audit sem PII.
 
 ## O que este PR não faz
 
-- Não calcula créditos do extrato, não classifica lançamento, não tem prompt de renda.
+- Não reabre o extrato sozinho: reusa as análises / o `bloco_calculado` do 4.1. Sem prompt de renda.
 - Não altera `SYSTEM_DO_RELATORIO_PRELIMINAR` nem `SYSTEM_DA_ANALISE_DE_RENDA`.
 - Não reabre PDF nem muda o teto de caracteres das fontes (isso é do motor / preliminar).
 - Não recomenda alugar. Não aprova o **processo** (isso continua só do Felipe).
@@ -44,11 +43,11 @@ Mapa: `docs/architecture/locacao-processo.architecture.json` (peça `relatorio`,
 
 | Tema | O que este PR faz | Pendente |
 |---|---|---|
-| Motor do extrato | Consome bloco pronto; sem bloco, pendente | Rebase quando `lib/locacao/extrato/` entrar |
+| Motor do extrato | `montarBlocoDeRendaDoExtrato` + pacote do #31; senão `bloco_calculado` | — |
 | Quem aprova o relatório | Qualquer atendente (8a) | Só o Felipe, como a aprovação do processo? |
 | Arquivos desligados | Aprova sem documento e **mantém** o rascunho | Exigir arquivos ligados para aprovar? |
 | Risco sem FC | Nunca "baixo" se não há comprovada; sem os dois, pendente | Sempre pendente até ter FC? |
-| 3× o pacote | Só aparece se o bloco já trouxer o número | Calcular aqui a partir da ficha? |
+| 3× o pacote | Aluguel+condomínio+IPTU+seguro-incêndio (sem fiança), do `montarPacote` | — |
 
 ## Destino
 
