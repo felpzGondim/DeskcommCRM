@@ -16,6 +16,16 @@ import {
 } from "@/lib/locacao/analise/fc";
 import { lerStatusDoHub } from "@/lib/locacao/analise/status-hub";
 import { hashCpfDoParticipante } from "@/lib/locacao/cpf";
+import { valoresVazios, type ValoresDoImovel } from "@/lib/locacao/valores-imovel";
+
+function valoresProntos(): ValoresDoImovel {
+  const v = valoresVazios();
+  v.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
+  v.condominio = { valor: 500, origem: "conversa", editado_por: null, editado_em: null };
+  v.iptu = { valor: 200, origem: "conversa", editado_por: null, editado_em: null };
+  v.seguro_incendio = { valor: 80, origem: "conversa", editado_por: null, editado_em: null };
+  return v;
+}
 
 function fichaPronta() {
   const f = fichaVazia();
@@ -34,7 +44,7 @@ function fichaPronta() {
 describe("mapeamento da análise FC Score+", () => {
   it("recusa ficha incompleta sem ecoar PII", () => {
     const vazia = fichaVazia();
-    const motivo = pendenciaDoPayloadFc(vazia, vazia.pessoas[0] ?? null, null);
+    const motivo = pendenciaDoPayloadFc(vazia, vazia.pessoas[0] ?? null, null, valoresVazios());
     expect(motivo).toMatch(/celular|locatário|nome/i);
     expect(JSON.stringify(motivo)).not.toMatch(/@|529|1198/);
   });
@@ -49,11 +59,13 @@ describe("mapeamento da análise FC Score+", () => {
       conversaId: "conv-1",
       orgId: "org-1",
       telefone: "11987654321",
+      valores: valoresProntos(),
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.argumentos.pedido_id).toBe("00000000-0000-4000-8000-000000000099");
     expect(r.argumentos.renda.mensal).toBe(7500);
+    expect(r.argumentos.imovel.aluguel).toBe(2000);
     expect(r.argumentos).not.toHaveProperty("acao");
     expect(JSON.stringify(r.argumentos.candidato.cpf)).toBe(JSON.stringify("52998224725"));
   });
@@ -70,10 +82,32 @@ describe("mapeamento da análise FC Score+", () => {
       conversaId: "conv-1",
       orgId: "org-1",
       telefone: "11987654321",
+      valores: valoresProntos(),
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.motivo).toMatch(/renda/i);
+  });
+
+  it("recusa sem condomínio apontando o campo; fiança ausente não bloqueia", () => {
+    const ficha = fichaPronta();
+    const pessoa = pessoaDaFichaParaFc(ficha)!;
+    const valores = valoresProntos();
+    valores.condominio = { valor: null, origem: null, editado_por: null, editado_em: null };
+    const r = montarArgumentosFc({
+      ficha, pessoa, pedidoId: "00000000-0000-4000-8000-000000000099",
+      conversaId: "conv-1", orgId: "org-1", telefone: "11987654321", valores,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.motivo).toMatch(/condomínio \(inclui rateio\)/);
+    valores.condominio = { valor: 500, origem: "conversa", editado_por: null, editado_em: null };
+    valores.seguro_fianca = { valor: null, origem: null, editado_por: null, editado_em: null };
+    const ok = montarArgumentosFc({
+      ficha, pessoa, pedidoId: "00000000-0000-4000-8000-000000000099",
+      conversaId: "conv-1", orgId: "org-1", telefone: "11987654321", valores,
+    });
+    expect(ok.ok).toBe(true);
   });
 
   it("casa a pessoa da ficha pelo hash do CPF sem devolver o número", () => {

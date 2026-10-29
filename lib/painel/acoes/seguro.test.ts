@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   marcar: vi.fn(),
   print: vi.fn(),
   recente: vi.fn(),
+  valores: vi.fn(),
 }));
 
 vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({
@@ -35,6 +36,9 @@ vi.mock("@/lib/locacao/repositorio", () => ({
   marcarEstadoAnaliseSeguro: (...args: unknown[]) => mocks.marcar(...args),
   guardarPrintMigra: (...args: unknown[]) => mocks.print(...args),
   lerAnaliseSeguroMaisRecente: (...args: unknown[]) => mocks.recente(...args),
+}));
+vi.mock("@/lib/locacao/valores-imovel-persistencia", () => ({
+  garantirValoresDoProcesso: (...args: unknown[]) => mocks.valores(...args),
 }));
 
 import { fichaVazia } from "@/lib/locacao/ficha-schema";
@@ -116,6 +120,13 @@ describe("analisar seguro no painel", () => {
     mocks.listar.mockResolvedValue([{ id: "proc-1" }]);
     mocks.andamento.mockResolvedValue(null);
     mocks.ficha.mockResolvedValue({ ficha: fichaPronta(), versao: 2 });
+    mocks.valores.mockResolvedValue({
+      aluguel: { valor: 2000, origem: "conversa", editado_por: null, editado_em: null },
+      condominio: { valor: 500, origem: "conversa", editado_por: null, editado_em: null },
+      iptu: { valor: 200, origem: "conversa", editado_por: null, editado_em: null },
+      seguro_incendio: { valor: 80, origem: "conversa", editado_por: null, editado_em: null },
+      seguro_fianca: { valor: null, origem: null, editado_por: null, editado_em: null },
+    });
     mocks.abrir.mockResolvedValue({ pedidoId: PEDIDO, reusou: false });
     mocks.marcar.mockResolvedValue(undefined);
     mocks.ler.mockResolvedValue({
@@ -165,6 +176,21 @@ describe("analisar seguro no painel", () => {
     expect(r.ok).toBe(false);
     expect(r.texto).toMatch(/ainda não separa/);
     expect(mocks.abrir).not.toHaveBeenCalled();
+  });
+
+  it("recusa se faltar seguro-incêndio, apontando o campo; fiança não entra", async () => {
+    mocks.valores.mockResolvedValue({
+      aluguel: { valor: 2000, origem: "conversa", editado_por: null, editado_em: null },
+      condominio: { valor: 500, origem: "conversa", editado_por: null, editado_em: null },
+      iptu: { valor: 200, origem: "conversa", editado_por: null, editado_em: null },
+      seguro_incendio: { valor: null, origem: null, editado_por: null, editado_em: null },
+      seguro_fianca: { valor: 90, origem: "conversa", editado_por: null, editado_em: null },
+    });
+    const r = await analisarSeguroDoPainel(ctx, { processo_id: "proc-1" });
+    expect(r.ok).toBe(false);
+    expect(r.texto).toMatch(/seguro-incêndio/);
+    expect(mocks.abrir).not.toHaveBeenCalled();
+    expect(mocks.chamar).not.toHaveBeenCalled();
   });
 
   it("dispara acao seguro com pedido_id próprio e não persiste score/risco", async () => {

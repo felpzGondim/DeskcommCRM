@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
   TETO_PRINT_BYTES,
   decodificarPrint,
@@ -11,6 +10,17 @@ import {
   resultadoDaCotacao,
   sanitizarCards,
 } from "@/lib/locacao/analise/seguro";
+import { fichaVazia } from "@/lib/locacao/ficha-schema";
+import { valoresVazios, type ValoresDoImovel } from "@/lib/locacao/valores-imovel";
+
+function valoresProntos(): ValoresDoImovel {
+  const v = valoresVazios();
+  v.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
+  v.condominio = { valor: 500, origem: "conversa", editado_por: null, editado_em: null };
+  v.iptu = { valor: 200, origem: "conversa", editado_por: null, editado_em: null };
+  v.seguro_incendio = { valor: 80, origem: "conversa", editado_por: null, editado_em: null };
+  return v;
+}
 
 function fichaPronta() {
   const f = fichaVazia();
@@ -30,7 +40,7 @@ function fichaPronta() {
 describe("mapeamento da cotação de seguro-fiança", () => {
   it("recusa ficha incompleta sem ecoar PII", () => {
     const vazia = fichaVazia();
-    const motivo = pendenciaDoPayloadSeguro(vazia, null);
+    const motivo = pendenciaDoPayloadSeguro(vazia, null, valoresVazios());
     expect(motivo).toMatch(/celular/);
     expect(JSON.stringify(motivo)).not.toMatch(/@|529|1198/);
   });
@@ -43,6 +53,7 @@ describe("mapeamento da cotação de seguro-fiança", () => {
       conversaId: "conv-1",
       orgId: "org-1",
       telefone: "11987654321",
+      valores: valoresProntos(),
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -53,11 +64,32 @@ describe("mapeamento da cotação de seguro-fiança", () => {
     expect(r.argumentos).not.toHaveProperty("solidarios");
   });
 
+  it("recusa sem IPTU apontando o campo; fiança ausente não bloqueia", () => {
+    const ficha = fichaPronta();
+    const valores = valoresProntos();
+    valores.iptu = { valor: null, origem: null, editado_por: null, editado_em: null };
+    const motivo = pendenciaDoPayloadSeguro(ficha, "11987654321", valores);
+    expect(motivo).toMatch(/IPTU/);
+    valores.iptu = { valor: 200, origem: "conversa", editado_por: null, editado_em: null };
+    valores.seguro_fianca = { valor: null, origem: null, editado_por: null, editado_em: null };
+    const ok = montarArgumentosSeguro({
+      ficha,
+      pedidoId: "00000000-0000-4000-8000-000000000099",
+      conversaId: "conv-1",
+      orgId: "org-1",
+      telefone: "11987654321",
+      valores,
+    });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.argumentos.imovel.aluguel).toBe(2000);
+  });
+
   it("sem renda comprovada recusa e não inventa valor", () => {
     const ficha = fichaPronta();
     ficha.renda.mensal.valor = null;
     ficha.renda.proposta_fc.valor = null;
-    const motivo = pendenciaDoPayloadSeguro(ficha, "11987654321");
+    const motivo = pendenciaDoPayloadSeguro(ficha, "11987654321", valoresProntos());
     expect(motivo).toMatch(/renda/i);
     const r = montarArgumentosSeguro({
       ficha,
@@ -65,6 +97,7 @@ describe("mapeamento da cotação de seguro-fiança", () => {
       conversaId: "conv-1",
       orgId: "org-1",
       telefone: "11987654321",
+      valores: valoresProntos(),
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;

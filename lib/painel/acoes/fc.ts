@@ -41,6 +41,7 @@ import {
   LocacaoErro,
   marcarEstadoAnaliseFc,
 } from "@/lib/locacao/repositorio";
+import { garantirValoresDoProcesso } from "@/lib/locacao/valores-imovel-persistencia";
 import { TEXTO_ANALISE_DESLIGADA } from "@/lib/painel/acoes/analise";
 import {
   chamarBaixarResultadoAnalise,
@@ -363,7 +364,12 @@ export async function analisarFcDoPainel(
     return recusaHub(err);
   }
 
-  const pendencia = pendenciaDoPayloadFc(ficha, pessoa, telefone);
+  const valores = await garantirValoresDoProcesso(ctx.admin, {
+    orgId: ctx.orgId,
+    processoId: alvo.id,
+    settings: ctx.settings,
+  });
+  const pendencia = pendenciaDoPayloadFc(ficha, pessoa, telefone, valores);
   if (pendencia || !pessoa || !telefone) {
     return { ok: false, texto: pendencia ?? TEXTO_SEM_LOCATARIO, codigo: "validation_error" };
   }
@@ -392,6 +398,7 @@ export async function analisarFcDoPainel(
     conversaId: ctx.conversationId,
     orgId: ctx.orgId,
     telefone,
+    valores,
   });
   if (!payload.ok) {
     await marcarEstadoAnaliseFc(ctx.admin, {
