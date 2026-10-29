@@ -103,3 +103,4 @@ A tela e as ferramentas do botão 1 (Analisar renda) estão em
 [`locacao-fase4-renda.md`](locacao-fase4-renda.md).
 O botão 2 (seguro-fiança) está em [`locacao-fase4-seguro.md`](locacao-fase4-seguro.md).
 O botão 3 (FC Score+) está em [`locacao-fase4-fc.md`](locacao-fase4-fc.md).
+O manual assistido (reserva 4.4) está em [`locacao-fase4-manual.md`](locacao-fase4-manual.md).

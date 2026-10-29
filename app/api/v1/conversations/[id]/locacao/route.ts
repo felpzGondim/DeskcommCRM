@@ -36,7 +36,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const rendaLigada = analiseLigada(org?.settings, "renda");
   const seguroLigada = analiseLigada(org?.settings, "seguro");
   const fcLigada = analiseLigada(org?.settings, "fc");
-  const analise = { renda: rendaLigada, seguro: seguroLigada, fc: fcLigada };
+  const manualLigada = analiseLigada(org?.settings, "manual");
+  const analise = { renda: rendaLigada, seguro: seguroLigada, fc: fcLigada, manual: manualLigada };
   if (!habilitado) return ok({ habilitado: false, analise, processos: [] }, { requestId });
   const admin = createAdminClient();
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
@@ -64,7 +65,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const rendaPorId = new Map(fichas.map((f) => [f.id, f]));
   const seguros = await Promise.all(processos.slice(0, 5).map(async (p) => {
     const idProc = String(p.id ?? "");
-    const linha = idProc && seguroLigada
+    const linha = idProc && (seguroLigada || manualLigada)
       ? await lerAnaliseSeguroMaisRecente(admin, auth.org.orgId, idProc)
       : null;
     const resultado = linha?.resultado && typeof linha.resultado === "object"
@@ -81,11 +82,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const seguroPorId = new Map(seguros.map((s) => [s.id, s]));
   const fcs = await Promise.all(processos.slice(0, 5).map(async (p) => {
     const idProc = String(p.id ?? "");
-    const linha = idProc && fcLigada
+    const linha = idProc && (fcLigada || manualLigada)
       ? await lerAnaliseFcMaisRecenteDoProcesso(admin, auth.org.orgId, idProc)
       : null;
     const resultado = sanitizarResultadoFc(linha?.resultado);
-    const participantes = idProc && fcLigada
+    const participantes = idProc && (fcLigada || manualLigada)
       ? await listarParticipantes(admin, auth.org.orgId, idProc)
       : [];
     const fiadores = participantes

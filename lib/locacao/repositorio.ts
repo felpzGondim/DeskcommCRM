@@ -15,6 +15,7 @@ import type {
   OrigemDaAnalise,
   OrigemDaConversaDoProcesso,
   OrigemDaFichaDoProcesso,
+  OrigemDoDocumento,
   OrigemDoVinculoSuperlogica,
   PapelDoProcesso,
   RelacaoDeContatoDoProcesso,
@@ -499,6 +500,7 @@ export async function marcarEstadoAnaliseFc(
   input: {
     orgId: string; pedidoId: string;
     estado: EstadoDaAnaliseFc;
+    origem?: OrigemDaAnalise;
     hubJobId?: string | null;
     hubEstado?: string | null;
     resultado?: Record<string, unknown> | null;
@@ -508,6 +510,7 @@ export async function marcarEstadoAnaliseFc(
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = { estado: input.estado };
+  if (input.origem !== undefined) patch.origem = input.origem;
   if (input.hubJobId !== undefined) patch.hub_job_id = input.hubJobId;
   if (input.hubEstado !== undefined) patch.hub_estado = input.hubEstado;
   if (input.resultado !== undefined) patch.resultado = input.resultado;
@@ -541,6 +544,7 @@ export async function guardarLaudoFc(
     bytes: Buffer;
     mime: string;
     ext: "pdf" | "png" | "jpg" | "webp";
+    origem?: OrigemDoDocumento;
   },
 ): Promise<string> {
   const docId = randomUUID();
@@ -558,7 +562,7 @@ export async function guardarLaudoFc(
     processo_id: input.processoId,
     participante_id: input.participanteId ?? null,
     categoria: "laudo_fc",
-    origem: "hub_fc",
+    origem: input.origem ?? "hub_fc",
     storage_path: path,
     mime: input.mime,
     tamanho_bytes: input.bytes.length,
@@ -668,6 +672,7 @@ export async function guardarPrintMigra(
     bytes: Buffer;
     mime: string;
     ext: "png" | "jpg" | "webp" | "pdf";
+    origem?: OrigemDoDocumento;
   },
 ): Promise<string> {
   const docId = randomUUID();
@@ -685,7 +690,7 @@ export async function guardarPrintMigra(
     processo_id: input.processoId,
     participante_id: input.participanteId ?? null,
     categoria: "cotacao_seguro",
-    origem: "hub_migra",
+    origem: input.origem ?? "hub_migra",
     storage_path: path,
     mime: input.mime,
     tamanho_bytes: input.bytes.length,
@@ -702,6 +707,7 @@ export async function marcarEstadoAnaliseSeguro(
   input: {
     orgId: string; pedidoId: string;
     estado: EstadoDaAnaliseSeguro;
+    origem?: OrigemDaAnalise;
     hubJobId?: string | null;
     hubEstado?: string | null;
     resultado?: Record<string, unknown> | null;
@@ -710,6 +716,7 @@ export async function marcarEstadoAnaliseSeguro(
   },
 ): Promise<void> {
   const patch: Record<string, unknown> = { estado: input.estado };
+  if (input.origem !== undefined) patch.origem = input.origem;
   if (input.hubJobId !== undefined) patch.hub_job_id = input.hubJobId;
   if (input.hubEstado !== undefined) patch.hub_estado = input.hubEstado;
   if (input.resultado !== undefined) patch.resultado = input.resultado;

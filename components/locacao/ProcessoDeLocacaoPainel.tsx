@@ -5,10 +5,37 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { copyToClipboard } from "@/lib/clipboard";
 import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 
 type CardSeguro = { seguradora?: string; codigo?: string; codigo_cotacao?: string; status?: string; plano?: string };
 type FiadorFc = { id: string; papel?: string; cpf_mascarado?: string | null };
+type CampoCopia = { chave: string; rotulo: string; valor: string; sensivel?: boolean };
+type ManualResumo = {
+  campos: CampoCopia[];
+  solidarios: Array<{ nome: string; cpf_mascarado: string }>;
+  vigencia: { inicio: string; fim: string };
+  links: { fc: string; migra: string };
+  passos_fc: string[];
+  passos_migra: string[];
+  etapa_fc?: boolean;
+  etapa_seguro?: boolean;
+  fc_pedido_id?: string | null;
+  seguro_pedido_id?: string | null;
+};
+
+function estadoAbreManual(estado: string | null | undefined): boolean {
+  return estado === "erro" || estado === "login_necessario";
+}
+
+async function arquivoParaAnexo(file: File): Promise<{ bytes_b64: string; mime: string } | null> {
+  if (file.size === 0 || file.size > 2 * 1024 * 1024) return null;
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return { bytes_b64: btoa(bin), mime: file.type || "application/pdf" };
+}
 
 type ProcessoResumo = {
   id: string;
@@ -69,6 +96,7 @@ export function ProcessoDeLocacaoPainel({
   const [analiseRenda, setAnaliseRenda] = useState(false);
   const [analiseSeguro, setAnaliseSeguro] = useState(false);
   const [analiseFc, setAnaliseFc] = useState(false);
+  const [analiseManual, setAnaliseManual] = useState(false);
   const [processos, setProcessos] = useState<ProcessoResumo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -82,6 +110,19 @@ export function ProcessoDeLocacaoPainel({
   const [resumo, setResumo] = useState<string | null>(null);
   const [resumoSeguro, setResumoSeguro] = useState<string | null>(null);
   const [resumoFc, setResumoFc] = useState<string | null>(null);
+  const [manual, setManual] = useState<ManualResumo | null>(null);
+  const [resumoManual, setResumoManual] = useState<string | null>(null);
+  const [cpfRevelado, setCpfRevelado] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const [revelandoCpf, setRevelandoCpf] = useState(false);
+  const [registrandoFc, setRegistrandoFc] = useState(false);
+  const [registrandoSeguro, setRegistrandoSeguro] = useState(false);
+  const [scoreManual, setScoreManual] = useState("");
+  const [riscoManual, setRiscoManual] = useState("");
+  const [idFcManual, setIdFcManual] = useState("");
+  const [cardsManual, setCardsManual] = useState<CardSeguro[]>([{}]);
+  const [laudoManual, setLaudoManual] = useState<File | null>(null);
+  const [printManual, setPrintManual] = useState<File | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -90,7 +131,7 @@ export function ProcessoDeLocacaoPainel({
         const r = await apiClient.get<{
           data: {
             habilitado?: boolean;
-            analise?: { renda?: boolean; seguro?: boolean; fc?: boolean };
+            analise?: { renda?: boolean; seguro?: boolean; fc?: boolean; manual?: boolean };
             processos?: ProcessoResumo[];
           };
         }>(`/api/v1/conversations/${conversationId}/locacao`);
@@ -99,6 +140,7 @@ export function ProcessoDeLocacaoPainel({
         setAnaliseRenda(r.data?.analise?.renda === true);
         setAnaliseSeguro(r.data?.analise?.seguro === true);
         setAnaliseFc(r.data?.analise?.fc === true);
+        setAnaliseManual(r.data?.analise?.manual === true);
         setProcessos(r.data?.processos ?? []);
       } catch {
         if (vivo) setHabilitado(false);
@@ -202,6 +244,43 @@ export function ProcessoDeLocacaoPainel({
     }, 15_000);
     return () => window.clearInterval(tick);
   }, [conversationId, fcEmCurso, processoAtivo?.id, processoAtivo?.fc_pedido_id, processoAtivo?.fc_estado]);
+
+  const manualAberto = analiseManual && !!processoAtivo
+    && (estadoAbreManual(processoAtivo.fc_estado) || estadoAbreManual(processoAtivo.seguro_estado));
+
+  useEffect(() => {
+    if (!manualAberto || !processoAtivo) {
+      setManual(null);
+      setCpfRevelado(null);
+      return;
+    }
+    let vivo = true;
+    void (async () => {
+      try {
+        const r = await apiClient.post<{ data: ManualResumo & { resumo?: string } }>(
+          `/api/v1/conversations/${conversationId}/painel-agente/manual`,
+          { etapa: "preparar", processo_id: processoAtivo.id },
+        );
+        if (!vivo) return;
+        setManual({
+          campos: r.data?.campos ?? [],
+          solidarios: r.data?.solidarios ?? [],
+          vigencia: r.data?.vigencia ?? { inicio: "", fim: "" },
+          links: r.data?.links ?? { fc: "", migra: "" },
+          passos_fc: r.data?.passos_fc ?? [],
+          passos_migra: r.data?.passos_migra ?? [],
+          etapa_fc: r.data?.etapa_fc === true,
+          etapa_seguro: r.data?.etapa_seguro === true,
+          fc_pedido_id: r.data?.fc_pedido_id ?? null,
+          seguro_pedido_id: r.data?.seguro_pedido_id ?? null,
+        });
+        setResumoManual(r.data?.resumo ?? null);
+      } catch {
+        if (vivo) setManual(null);
+      }
+    })();
+    return () => { vivo = false; };
+  }, [conversationId, manualAberto, processoAtivo?.id, processoAtivo?.fc_estado, processoAtivo?.seguro_estado]);
 
   if (!habilitado) return null;
 
@@ -457,6 +536,134 @@ export function ProcessoDeLocacaoPainel({
     }
   }
 
+  async function copiarCampo(chave: string, valor: string) {
+    const ok = await copyToClipboard(valor);
+    if (ok) {
+      setCopiado(chave);
+      window.setTimeout(() => setCopiado((atual) => (atual === chave ? null : atual)), 1500);
+      return;
+    }
+    setErro(t("Não foi possível copiar."));
+  }
+
+  async function revelarCpf() {
+    if (revelandoCpf || desabilitado || !processo || !manual) return;
+    if (cpfRevelado) {
+      setCpfRevelado(null);
+      return;
+    }
+    setErro(null);
+    setRevelandoCpf(true);
+    try {
+      const r = await apiClient.post<{ data: { cpf?: string; cpf_formatado?: string; resumo?: string } }>(
+        `/api/v1/conversations/${conversationId}/painel-agente/manual`,
+        { etapa: "revelar_cpf", processo_id: processo.id },
+      );
+      setCpfRevelado(r.data?.cpf_formatado ?? r.data?.cpf ?? null);
+      setResumoManual(r.data?.resumo ?? null);
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não há CPF na ficha deste processo para revelar."));
+    } finally {
+      setRevelandoCpf(false);
+    }
+  }
+
+  async function registrarFcManual() {
+    if (registrandoFc || desabilitado || !processo || !manual) return;
+    setErro(null);
+    setRegistrandoFc(true);
+    try {
+      const anexo = laudoManual ? await arquivoParaAnexo(laudoManual) : undefined;
+      if (laudoManual && !anexo) {
+        setErro(t("O arquivo anexado não pôde ser lido (PDF, PNG, JPG ou WEBP até 2 MB)."));
+        return;
+      }
+      const r = await apiClient.post<{
+        data: {
+          resumo?: string;
+          estado?: string;
+          score?: number | string | null;
+          risco?: string | null;
+          id_fc?: string | null;
+          documento_id?: string | null;
+          pedido_id?: string;
+        };
+      }>(`/api/v1/conversations/${conversationId}/painel-agente/manual`, {
+        etapa: "registrar_fc",
+        processo_id: processo.id,
+        pedido_id: manual.fc_pedido_id ?? processo.fc_pedido_id ?? undefined,
+        score: scoreManual.trim() || undefined,
+        risco: riscoManual.trim() || undefined,
+        id_fc: idFcManual.trim() || undefined,
+        anexo,
+      });
+      setResumoManual(r.data?.resumo ?? null);
+      setProcessos((atual) =>
+        atual.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                fc_estado: r.data?.estado ?? "concluida",
+                fc_score: r.data?.score ?? p.fc_score,
+                fc_risco: r.data?.risco ?? p.fc_risco,
+                fc_id: r.data?.id_fc ?? p.fc_id,
+                fc_documento_id: r.data?.documento_id ?? p.fc_documento_id,
+              }
+            : p,
+        ),
+      );
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível analisar a FC."));
+    } finally {
+      setRegistrandoFc(false);
+    }
+  }
+
+  async function registrarSeguroManual() {
+    if (registrandoSeguro || desabilitado || !processo || !manual) return;
+    setErro(null);
+    setRegistrandoSeguro(true);
+    try {
+      const anexo = printManual ? await arquivoParaAnexo(printManual) : undefined;
+      if (printManual && !anexo) {
+        setErro(t("O arquivo anexado não pôde ser lido (PDF, PNG, JPG ou WEBP até 2 MB)."));
+        return;
+      }
+      const r = await apiClient.post<{
+        data: {
+          resumo?: string;
+          estado?: string;
+          cards?: CardSeguro[];
+          documento_id?: string | null;
+          pedido_id?: string;
+        };
+      }>(`/api/v1/conversations/${conversationId}/painel-agente/manual`, {
+        etapa: "registrar_seguro",
+        processo_id: processo.id,
+        pedido_id: manual.seguro_pedido_id ?? processo.seguro_pedido_id ?? undefined,
+        cards: cardsManual.filter((c) => c.seguradora || c.codigo || c.codigo_cotacao),
+        anexo,
+      });
+      setResumoManual(r.data?.resumo ?? null);
+      setProcessos((atual) =>
+        atual.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                seguro_estado: r.data?.estado ?? "concluida",
+                seguro_cards: r.data?.cards ?? p.seguro_cards,
+                seguro_documento_id: r.data?.documento_id ?? p.seguro_documento_id,
+              }
+            : p,
+        ),
+      );
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível cotar o seguro-fiança."));
+    } finally {
+      setRegistrandoSeguro(false);
+    }
+  }
+
   return (
     <div className="space-y-2 rounded-md border border-border p-2">
       <p className="text-xs font-medium">{t("Processo de locação")}</p>
@@ -645,6 +852,173 @@ export function ProcessoDeLocacaoPainel({
               ))}
             </>
           )}
+        </div>
+      ) : null}
+      {manualAberto && manual ? (
+        <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-manual">
+          <p className="text-xs font-medium">{t("Manual assistido")}</p>
+          <p className="text-[11px] text-text-muted">
+            {t("O robô não conseguiu terminar esta etapa. Faça no site e registre o resultado aqui.")}
+          </p>
+          {resumoManual ? <p className="text-xs whitespace-pre-wrap">{resumoManual}</p> : null}
+          <p className="text-[11px] font-medium">{t("Dados para copiar")}</p>
+          {manual.campos.map((campo) => {
+            const valor = campo.sensivel && cpfRevelado ? cpfRevelado : campo.valor;
+            return (
+              <div key={campo.chave} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-text-muted">{t(campo.rotulo)}:</span>
+                <span className="text-xs">{valor}</span>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                  type="button"
+                  disabled={desabilitado}
+                  onClick={() => void copiarCampo(campo.chave, valor)}>
+                  {copiado === campo.chave ? t("Copiado") : t("Copiar")}
+                </Button>
+                {campo.sensivel ? (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    type="button"
+                    disabled={desabilitado || revelandoCpf}
+                    onClick={() => void revelarCpf()}>
+                    {revelandoCpf
+                      ? t("revelando CPF…")
+                      : cpfRevelado ? t("Esconder CPF") : t("Revelar CPF")}
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+          {manual.solidarios.length > 0 ? (
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-medium">{t("Solidários")}</p>
+              {manual.solidarios.map((s, i) => (
+                <p key={`${s.nome}-${i}`} className="text-[11px] text-text-muted">
+                  {s.nome}{s.cpf_mascarado ? ` · ${s.cpf_mascarado}` : ""}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {manual.vigencia.inicio ? (
+            <p className="text-[11px] text-text-muted">
+              {t("Vigência")}: {manual.vigencia.inicio} → {manual.vigencia.fim}
+            </p>
+          ) : null}
+          {manual.etapa_fc ? (
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium">{t("Passo a passo da FC")}</p>
+              {manual.links.fc ? (
+                <a className="text-xs underline" href={manual.links.fc} target="_blank" rel="noreferrer">
+                  {t("Abrir site da FC")}
+                </a>
+              ) : null}
+              <ol className="list-decimal space-y-0.5 pl-4">
+                <li className="text-[11px] text-text-muted">
+                  {t("Abra o site da FC Score+ (cliente.fcanalise.com.br) e entre com a conta da imobiliária.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Preencha o formulário com os dados ao lado. Não envie arquivo — a FC só pede dados.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Clique em SALVAR (é grátis e gera o ID-FC). Não clique em Processar ANÁLISE daqui do painel: o passo pago é só no site, se você decidir.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Se processar no site, espere o laudo. Anote score, risco e o ID-FC e anexe o PDF aqui.")}
+                </li>
+              </ol>
+              <p className="text-[11px] font-medium">{t("Registrar resultado da FC")}</p>
+              <label className="block space-y-0.5">
+                <span className="text-[11px]">{t("Score")}</span>
+                <input className="h-7 w-full rounded-md border border-border bg-background px-2 text-xs"
+                  value={scoreManual} onChange={(e) => setScoreManual(e.target.value)}
+                  aria-label={t("Score")} />
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[11px]">{t("Risco")}</span>
+                <input className="h-7 w-full rounded-md border border-border bg-background px-2 text-xs"
+                  value={riscoManual} onChange={(e) => setRiscoManual(e.target.value)}
+                  aria-label={t("Risco")} />
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[11px]">{t("ID-FC")}</span>
+                <input className="h-7 w-full rounded-md border border-border bg-background px-2 text-xs"
+                  value={idFcManual} onChange={(e) => setIdFcManual(e.target.value)}
+                  aria-label={t("ID-FC")} />
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[11px]">{t("Anexar laudo")}</span>
+                <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
+                  className="text-xs" aria-label={t("Anexar laudo")}
+                  onChange={(e) => setLaudoManual(e.target.files?.[0] ?? null)} />
+              </label>
+              <Button size="sm" className="h-7 px-2 text-xs"
+                disabled={desabilitado || registrandoFc}
+                onClick={() => void registrarFcManual()}>
+                {registrandoFc ? t("registrando a FC manual…") : t("Registrar FC")}
+              </Button>
+            </div>
+          ) : null}
+          {manual.etapa_seguro ? (
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium">{t("Passo a passo da Migra")}</p>
+              {manual.links.migra ? (
+                <a className="text-xs underline" href={manual.links.migra} target="_blank" rel="noreferrer">
+                  {t("Abrir site da Migra")}
+                </a>
+              ) : null}
+              <p className="text-[11px] font-medium text-destructive">
+                {t("Clique em Analisar. Nunca clique em Contratar.")}
+              </p>
+              <ol className="list-decimal space-y-0.5 pl-4">
+                <li className="text-[11px] text-text-muted">
+                  {t("Abra o site da Migra (migra.app.br) e entre com a conta da imobiliária.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Abra o Multi Cálculo PF Residencial e preencha com os dados ao lado. Colocatários entram como solidários.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Clique em Analisar. Nunca clique em Contratar.")}
+                </li>
+                <li className="text-[11px] text-text-muted">
+                  {t("Espere o modal, tire um print dos cards e registre seguradora, código, status e plano aqui.")}
+                </li>
+              </ol>
+              <p className="text-[11px] font-medium">{t("Registrar cards da Migra")}</p>
+              {cardsManual.map((card, i) => (
+                <div key={i} className="grid grid-cols-2 gap-1">
+                  <input className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+                    placeholder={t("Seguradora")} aria-label={t("Seguradora")}
+                    value={card.seguradora ?? ""}
+                    onChange={(e) => setCardsManual((atual) => atual.map((c, j) => j === i ? { ...c, seguradora: e.target.value } : c))} />
+                  <input className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+                    placeholder={t("Código")} aria-label={t("Código")}
+                    value={card.codigo ?? ""}
+                    onChange={(e) => setCardsManual((atual) => atual.map((c, j) => j === i ? { ...c, codigo: e.target.value } : c))} />
+                  <input className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+                    placeholder={t("Status")} aria-label={t("Status")}
+                    value={card.status ?? ""}
+                    onChange={(e) => setCardsManual((atual) => atual.map((c, j) => j === i ? { ...c, status: e.target.value } : c))} />
+                  <input className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+                    placeholder={t("Plano")} aria-label={t("Plano")}
+                    value={card.plano ?? ""}
+                    onChange={(e) => setCardsManual((atual) => atual.map((c, j) => j === i ? { ...c, plano: e.target.value } : c))} />
+                </div>
+              ))}
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" type="button"
+                onClick={() => setCardsManual((atual) => [...atual, {}])}>
+                {t("Adicionar card")}
+              </Button>
+              <label className="block space-y-0.5">
+                <span className="text-[11px]">{t("Anexar print")}</span>
+                <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
+                  className="text-xs" aria-label={t("Anexar print")}
+                  onChange={(e) => setPrintManual(e.target.files?.[0] ?? null)} />
+              </label>
+              <Button size="sm" className="h-7 px-2 text-xs"
+                disabled={desabilitado || registrandoSeguro}
+                onClick={() => void registrarSeguroManual()}>
+                {registrandoSeguro ? t("registrando a cotação manual…") : t("Registrar cotação")}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {erro ? <p className="text-xs text-destructive" role="alert">{erro}</p> : null}

@@ -8,6 +8,12 @@ import { z } from "zod";
 import { analisarRendaDoPainel, confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
 import { consultarLeituraHub, executarConsultaHub, NOMES_HUB_IMOVEL, NOMES_HUB_PESSOAS, confirmarAnaliseHub, prepararAnaliseHub } from "@/lib/painel/acoes/hub";
 import { analisarFcDoPainel, confirmarCobrancaFcDoPainel, statusFcDoPainel } from "@/lib/painel/acoes/fc";
+import {
+  prepararManualDoPainel,
+  registrarManualFcDoPainel,
+  registrarManualSeguroDoPainel,
+  revelarCpfManualDoPainel,
+} from "@/lib/painel/acoes/manual";
 import { analisarSeguroDoPainel, statusSeguroDoPainel } from "@/lib/painel/acoes/seguro";
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
@@ -316,6 +322,96 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     exigeChaveAnalise: "fc",
     executar: (ctx, args) =>
       confirmarCobrancaFcDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
+  },
+  {
+    nome: "preparar_manual",
+    descricao: "Mostra o passo a passo do manual assistido (FC ou Migra) quando o robô caiu em erro ou pediu login. CPF mascarado. Não cobra e não chama o Hub.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "preparando o manual…",
+    acaoDoBotao: "preparar_manual",
+    padraoLigada: true,
+    exigeChaveAnalise: "manual",
+    executar: (ctx, args) =>
+      prepararManualDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
+  },
+  {
+    nome: "revelar_cpf_manual",
+    descricao: "Revela o CPF da ficha só nesta tela, com auditoria. Nível S: só o atendente clica. Não grava o número no histórico.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "revelando CPF…",
+    acaoDoBotao: "revelar_cpf_manual",
+    padraoLigada: true,
+    exigeChaveAnalise: "manual",
+    executar: (ctx, args) =>
+      revelarCpfManualDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
+  },
+  {
+    nome: "registrar_manual_fc",
+    descricao: "Registra score, risco e laudo da FC feitos no site pelo atendente, no mesmo pedido que o robô deixou em erro. Nível S. Não cobra.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+      score: z.union([z.number().finite(), z.string().max(40)]).nullable().optional(),
+      risco: z.string().max(40).nullable().optional(),
+      id_fc: z.string().max(80).nullable().optional(),
+      anexo: z.object({
+        bytes_b64: z.string().min(1).max(2_800_000),
+        mime: z.string().max(80).optional(),
+      }).strict().optional(),
+    }).strict(),
+    rotuloAndamento: "registrando a FC manual…",
+    acaoDoBotao: "registrar_manual_fc",
+    padraoLigada: true,
+    exigeChaveAnalise: "manual",
+    executar: (ctx, args) =>
+      registrarManualFcDoPainel(ctx, (args ?? {}) as {
+        processo_id?: string;
+        pedido_id?: string;
+        score?: number | string | null;
+        risco?: string | null;
+        id_fc?: string | null;
+        anexo?: { bytes_b64?: string; mime?: string };
+      }),
+  },
+  {
+    nome: "registrar_manual_seguro",
+    descricao: "Registra os cards da Migra feitos no site pelo atendente, no mesmo pedido que o robô deixou em erro. Nível S. Nunca Contratar.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+      cards: z.array(z.object({
+        seguradora: z.string().max(80).optional(),
+        codigo: z.string().max(80).optional(),
+        codigo_cotacao: z.string().max(80).optional(),
+        status: z.string().max(80).optional(),
+        plano: z.string().max(120).optional(),
+      }).strict()).max(20).optional(),
+      anexo: z.object({
+        bytes_b64: z.string().min(1).max(2_800_000),
+        mime: z.string().max(80).optional(),
+      }).strict().optional(),
+    }).strict(),
+    rotuloAndamento: "registrando a cotação manual…",
+    acaoDoBotao: "registrar_manual_seguro",
+    padraoLigada: true,
+    exigeChaveAnalise: "manual",
+    executar: (ctx, args) =>
+      registrarManualSeguroDoPainel(ctx, (args ?? {}) as {
+        processo_id?: string;
+        pedido_id?: string;
+        cards?: unknown;
+        anexo?: { bytes_b64?: string; mime?: string };
+      }),
   },
 ];
 

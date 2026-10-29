@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Manual assistido no Painel (PR 4.4)",
+    "subtitle": "Chave off; reserva de erro/login_necessario; CPF mascarado; mesmo registro do robô",
+    "output": "painel-analise-manual.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "inbox", "label": "Inbox" },
+    { "id": "servidor", "label": "Servidor" },
+    { "id": "registro", "label": "Registro" }
+  ],
+  "mainPath": ["falha", "chave", "passo", "revelar", "formulario", "gravar"],
+  "nodes": [
+    {
+      "id": "falha",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "FC ou Migra em erro / login_necessario no processo"
+    },
+    {
+      "id": "config",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Configurações › Locação: locacao.analise.manual off"
+    },
+    {
+      "id": "chave",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "analiseLigada: processos + analise.manual"
+    },
+    {
+      "id": "bloco",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Manual assistido: passo a passo, copiar, revelar CPF, formulário"
+    },
+    {
+      "id": "rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "painel-agente/manual: agent+, org, rate limit, requireSupportWrite"
+    },
+    {
+      "id": "executar",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "executarFerramenta: preparar L; revelar/registrar S recusa origem agente"
+    },
+    {
+      "id": "passo",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "preparar_manual: dados da ficha mascarados; sem Hub"
+    },
+    {
+      "id": "revelar",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "revelar_cpf_manual: CPF da ficha só no extra; texto sem número"
+    },
+    {
+      "id": "formulario",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Score/risco/ID-FC ou cards + anexo opcional"
+    },
+    {
+      "id": "trava",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "exigirRendaConfirmada; só atualiza pedido em erro/login_necessario"
+    },
+    {
+      "id": "gravar",
+      "lane": "registro",
+      "col": 3,
+      "type": "database",
+      "label": "locacao_analises_* origem=manual; documento manual_assistido"
+    },
+    {
+      "id": "audit",
+      "lane": "registro",
+      "col": 3,
+      "type": "database",
+      "label": "api_audit_log: cpf_revelado / analise_manual_fc / analise_manual_seguro, sem PII"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "config", "to": "chave", "label": "admin liga; ausente = off" },
+    { "id": "e2", "from": "chave", "to": "bloco", "label": "off: o bloco não aparece" },
+    { "id": "e3", "from": "falha", "to": "bloco", "label": "só erro ou login_necessario" },
+    { "id": "e4", "from": "bloco", "to": "rota", "label": "preparar / revelar / registrar" },
+    { "id": "e5", "from": "rota", "to": "executar", "label": "origem botao" },
+    { "id": "e6", "from": "executar", "to": "passo", "label": "L: cópia mascarada" },
+    { "id": "e7", "from": "passo", "to": "bloco", "label": "campos, passos, links" },
+    { "id": "e8", "from": "executar", "to": "revelar", "label": "S: clique Revelar CPF" },
+    { "id": "e9", "from": "revelar", "to": "audit", "label": "sem o número no metadata" },
+    { "id": "e10", "from": "formulario", "to": "rota", "label": "clique Registrar" },
+    { "id": "e11", "from": "executar", "to": "trava", "label": "sem renda ou sem falha, recusa" },
+    { "id": "e12", "from": "trava", "to": "gravar", "label": "mesmo pedido_id do robô" },
+    { "id": "e13", "from": "gravar", "to": "audit", "label": "mutação com efeito" },
+    { "id": "e14", "from": "gravar", "to": "bloco", "label": "estado concluida; 4.5 lê daqui" }
+  ]
+}
