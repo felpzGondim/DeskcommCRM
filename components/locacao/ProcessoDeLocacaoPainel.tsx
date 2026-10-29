@@ -88,12 +88,22 @@ function rotuloEstadoFc(estado: string): string {
   return "FC em andamento";
 }
 
+export type SecaoDoProcessoPainel =
+  | "cabecalho"
+  | "renda"
+  | "seguro"
+  | "fc"
+  | "relatorio"
+  | "manual";
+
 export function ProcessoDeLocacaoPainel({
   conversationId,
   desabilitado = false,
+  secoes,
 }: {
   conversationId: string;
   desabilitado?: boolean;
+  secoes?: readonly SecaoDoProcessoPainel[];
 }) {
   const t = useT();
   const [habilitado, setHabilitado] = useState(false);
@@ -131,6 +141,13 @@ export function ProcessoDeLocacaoPainel({
   const [cardsManual, setCardsManual] = useState<CardSeguro[]>([{}]);
   const [laudoManual, setLaudoManual] = useState<File | null>(null);
   const [printManual, setPrintManual] = useState<File | null>(null);
+  const mostra = (s: SecaoDoProcessoPainel) => !secoes || secoes.includes(s);
+  const verCabecalho = mostra("cabecalho");
+  const verRenda = mostra("renda");
+  const verSeguro = mostra("seguro");
+  const verFc = mostra("fc");
+  const verRelatorio = mostra("relatorio");
+  const verManual = mostra("manual");
 
   useEffect(() => {
     let vivo = true;
@@ -735,6 +752,7 @@ export function ProcessoDeLocacaoPainel({
 
   return (
     <div className="space-y-2 rounded-md border border-border p-2">
+      {verCabecalho ? <>
       <p className="text-xs font-medium">{t("Processo de locação")}</p>
       {processos.length === 0 ? (
         <p className="text-xs text-text-muted">{t("Nenhum processo ligado a esta conversa.")}</p>
@@ -753,7 +771,8 @@ export function ProcessoDeLocacaoPainel({
         disabled={desabilitado || criando} onClick={() => void abrir()}>
         {criando ? t("Abrindo…") : t("Abrir processo")}
       </Button>
-      {analiseRenda ? (
+      </> : null}
+      {verRenda && analiseRenda ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-renda">
           <p className="text-xs font-medium">{t("Análise de renda")}</p>
           {!processo ? (
@@ -810,7 +829,7 @@ export function ProcessoDeLocacaoPainel({
           )}
         </div>
       ) : null}
-      {analiseSeguro ? (
+      {verSeguro && analiseSeguro ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-seguro">
           <p className="text-xs font-medium">{t("Seguro-fiança")}</p>
           {!processo ? (
@@ -855,7 +874,7 @@ export function ProcessoDeLocacaoPainel({
           )}
         </div>
       ) : null}
-      {analiseFc ? (
+      {verFc && analiseFc ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-fc">
           <p className="text-xs font-medium">{t("FC Score+")}</p>
           {!processo ? (
@@ -923,7 +942,7 @@ export function ProcessoDeLocacaoPainel({
           )}
         </div>
       ) : null}
-      {analiseRelatorio ? (
+      {verRelatorio && analiseRelatorio ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-relatorio">
           <p className="text-xs font-medium">{t("Relatório financeiro")}</p>
           {!processo ? (
@@ -964,7 +983,7 @@ export function ProcessoDeLocacaoPainel({
           )}
         </div>
       ) : null}
-      {manualAberto && manual ? (
+      {verManual && manualAberto && manual ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-manual">
           <p className="text-xs font-medium">{t("Manual assistido")}</p>
           <p className="text-[11px] text-text-muted">

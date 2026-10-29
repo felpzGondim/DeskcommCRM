@@ -61,15 +61,49 @@ describe("Painel do agente (UI)", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Gerar contrato" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Abrir análise" })).toBeDisabled();
   });
 
-  it("oferece Gerar contrato no painel e abre a preparação sem gravar", () => {
+  it("oferece Abrir análise no painel e a aba Gerar contrato sem gravar", async () => {
+    getMock.mockImplementation((url: unknown) => {
+      const u = String(url);
+      if (u.includes("valores-imovel")) {
+        return Promise.resolve({
+          data: {
+            valores: {
+              aluguel: { valor: 2000, origem: "superlogica", editado_em: null },
+              condominio: { valor: 400, origem: "conversa", editado_em: null },
+            },
+          },
+        });
+      }
+      if (u.includes("/conversations/") && u.includes("/locacao")) {
+        return Promise.resolve({
+          data: {
+            processos: [{ id: "proc-1", status: "lead", imovel: "Rua 1" }],
+            contato: { id: "c1", superlogica_id_pessoa: null, superlogica_tipo: null },
+          },
+        });
+      }
+      if (u.includes("/vinculos")) return Promise.resolve({ data: { vinculo: null } });
+      return Promise.resolve({ data: { atual: null, historico: [] } });
+    });
     render(<PainelDoAgente conversationId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Gerar contrato" }));
-    expect(screen.getByRole("dialog", { name: "Gerar contrato no SuperLógica" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Preparar locação" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
+    expect(screen.getByRole("dialog", { name: "Análise de inquilino" })).toBeVisible();
+    expect(await screen.findByDisplayValue("2000")).toBeVisible();
+    expect(screen.getByTestId("campos-imovel-processo")).toBeVisible();
+    expect(screen.getByText(/Origem:\s*Superlógica/)).toBeTruthy();
+    expect(screen.getByText(/Origem:\s*conversa\/ficha/)).toBeTruthy();
+    expect(screen.getByLabelText("Aluguel (R$/mês)")).toBeEnabled();
+    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
+    const preparar = await screen.findByRole("button", { name: "Preparar locação" });
+    expect(preparar).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Dados" }));
+    expect(preparar).toBeInTheDocument();
+    expect(preparar).not.toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
+    expect(preparar).toBeVisible();
     expect(postMock).not.toHaveBeenCalled();
   });
 
@@ -405,6 +439,7 @@ describe("Painel do agente (UI)", () => {
     });
     const usar = vi.fn();
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeEnabled(),
     );

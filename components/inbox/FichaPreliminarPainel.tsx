@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
-import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
 import {
   PAPEIS_DA_FICHA,
   pessoaVazia,
@@ -261,10 +260,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.codigo_fc)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, codigo_fc: campo(e.target.value) } } : a)} />
             </label>
-            <CamposImovelProcessoNaFicha
-              conversationId={conversationId}
-              desabilitado={somenteLeitura || desabilitado}
-            />
           </div>
           <div className="space-y-1">
             <label className="block text-[11px]">{t("Renda mensal (R$)")}

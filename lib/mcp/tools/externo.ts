@@ -38,6 +38,11 @@
 import { z } from "zod";
 
 import {
+  ehFerramentaDeContratoHub,
+  interpretarContratoHub,
+  motivoDoVazioDoContratoHub,
+} from "@/lib/locacao/contrato-hub";
+import {
   chamarFerramentaRemota,
   type FerramentaRemota,
   type OpcoesDeChamada,
@@ -137,17 +142,21 @@ export function definirFerramentasRemotas(
 
     // LEITURA só com as duas metades do item 8 — ver o cabeçalho deste arquivo.
     const ehLeitura = escolha.leitura && ferramenta.somenteLeitura === true;
+    const ehContrato = ehFerramentaDeContratoHub(ferramenta.name);
 
     definicoes.push({
       name: ferramenta.name,
       // O sufixo diz de ONDE o dado vem: o modelo não pode tratar preço vindo
       // do ERP como se viesse do catálogo do CRM, e o leitor do turno tem o
       // direito de saber que aquilo é consulta a outro sistema.
-      description: `${ferramenta.description ?? ferramenta.name} (servidor MCP externo)`,
+      description: ehContrato
+        ? `${ferramenta.description ?? ferramenta.name} (servidor MCP externo). Se encontrado for falso ou o status não for ok, não afirme ao cliente que ele não tem contrato.`
+        : `${ferramenta.description ?? ferramenta.name} (servidor MCP externo)`,
       inputSchema: shapeDaFerramenta(ferramenta),
       category: ehLeitura ? "read" : "write",
       requiresRole: "agent",
       requiresScope: ehLeitura ? "mcp:read" : "mcp:write",
+      ...(ehContrato ? { motivoDoVazio: motivoDoVazioDoContratoHub } : {}),
       handler: async (input) => {
         const resultado = await chamarFerramentaRemota(
           servidor,
@@ -155,6 +164,24 @@ export function definirFerramentasRemotas(
           (input ?? {}) as Record<string, unknown>,
           opcoes,
         );
+        if (ehContrato) {
+          const bruto = resultado.dados !== undefined
+            ? resultado.dados
+            : (() => {
+                try { return JSON.parse(resultado.texto); } catch { return null; }
+              })();
+          const leitura = interpretarContratoHub(bruto);
+          if (leitura && !leitura.encontrado) {
+            return {
+              texto: `${leitura.textoParaAtendente} ${leitura.instrucaoIa ?? ""}`.trim(),
+              dados: {
+                resultado: leitura.resultado,
+                encontrado: false,
+                status: leitura.status,
+              },
+            };
+          }
+        }
         return resultado.dados === undefined
           ? { texto: resultado.texto }
           : { texto: resultado.texto, dados: resultado.dados };

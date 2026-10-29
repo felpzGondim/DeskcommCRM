@@ -242,8 +242,8 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
   "lib/mcp/servidor-externo/chamada.ts": {
     categoria: "PROTOCOLO",
     motivo:
-      "clientInfo do handshake `initialize` do MCP que este cliente manda ao servidor REMOTO: ele registra quem conectou e é comum haver regra de acesso por identificação do cliente lá do lado. Não é texto de interface — a tela nunca mostra — e renomear muda a identidade reportada no fio do protocolo. E os cabeçalhos `X-Deskcomm-Contato-*`/`X-Deskcomm-Canal` (#2147): o servidor externo FILTRA os dados do cliente da conversa por esses nomes exatos; renomear faz o servidor deixar de achar a identidade e, conforme a implementação dele, responder sem filtro",
-    marcas: ["deskcomm-crm", "x-deskcomm-canal", "x-deskcomm-contato-id", "x-deskcomm-contato-telefone"],
+      "clientInfo do handshake `initialize` do MCP que este cliente manda ao servidor REMOTO: ele registra quem conectou e é comum haver regra de acesso por identificação do cliente lá do lado. Não é texto de interface — a tela nunca mostra — e renomear muda a identidade reportada no fio do protocolo. E os cabeçalhos `X-Deskcomm-Contato-*`/`X-Deskcomm-Canal`/`X-Deskcomm-Superlogica-Pessoa-Id` (#2147): o servidor externo FILTRA os dados do cliente da conversa por esses nomes exatos; renomear faz o servidor deixar de achar a identidade e, conforme a implementação dele, responder sem filtro",
+    marcas: ["deskcomm-crm", "x-deskcomm-canal", "x-deskcomm-contato-id", "x-deskcomm-contato-telefone", "x-deskcomm-superlogica-pessoa-id"],
   },
   "lib/mcp/servidor-externo/externo.test.ts": {
     categoria: "PROTOCOLO",
@@ -257,6 +257,8 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
       "x-deskcomm-contato-telefone",
       "x-deskcomm-extra",
       "x-deskcomm-extra",
+      "x-deskcomm-superlogica-pessoa-id",
+      "x-deskcomm-superlogica-pessoa-id",
     ],
   },
   "lib/supabase/admin.ts": {

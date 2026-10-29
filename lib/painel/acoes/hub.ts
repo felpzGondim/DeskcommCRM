@@ -374,6 +374,7 @@ export async function executarConsultaHub(
       texto: mascararPessoaNoTexto(saida.resumo),
       sugestao: saida.sugestao,
       links: saida.links,
+      extra: saida.extra,
     };
   } catch {
     return falhou("Não foi possível consultar o Brisa Hub agora. Tente novamente.");

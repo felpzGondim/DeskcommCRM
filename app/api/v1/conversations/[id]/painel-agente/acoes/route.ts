@@ -67,10 +67,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return fail("reply_context_unavailable", t("O contato não tem telefone disponível para esta consulta."), 422, { requestId });
   }
 
-  const registrar = (sucesso: boolean, replay = false) => void audit({
+  const registrar = (sucesso: boolean, replay = false, extra: Record<string, unknown> = {}) => void audit({
     action: `ai.painel_atendente.${pedido.acao}`,
     actorUserId: auth.user.id, organizationId: orgId, resourceType: "conversation",
-    resourceId: id, requestId, metadata: { sucesso, replay },
+    resourceId: id, requestId, metadata: { sucesso, replay, ...extra },
   });
 
   const { data: orgLinha } = await db.from("organizations").select("settings")
@@ -108,7 +108,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return respostaDaFerramenta(r, t, requestId);
     }
     const r = await executarFerramenta(NOME_DA_ACAO[pedido.acao], contexto, {});
-    registrar(r.ok);
+    if (pedido.acao === "contrato") {
+      registrar(r.ok, false, {
+        status: typeof r.extra?.status === "string" ? r.extra.status : undefined,
+        encontrado: r.extra?.encontrado === true,
+      });
+    } else {
+      registrar(r.ok);
+    }
     return respostaDaFerramenta(r, t, requestId);
   } catch {
     registrar(false);
