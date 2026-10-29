@@ -13,7 +13,9 @@ import {
   lerFichaAtualDoProcesso,
   listarParticipantes,
   listarProcessosDaConversa,
+  vinculoDoContato,
 } from "@/lib/locacao/repositorio";
+import { vinculoDaLinha } from "@/lib/locacao/superlogica-id";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -27,7 +29,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const auth = await requireRole("agent", { requestId, resource: "locacao", allowPlatformAdmin: "leitura" });
   if (!auth.ok) return auth.response;
   const db = await createClient();
-  const { data: conv } = await db.from("conversations").select("id")
+  const { data: conv } = await db.from("conversations").select("id,contact_id")
     .eq("organization_id", auth.org.orgId).eq("id", id).maybeSingle();
   if (!conv) return fail("not_found", "not_found", 404, { requestId });
   const { data: org } = await db.from("organizations").select("settings")
@@ -45,8 +47,23 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     manual: manualLigada,
     relatorio: relatorioLigada,
   };
-  if (!habilitado) return ok({ habilitado: false, analise, processos: [] }, { requestId });
+  const contactId = typeof conv.contact_id === "string" ? conv.contact_id : null;
   const admin = createAdminClient();
+  const { data: contatoLinha } = contactId
+    ? await db.from("contacts").select("id")
+      .eq("organization_id", auth.org.orgId).eq("id", contactId).maybeSingle()
+    : { data: null };
+  const vinculo = vinculoDaLinha(
+    contactId ? await vinculoDoContato(admin, auth.org.orgId, contactId) : null,
+  );
+  const contato = {
+    id: typeof (contatoLinha as { id?: unknown } | null)?.id === "string"
+      ? (contatoLinha as { id: string }).id
+      : contactId,
+    superlogica_id_pessoa: vinculo.superlogica_id_pessoa,
+    superlogica_tipo: vinculo.superlogica_tipo,
+  };
+  if (!habilitado) return ok({ habilitado: false, analise, processos: [], contato }, { requestId });
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
   const imoveisIds = [...new Set(processos.map((p) => String(p.imovel_id ?? "")))].filter(Boolean);
   const rotulos = new Map<string, string>();
@@ -120,6 +137,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   return ok({
     habilitado: true,
     analise,
+    contato,
     processos: processos.map((p) => {
       const idProc = String(p.id ?? "");
       const extra = rendaPorId.get(idProc);

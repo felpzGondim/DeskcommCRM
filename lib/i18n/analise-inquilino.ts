@@ -1,0 +1,36 @@
+export const TEXTOS_ANALISE_INQUILINO = {
+  "Abrir análise": { es: "Abrir análisis" },
+  "Análise de inquilino": { es: "Análisis de inquilino" },
+  "A ficha, o vínculo Superlógica, a renda, a FC, a cotação e o contrato ficam nesta tela. Nada é enviado ao cliente.": {
+    es: "La ficha, el vínculo Superlógica, la renta, FC, la cotización y el contrato quedan en esta pantalla. Nada se envía al cliente.",
+  },
+  "Análise FC": { es: "Análisis FC" },
+  "Análise Migra": { es: "Análisis Migra" },
+  "Vínculo Superlógica": { es: "Vínculo Superlógica" },
+  "Pessoa Superlógica": { es: "Persona Superlógica" },
+  "Sem vínculo Superlógica neste contato.": { es: "Sin vínculo Superlógica en este contacto." },
+  "Buscar na Superlógica": { es: "Buscar en Superlógica" },
+  "Nome ou CPF": { es: "Nombre o CPF" },
+  "Buscando…": { es: "Buscando…" },
+  "Nenhum cadastro encontrado. Isso não prova que a pessoa não existe — confira no Superlógica.": {
+    es: "Ningún registro encontrado. Eso no prueba que la persona no exista — revíselo en Superlógica.",
+  },
+  "Ligar este cadastro": { es: "Vincular este registro" },
+  "Ligando…": { es: "Vinculando…" },
+  "Desfazer vínculo": { es: "Deshacer vínculo" },
+  "Desfazendo…": { es: "Deshaciendo…" },
+  "Cadastro errado": { es: "Registro equivocado" },
+  "Número mudou": { es: "El número cambió" },
+  "Pedido de privacidade": { es: "Pedido de privacidad" },
+  "Há mais resultados. Refine a busca.": { es: "Hay más resultados. Refine la búsqueda." },
+  "tipo não informado": { es: "tipo no informado" },
+  "Não foi possível buscar na Superlógica.": { es: "No fue posible buscar en Superlógica." },
+  "Não foi possível ligar.": { es: "No fue posible vincular." },
+  "Não foi possível desligar.": { es: "No fue posible desvincular." },
+  "Busque por nome ou CPF. O CPF só vai na consulta e não fica salvo nem no log.": {
+    es: "Busque por nombre o CPF. El CPF solo va en la consulta y no queda guardado ni en el registro.",
+  },
+  "Este contato já tem outro vínculo. Nada foi sobrescrito.": {
+    es: "Este contacto ya tiene otro vínculo. No se sobrescribió nada.",
+  },
+};

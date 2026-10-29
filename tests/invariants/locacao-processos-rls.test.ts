@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { countAs, sql } from "./gov-helpers";
 
 /**
- * Fases 3 / 3.5 / 3b / 4 (0763–0770): membro lê a linha da própria org e zero
+ * Fases 3 / 3.5 / 3b / 4 / valores do imóvel (0763–0771): membro lê a linha da própria org e zero
  * da outra; authenticated não escreve; sem SECURITY DEFINER exposta a
  * authenticated. Sem dado pessoal: nomes e ids desta suíte são de teste.
  */
@@ -127,6 +127,27 @@ describe("locacao processos: RLS e escrita", () => {
     expect(() =>
       sql(`insert into locacao_processo_eventos (organization_id, processo_id, tipo, ator_tipo)
             values ('${orgA}', '${procA}', 'contratar', 'sistema');`),
+    ).toThrow(/check|violat/i);
+  });
+
+  it("aceita valores do imóvel com origem; recusa negativo e par valor/origem quebrado", () => {
+    sql(`update locacao_processos
+           set aluguel = 2000, aluguel_origem = 'conversa',
+               condominio = 500, condominio_origem = 'superlogica',
+               iptu = 200, iptu_origem = 'manual',
+               seguro_incendio = 80, seguro_incendio_origem = 'conversa',
+               seguro_fianca = null, seguro_fianca_origem = null
+         where id = '${procA}'`);
+    sql(`insert into locacao_processo_eventos (organization_id, processo_id, tipo, ator_tipo, detalhe)
+          values ('${orgA}', '${procA}', 'valores_imovel', 'usuario', '{"campos":["aluguel"]}'::jsonb);`);
+    expect(
+      sql(`select aluguel_origem from locacao_processos where id = '${procA}'`),
+    ).toBe("conversa");
+    expect(() =>
+      sql(`update locacao_processos set aluguel = -1 where id = '${procA}'`),
+    ).toThrow(/check|violat/i);
+    expect(() =>
+      sql(`update locacao_processos set condominio_origem = null where id = '${procA}'`),
     ).toThrow(/check|violat/i);
   });
 

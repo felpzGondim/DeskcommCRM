@@ -7,6 +7,7 @@ import {
   ORIGENS_DA_ANALISE,
   ORIGENS_DA_FICHA_DO_PROCESSO,
   ORIGENS_DO_DOCUMENTO,
+  ORIGENS_DO_VALOR_DO_IMOVEL,
   TIPOS_DE_EVENTO_DO_PROCESSO,
 } from "@/lib/locacao/vocabulario";
 
@@ -14,7 +15,9 @@ describe("vocabulário da Fase 4", () => {
   it("eventos renda e relatorio existem; Contratar não existe", () => {
     expect(TIPOS_DE_EVENTO_DO_PROCESSO).toContain("renda");
     expect(TIPOS_DE_EVENTO_DO_PROCESSO).toContain("relatorio");
+    expect(TIPOS_DE_EVENTO_DO_PROCESSO).toContain("valores_imovel");
     expect(TIPOS_DE_EVENTO_DO_PROCESSO as readonly string[]).not.toContain("contratar");
+    expect(ORIGENS_DO_VALOR_DO_IMOVEL).toEqual(["superlogica", "conversa", "manual"]);
   });
 
   it("seguro e FC compartilham origem hub|manual e login_necessario", () => {

@@ -60,6 +60,9 @@ export type MotivoDeDesfazerVinculo = (typeof MOTIVOS_DE_DESFAZER_VINCULO)[numbe
 export const QUALIDADES_DO_VINCULO = ["exato", "sem_9", "ddd_presumido"] as const;
 export type QualidadeDoVinculo = (typeof QUALIDADES_DO_VINCULO)[number];
 
+export const ORIGENS_DO_VALOR_DO_IMOVEL = ["superlogica", "conversa", "manual"] as const;
+export type OrigemDoValorDoImovel = (typeof ORIGENS_DO_VALOR_DO_IMOVEL)[number];
+
 export const ORIGENS_DA_CONVERSA_DO_PROCESSO = ["criacao", "manual", "sugestao"] as const;
 export type OrigemDaConversaDoProcesso = (typeof ORIGENS_DA_CONVERSA_DO_PROCESSO)[number];
 
@@ -86,6 +89,7 @@ export const TIPOS_DE_EVENTO_DO_PROCESSO = [
   "lgpd",
   "renda",
   "relatorio",
+  "valores_imovel",
 ] as const;
 export type TipoDeEventoDoProcesso = (typeof TIPOS_DE_EVENTO_DO_PROCESSO)[number];
 

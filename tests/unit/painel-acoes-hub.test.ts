@@ -80,5 +80,31 @@ describe("mapeamento do painel para o Brisa Hub", () => {
       inquilino_situacao: "ativo",
     } });
     expect(r?.resumo).toContain("Vencimento: dia 10");
+    expect(r?.extra).toEqual({ status: "ok", encontrado: true });
   });
+
+  it("encontrado:false nunca é sucesso nem sugere texto ao cliente", () => {
+    const r = apresentarResultado("contrato", { texto: "", dados: {
+      resultado: "ok", encontrado: false, status: "ok",
+      contrato: { imovel: "Rua que não deveria aparecer" },
+    } });
+    expect(r?.extra).toEqual({ status: "nao_encontrado", encontrado: false });
+    expect(r?.resumo).not.toContain("Rua que não deveria aparecer");
+    expect(r?.sugestao).toBeUndefined();
+    expect(r?.resumo).toMatch(/não prova que o cliente não tem contrato/i);
+  });
+
+  it.each(["nao_encontrado", "indisponivel"] as const)(
+    "status %s não vira sugestão nem afirma ausência de contrato",
+    (status) => {
+      const r = apresentarResultado("contrato", {
+        texto: "",
+        dados: { resultado: status, encontrado: false, status },
+      });
+      expect(r?.extra?.encontrado).toBe(false);
+      expect(r?.extra?.status).toBe(status);
+      expect(r?.sugestao).toBeUndefined();
+      expect(r?.resumo.length).toBeGreaterThan(20);
+    },
+  );
 });

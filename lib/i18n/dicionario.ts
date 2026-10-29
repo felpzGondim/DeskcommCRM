@@ -43,6 +43,7 @@ import { TEXTOS_PAINEL_MANUAL } from "./painel-manual";
 import { TEXTOS_PAINEL_RELATORIO } from "./painel-relatorio";
 import { TEXTOS_PAINEL_SEGURO } from "./painel-seguro";
 import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
+import { TEXTOS_ANALISE_INQUILINO } from "./analise-inquilino";
 
 /** `pt-BR` não aparece: é a chave. Só o que DIFERE precisa de linha. */
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
@@ -57,6 +58,7 @@ export const DICIONARIO: Traducoes = {
   ...TEXTOS_PAINEL_FC,
   ...TEXTOS_PAINEL_MANUAL,
   ...TEXTOS_PAINEL_RELATORIO,
+  ...TEXTOS_ANALISE_INQUILINO,
   "Não foi possível consultar o Brisa Hub agora.": { es: "No fue posible consultar Brisa Hub ahora." },
   "Preparar análise de inquilino": { es: "Preparar análisis del inquilino" },
   "Não foi possível preparar a análise.": { es: "No fue posible preparar el análisis." },

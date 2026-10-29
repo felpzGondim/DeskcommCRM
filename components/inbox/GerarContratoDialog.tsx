@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,14 +12,21 @@ import { apiClient } from "@/lib/api/client";
 type Previa = { resumo: string; pendencias: Array<string | PendenciaContrato>; avisos: string[]; token: string | null };
 type Campo = { nome: string; rotulo: string; tipo?: "number" | "date" | "email"; obrigatorio?: boolean };
 
-
-
-/** Dados ficam na tela; a preparação não grava a locação. Sem envio ao cliente. */
-export function GerarContratoDialog({ conversationId, desabilitado = false }: {
-  conversationId: string; desabilitado?: boolean;
+/** Formulário da locação — usado no diálogo legado e na aba Gerar contrato. */
+export function FormularioGerarContrato({
+  conversationId,
+  desabilitado = false,
+  modo = "embutido",
+  onOcupadoChange,
+}: {
+  conversationId: string;
+  desabilitado?: boolean;
+  modo?: "embutido" | "dialogo";
+  onOcupadoChange?: (ocupado: boolean) => void;
 }) {
   const t = useT();
   const campoId = useId();
+  const [aberto, setAberto] = useState(false);
   const camposPessoa: Campo[] = [
     { nome: "cpf", rotulo: t("CPF"), obrigatorio: true },
     { nome: "nome", rotulo: t("Nome completo") }, { nome: "email", rotulo: t("E-mail"), tipo: "email" },
@@ -29,8 +36,11 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
     { nome: "complemento", rotulo: t("Complemento") }, { nome: "bairro", rotulo: t("Bairro") },
     { nome: "cep", rotulo: t("CEP") }, { nome: "cidade", rotulo: t("Cidade") }, { nome: "uf", rotulo: t("UF") },
   ];
-  const [aberto, setAberto] = useState(false);
   const [ocupado, setOcupado] = useState(false);
+  useEffect(() => {
+    onOcupadoChange?.(ocupado);
+    return () => onOcupadoChange?.(false);
+  }, [ocupado, onOcupadoChange]);
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [resultado, setResultado] = useState<ResultadoContrato | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -117,6 +127,83 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
 
   const garantias: Array<[string, string]> = [["nenhuma", t("Nenhuma")], ["caucao", t("Caução")], ["seguro_fianca", t("Seguro fiança")], ["fiador", t("Fiador")]];
 
+  const corpo = <>
+    {!resultado?.gravado && <form onSubmit={(e) => void preparar(e)} onChange={(e) => {
+      const alvo = e.target;
+      if (alvo instanceof HTMLInputElement || alvo instanceof HTMLSelectElement) {
+        setValores((v) => ({ ...v, [alvo.name]: alvo.value }));
+      }
+      if (!confirmacaoIniciada) { setPrevia(null); setRevisado(false); }
+    }} className="space-y-4">
+      <fieldset disabled={bloqueado} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {campo({ nome: "imovel.endereco", rotulo: t("Endereço do imóvel"), obrigatorio: true })}
+          {campo({ nome: "imovel.numero", rotulo: t("Número do imóvel") })}
+          {campo({ nome: "imovel.complemento", rotulo: t("Complemento do imóvel") })}
+          {campo({ nome: "aluguel", rotulo: t("Aluguel mensal (R$)"), tipo: "number", obrigatorio: true })}
+          {campo({ nome: "data_inicio", rotulo: t("Início da locação"), tipo: "date", obrigatorio: true })}
+          {campo({ nome: "data_fim", rotulo: t("Fim da locação"), tipo: "date" })}
+          {campo({ nome: "prazo_meses", rotulo: t("Prazo em meses"), tipo: "number" })}
+          {campo({ nome: "isencao_multa_meses", rotulo: t("Meses de isenção de multa"), tipo: "number" })}
+          {campo({ nome: "dia_vencimento", rotulo: t("Dia de vencimento"), tipo: "number", obrigatorio: true })}
+          {selecao("tipo", t("Tipo de locação"), [["residencial", t("Residencial")], ["comercial", t("Comercial")]])}
+          {selecao("indice_reajuste", t("Índice de reajuste"), [["IGPM", t("IGP-M")], ["IPCA", t("IPCA")]])}
+          {selecao("garantia", t("Garantia"), garantias)}
+          {selecao("split", t("Split (repasse automático)"), [["false", t("Não ligar o split")], ["true", t("Ligar o split")]], "false")}
+          {campo({ nome: "caucao_valor", rotulo: t("Valor da caução (R$)"), tipo: "number" })}
+          {campo({ nome: "seguradora_fianca", rotulo: t("Seguradora do seguro fiança") })}
+          {campo({ nome: "apolice", rotulo: t("Número da apólice") })}
+        </div>
+        {pessoas("locatarios", locatarios)}
+        <Button type="button" variant="outline" onClick={() => { setPrevia(null); setLocatarios((n) => n + 1); }} disabled={locatarios >= 10}>{t("Adicionar locatário")}</Button>
+        {locatarios > 1 && <Button type="button" variant="ghost" onClick={() => { setPrevia(null); setLocatarios((n) => n - 1); }}>{t("Remover último locatário")}</Button>}
+        {pessoas("fiadores", fiadores)}
+        <Button type="button" variant="outline" onClick={() => { setPrevia(null); setFiadores((n) => n + 1); }} disabled={fiadores >= 10}>{t("Adicionar fiador")}</Button>
+        {fiadores > 0 && <Button type="button" variant="ghost" onClick={() => { setPrevia(null); setFiadores((n) => n - 1); }}>{t("Remover último fiador")}</Button>}
+        <details className="space-y-3">
+          <summary className="cursor-pointer text-sm font-medium">{t("Taxas e despesas da locação")}</summary>
+          <p className="text-xs text-muted-foreground">{t("Campos opcionais em branco usam os valores definidos pelo Hub. Confira todas as taxas e condições na prévia antes de confirmar.")}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {campo({ nome: "taxa_adm", rotulo: t("Taxa de administração (%)"), tipo: "number" })}
+            {campo({ nome: "taxa_locacao", rotulo: t("Taxa de locação (%)"), tipo: "number" })}
+            {campo({ nome: "iptu.valor_mensal", rotulo: t("IPTU mensal (R$)"), tipo: "number" })}
+            {campo({ nome: "seguro_fianca.valor_mensal", rotulo: t("Seguro fiança mensal (R$)"), tipo: "number" })}
+            {campo({ nome: "observacao", rotulo: t("Observação") })}
+          </div>
+        </details>
+        <Button type="submit">{ocupado ? t("Preparando…") : t("Preparar locação")}</Button>
+      </fieldset>
+    </form>}
+    {previa && !resultado?.gravado && <section aria-label={t("Prévia da locação")} className="space-y-3 rounded-md border border-border p-3">
+      <h4 className="font-medium">{t("Prévia da locação")}</h4>
+      <p className="whitespace-pre-wrap wrap-anywhere text-sm">{previa.resumo}</p>
+      {[...previa.pendencias.map(textoDaPendencia), ...previa.avisos].map((p, i) => <p key={i} className="text-sm">{p}</p>)}
+      {previa.token && <>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={revisado} disabled={ocupado || desabilitado || confirmacaoIniciada}
+            onChange={(e) => setRevisado(e.target.checked)} />
+          {t("Conferi todos os dados, taxas e condições. Confirmo a criação da locação ativa no SuperLógica.")}
+        </label>
+        <Button disabled={ocupado || desabilitado || !revisado} onClick={() => void confirmar()}>
+          {ocupado ? t("Confirmando…") : confirmacaoIniciada ? t("Consultar ou retomar confirmação") : t("Confirmar criação da locação")}
+        </Button>
+      </>}
+    </section>}
+    {resultado?.gravado && <section role="status" className="space-y-2 text-sm">
+      <p className="font-medium">{t("Locação criada no SuperLógica.")}</p>
+      <p>{t("Contrato")}: {resultado.id_contrato} · {resultado.situacao}</p>
+      {resultado.completo === false && <p>{t("O contrato foi criado, mas há despesas pendentes. Confira no SuperLógica antes de prosseguir.")}</p>}
+      {[resultado.proximo_passo, resultado.acao_humana, ...resultado.acoes_manuais, ...resultado.avisos, ...resultado.divergencias]
+        .filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
+    </section>}
+    {erro && <p role="alert" className="text-sm text-destructive">{erro}</p>}
+    {modo === "dialogo" ? (
+      <Button variant="ghost" disabled={ocupado} onClick={() => setAberto(false)}>{t("Fechar")}</Button>
+    ) : null}
+  </>;
+
+  if (modo === "embutido") return corpo;
+
   return <Dialog open={aberto} onOpenChange={(v) => { if (!ocupado) setAberto(v); }}>
     <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={desabilitado}
       onClick={() => setAberto(true)}>{t("Gerar contrato")}</Button>
@@ -125,76 +212,14 @@ export function GerarContratoDialog({ conversationId, desabilitado = false }: {
         <DialogTitle>{t("Gerar contrato no SuperLógica")}</DialogTitle>
         <DialogDescription>{t("Preencha os dados da locação e confira a prévia. A gravação acontece somente após sua confirmação. O contrato será criado como ativo.")}</DialogDescription>
       </DialogHeader>
-      {!resultado?.gravado && <form onSubmit={(e) => void preparar(e)} onChange={(e) => {
-        const alvo = e.target;
-        if (alvo instanceof HTMLInputElement || alvo instanceof HTMLSelectElement) {
-          setValores((v) => ({ ...v, [alvo.name]: alvo.value }));
-        }
-        if (!confirmacaoIniciada) { setPrevia(null); setRevisado(false); }
-      }} className="space-y-4">
-        <fieldset disabled={bloqueado} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {campo({ nome: "imovel.endereco", rotulo: t("Endereço do imóvel"), obrigatorio: true })}
-            {campo({ nome: "imovel.numero", rotulo: t("Número do imóvel") })}
-            {campo({ nome: "imovel.complemento", rotulo: t("Complemento do imóvel") })}
-            {campo({ nome: "aluguel", rotulo: t("Aluguel mensal (R$)"), tipo: "number", obrigatorio: true })}
-            {campo({ nome: "data_inicio", rotulo: t("Início da locação"), tipo: "date", obrigatorio: true })}
-            {campo({ nome: "data_fim", rotulo: t("Fim da locação"), tipo: "date" })}
-            {campo({ nome: "prazo_meses", rotulo: t("Prazo em meses"), tipo: "number" })}
-            {campo({ nome: "isencao_multa_meses", rotulo: t("Meses de isenção de multa"), tipo: "number" })}
-            {campo({ nome: "dia_vencimento", rotulo: t("Dia de vencimento"), tipo: "number", obrigatorio: true })}
-            {selecao("tipo", t("Tipo de locação"), [["residencial", t("Residencial")], ["comercial", t("Comercial")]])}
-            {selecao("indice_reajuste", t("Índice de reajuste"), [["IGPM", t("IGP-M")], ["IPCA", t("IPCA")]])}
-            {selecao("garantia", t("Garantia"), garantias)}
-            {selecao("split", t("Split (repasse automático)"), [["false", t("Não ligar o split")], ["true", t("Ligar o split")]], "false")}
-            {campo({ nome: "caucao_valor", rotulo: t("Valor da caução (R$)"), tipo: "number" })}
-            {campo({ nome: "seguradora_fianca", rotulo: t("Seguradora do seguro fiança") })}
-            {campo({ nome: "apolice", rotulo: t("Número da apólice") })}
-          </div>
-          {pessoas("locatarios", locatarios)}
-          <Button type="button" variant="outline" onClick={() => { setPrevia(null); setLocatarios((n) => n + 1); }} disabled={locatarios >= 10}>{t("Adicionar locatário")}</Button>
-          {locatarios > 1 && <Button type="button" variant="ghost" onClick={() => { setPrevia(null); setLocatarios((n) => n - 1); }}>{t("Remover último locatário")}</Button>}
-          {pessoas("fiadores", fiadores)}
-          <Button type="button" variant="outline" onClick={() => { setPrevia(null); setFiadores((n) => n + 1); }} disabled={fiadores >= 10}>{t("Adicionar fiador")}</Button>
-          {fiadores > 0 && <Button type="button" variant="ghost" onClick={() => { setPrevia(null); setFiadores((n) => n - 1); }}>{t("Remover último fiador")}</Button>}
-          <details className="space-y-3">
-            <summary className="cursor-pointer text-sm font-medium">{t("Taxas e despesas da locação")}</summary>
-            <p className="text-xs text-muted-foreground">{t("Campos opcionais em branco usam os valores definidos pelo Hub. Confira todas as taxas e condições na prévia antes de confirmar.")}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {campo({ nome: "taxa_adm", rotulo: t("Taxa de administração (%)"), tipo: "number" })}
-              {campo({ nome: "taxa_locacao", rotulo: t("Taxa de locação (%)"), tipo: "number" })}
-              {campo({ nome: "iptu.valor_mensal", rotulo: t("IPTU mensal (R$)"), tipo: "number" })}
-              {campo({ nome: "seguro_fianca.valor_mensal", rotulo: t("Seguro fiança mensal (R$)"), tipo: "number" })}
-              {campo({ nome: "observacao", rotulo: t("Observação") })}
-            </div>
-          </details>
-          <Button type="submit">{ocupado ? t("Preparando…") : t("Preparar locação")}</Button>
-        </fieldset>
-      </form>}
-      {previa && !resultado?.gravado && <section aria-label={t("Prévia da locação")} className="space-y-3 rounded-md border border-border p-3">
-        <h4 className="font-medium">{t("Prévia da locação")}</h4>
-        <p className="whitespace-pre-wrap wrap-anywhere text-sm">{previa.resumo}</p>
-        {[...previa.pendencias.map(textoDaPendencia), ...previa.avisos].map((p, i) => <p key={i} className="text-sm">{p}</p>)}
-        {previa.token && <>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={revisado} disabled={ocupado || desabilitado || confirmacaoIniciada}
-              onChange={(e) => setRevisado(e.target.checked)} />
-            {t("Conferi todos os dados, taxas e condições. Confirmo a criação da locação ativa no SuperLógica.")}
-          </label>
-          <Button disabled={ocupado || desabilitado || !revisado} onClick={() => void confirmar()}>
-            {ocupado ? t("Confirmando…") : confirmacaoIniciada ? t("Consultar ou retomar confirmação") : t("Confirmar criação da locação")}
-          </Button>
-        </>}
-      </section>}
-      {resultado?.gravado && <section role="status" className="space-y-2 text-sm">
-        <p className="font-medium">{t("Locação criada no SuperLógica.")}</p>
-        <p>{t("Contrato")}: {resultado.id_contrato} · {resultado.situacao}</p>
-        {resultado.completo === false && <p>{t("O contrato foi criado, mas há despesas pendentes. Confira no SuperLógica antes de prosseguir.")}</p>}
-        {[resultado.proximo_passo, resultado.acao_humana, ...resultado.acoes_manuais, ...resultado.avisos, ...resultado.divergencias]
-          .filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
-      </section>}
-      {erro && <p role="alert" className="text-sm text-destructive">{erro}</p>}
-      <Button variant="ghost" disabled={ocupado} onClick={() => setAberto(false)}>{t("Fechar")}</Button>
+      {corpo}
     </DialogContent>
   </Dialog>;
+}
+
+/** Dados ficam na tela; a preparação não grava a locação. Sem envio ao cliente. */
+export function GerarContratoDialog({ conversationId, desabilitado = false }: {
+  conversationId: string; desabilitado?: boolean;
+}) {
+  return <FormularioGerarContrato conversationId={conversationId} desabilitado={desabilitado} modo="dialogo" />;
 }

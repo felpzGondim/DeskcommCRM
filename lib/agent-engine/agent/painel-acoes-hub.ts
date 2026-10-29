@@ -1,4 +1,5 @@
 /** Único contrato entre os botões do painel e as ferramentas anunciadas pelo Hub. */
+import { interpretarContratoHub } from "@/lib/locacao/contrato-hub";
 import type { FerramentaRemota, ResultadoRemoto } from "@/lib/mcp/servidor-externo/chamada";
 
 export const ACOES_HUB = {
@@ -64,6 +65,7 @@ export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado
   resumo: string;
   sugestao?: string;
   links?: Array<{ rotulo: string; url: string }>;
+  extra?: { status: string; encontrado: boolean };
 } | null {
   // Alguns servidores MCP devolvem o objeto em structuredContent; outros o
   // serializam num bloco text. Só aceitamos JSON e selecionamos campos abaixo.
@@ -111,19 +113,26 @@ export function apresentarResultado(acao: Exclude<AcaoHub, "analise">, resultado
     return { resumo, links };
   }
   if (acao === "contrato") {
-    if (d.resultado === "nao_encontrado") return { resumo: "Nenhum contrato ativo vinculado ao telefone desta conversa foi encontrado no Brisa Hub." };
-    if (d.resultado === "multiplos_contratos") return { resumo: "Há mais de um contrato vinculado a este telefone. Confira o cadastro no Brisa Hub antes de prosseguir." };
-    if (d.resultado === "indisponivel") return { resumo: "A consulta ao contrato está indisponível no Brisa Hub. Tente novamente." };
-    if (!d.contrato || typeof d.contrato !== "object") return null;
-    const c = d.contrato && typeof d.contrato === "object" ? d.contrato as Record<string, unknown> : d;
+    const leitura = interpretarContratoHub(d);
+    if (!leitura) return null;
+    if (!leitura.encontrado) {
+      return {
+        resumo: leitura.textoParaAtendente,
+        extra: { status: leitura.status, encontrado: false },
+      };
+    }
+    const c = leitura.contrato ?? {};
     const dia = typeof c.dia_vencimento === "string" && /^(?:[1-9]|[12][0-9]|3[01])$/.test(c.dia_vencimento) ? `dia ${c.dia_vencimento}` : "";
-    return { resumo: [
-      `Imóvel: ${curto(c.imovel) || "não informado"}`,
-      `Aluguel: ${valor(c.valor) || "não informado"}`,
-      `Vencimento: ${dia || data(c.vencimento) || "não informado"}`,
-      `Situação: ${situacao(c.situacao) || "não informada"}`,
-      `Inquilino: ${situacao(d.inquilino_situacao) || "vinculado ao telefone da conversa"}`,
-    ].join("\n") };
+    return {
+      resumo: [
+        `Imóvel: ${curto(c.imovel) || "não informado"}`,
+        `Aluguel: ${valor(c.valor) || "não informado"}`,
+        `Vencimento: ${dia || data(c.vencimento) || "não informado"}`,
+        `Situação: ${situacao(c.situacao) || "não informada"}`,
+        `Inquilino: ${situacao(leitura.inquilinoSituacao) || "vinculado ao telefone da conversa"}`,
+      ].join("\n"),
+      extra: { status: "ok", encontrado: true },
+    };
   }
   if (d.resultado !== undefined && d.resultado !== "ok") return null;
   if (!Array.isArray(d.documentos_faltantes)) return null;

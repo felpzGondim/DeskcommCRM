@@ -15,7 +15,8 @@
   ],
   "mainPath": ["painel", "flag", "processo", "etapa"],
   "nodes": [
-    { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: Abrir processo (papel contato)" },
+    { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: resumo + Abrir análise (papel contato)" },
+    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal Análise de inquilino com vínculo Superlógica" },
     { "id": "lista", "lane": "inbox", "col": 1, "type": "frontend", "label": "/app/locacao e detalhe com aprovar/reprovar" },
     { "id": "config", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: chaves desligadas" },
     { "id": "flag", "lane": "servidor", "col": 2, "type": "process", "label": "organizations.settings.locacao.* e superlogica_vinculo" },
@@ -31,7 +32,9 @@
     { "id": "relatorio", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: Gerar/aprovar relatório (6 seções, desligado)" },
     { "id": "hub", "lane": "fora", "col": 4, "type": "external", "label": "Superlógica via Hub: só GET; FC só a pedido, reuso 90d" },
     { "id": "drive", "lane": "fora", "col": 4, "type": "external", "label": "Drive Aluguéis: DESKCOMM_* env, chave desligada, nunca apaga" },
-    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" }
+    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" },
+    { "id": "valores", "lane": "registro", "col": 3, "type": "database", "label": "valores do imóvel no processo: origem e edição" },
+    { "id": "camposImovel", "lane": "inbox", "col": 1, "type": "frontend", "label": "CamposImovelProcesso na aba Dados (origem visível)" }
   ],
   "edges": [
     { "id": "e1", "from": "painel", "to": "flag", "label": "só cria se processos_habilitado" },
@@ -61,6 +64,15 @@
     { "id": "e25", "from": "flag", "to": "chaves4", "label": "Fase 4 não liga nada" },
     { "id": "e26", "from": "chaves4", "to": "seguro", "label": "chave seguro desligada: tabela vazia" },
     { "id": "e27", "from": "chaves4", "to": "relatorio", "label": "chave relatorio desligada: botão some" },
-    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" }
+    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" },
+    { "id": "e29", "from": "painel", "to": "analise_modal", "label": "Abrir análise mesmo com processos desligados" },
+    { "id": "e30", "from": "analise_modal", "to": "rotas", "label": "busca, ligar, desligar, ficha, contrato" },
+    { "id": "e31", "from": "analise_modal", "to": "vinculo", "label": "contato_superlogica_vinculos + POST/DELETE vinculos" },
+    { "id": "e32", "from": "rotas", "to": "hub", "label": "buscar_pessoas_superlogica {pesquisa}" },
+    { "id": "e33", "from": "rotas", "to": "valores", "label": "GET pré-preenche; PATCH manual não é sobrescrito" },
+    { "id": "e34", "from": "valores", "to": "hub", "label": "FC/Migra usam os quatro; recusa se faltar" },
+    { "id": "e35", "from": "analise_modal", "to": "camposImovel", "label": "aba Dados: aluguel, condomínio, IPTU, seguros" },
+    { "id": "e36", "from": "camposImovel", "to": "valores", "label": "atendente edita; origem visível" },
+    { "id": "e37", "from": "valores", "to": "camposImovel", "label": "mostra valor e origem de cada campo" }
   ]
 }

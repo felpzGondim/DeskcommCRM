@@ -59,6 +59,23 @@ describe("acesso mínimo da análise (4.0, sem tela)", () => {
     expect(cabeca).not.toMatch(/security invoker/);
   });
 
+  it("a migration 0771 não cria SECURITY DEFINER nem liga chave da Fase 4", () => {
+    const src = readFileSync(
+      join(process.cwd(), "supabase/migrations/20261029040000_0771_locacao_valores_imovel.sql"),
+      "utf8",
+    );
+    expect(src).toContain("aluguel_origem");
+    expect(src).toContain("seguro_fianca");
+    expect(src).toContain("valores_imovel");
+    expect(src.toLowerCase()).not.toContain("security definer");
+    expect(src).not.toMatch(/analise.*true/i);
+    expect(src).not.toContain("pacote_superlogica_habilitado");
+    const baseline = readFileSync(join(process.cwd(), "supabase/baseline.sql"), "utf8");
+    const i = baseline.lastIndexOf("-- ---- locação 0771");
+    expect(i).toBeGreaterThan(0);
+    expect(baseline.slice(i)).toContain("locacao_processos_seguro_fianca_origem_check");
+  });
+
   it("settings recusa preço e aceita as cinco chaves desligadas", () => {
     const lido = locacaoSettingsSchema.parse({ analise: { renda: false, fc_preco: 2530 } });
     expect(lido.analise.renda).toBe(false);

@@ -95,6 +95,21 @@ export const TEXTOS_PAINEL_FC = {
   "Informe o imóvel (endereço e aluguel) na ficha antes de analisar a FC.": {
     es: "Informe el inmueble (dirección y alquiler) en la ficha antes de analizar FC.",
   },
+  "Informe o imóvel (endereço) na ficha antes de analisar a FC.": {
+    es: "Informe el inmueble (dirección) en la ficha antes de analizar FC.",
+  },
+  "Informe o aluguel no processo antes de analisar a FC.": {
+    es: "Informe el alquiler en el proceso antes de analizar FC.",
+  },
+  "Informe o condomínio (inclui rateio) no processo antes de analisar a FC.": {
+    es: "Informe el condominio (incluye prorrateo) en el proceso antes de analizar FC.",
+  },
+  "Informe o IPTU no processo antes de analisar a FC.": {
+    es: "Informe el IPTU en el proceso antes de analizar FC.",
+  },
+  "Informe o seguro-incêndio no processo antes de analisar a FC.": {
+    es: "Informe el seguro de incendio en el proceso antes de analizar FC.",
+  },
   "O Brisa Hub não aceitou o salvamento da FC.": {
     es: "Brisa Hub no aceptó el guardado de FC.",
   },

@@ -28,6 +28,7 @@ import {
   LocacaoErro,
   marcarEstadoAnaliseSeguro,
 } from "@/lib/locacao/repositorio";
+import { garantirValoresDoProcesso } from "@/lib/locacao/valores-imovel-persistencia";
 import { TEXTO_ANALISE_DESLIGADA } from "@/lib/painel/acoes/analise";
 import {
   chamarBaixarResultadoAnalise,
@@ -210,7 +211,12 @@ export async function analisarSeguroDoPainel(
   }
   const ficha = completarFicha(atual.ficha);
   const telefone = telefoneDoInquilinoPrincipal(ficha);
-  const pendencia = pendenciaDoPayloadSeguro(ficha, telefone);
+  const valores = await garantirValoresDoProcesso(ctx.admin, {
+    orgId: ctx.orgId,
+    processoId: alvo.id,
+    settings: ctx.settings,
+  });
+  const pendencia = pendenciaDoPayloadSeguro(ficha, telefone, valores);
   if (pendencia || !telefone) {
     return { ok: false, texto: pendencia ?? "Informe o celular do inquilino principal na ficha antes de cotar o seguro.", codigo: "validation_error" };
   }
@@ -236,6 +242,7 @@ export async function analisarSeguroDoPainel(
     conversaId: ctx.conversationId,
     orgId: ctx.orgId,
     telefone,
+    valores,
   });
   if (!payload.ok) {
     if (!aberto.reusou) {

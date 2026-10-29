@@ -12,6 +12,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import { CamposImovelProcessoDoProcesso } from "@/components/locacao/CamposImovelProcesso";
 import { AcoesDoProcesso } from "./_acoes";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       <h1 className="text-xl font-semibold">{t("Processo de locação")}</h1>
       <p className="text-sm">{rotulo}</p>
       <p className="text-sm">{t("Etapa")}: {rotuloDoStatusDoProcesso(String(processo.status), t)}</p>
+      <CamposImovelProcessoDoProcesso processoId={id} />
       <h2 className="text-sm font-medium">{t("Pessoas")}</h2>
       <ul className="space-y-1 text-sm">
         {participantes.map((p) => (

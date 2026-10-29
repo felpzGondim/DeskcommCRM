@@ -37,6 +37,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { logger } from "@/lib/logger";
+import { vinculoDaLinha } from "@/lib/locacao/superlogica-id";
 import {
   CABECALHOS_DO_CONTATO,
   listarFerramentasDoServidor,
@@ -124,6 +125,15 @@ async function cabecalhosDoContato(
   const digitos =
     typeof contato.phone_number === "string" ? contato.phone_number.replace(/\D/g, "") : "";
   if (digitos !== "") cabecalhos[CABECALHOS_DO_CONTATO.telefone] = digitos;
+  const { data: vinculoAtivo } = await supabase
+    .from("contato_superlogica_vinculos")
+    .select("superlogica_pessoa_id,tipos")
+    .eq("organization_id", organizationId)
+    .eq("contact_id", contatoId)
+    .eq("ativo", true)
+    .maybeSingle();
+  const pessoaId = vinculoDaLinha(vinculoAtivo).superlogica_id_pessoa;
+  if (pessoaId) cabecalhos[CABECALHOS_DO_CONTATO.pessoaSuperlogica] = pessoaId;
 
   if (!conversaId) return cabecalhos;
   const { data: conversa } = await supabase

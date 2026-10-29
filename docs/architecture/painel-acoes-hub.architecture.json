@@ -20,7 +20,7 @@
       "lane": "inbox",
       "col": 1,
       "type": "frontend",
-      "label": "PainelDoAgente: ações e confirmação"
+      "label": "PainelDoAgente: resumo + Abrir análise"
     },
     {
       "id": "rota",
@@ -41,14 +41,14 @@
       "lane": "integracao",
       "col": 4,
       "type": "external",
-      "label": "Brisa Hub: boletos, contrato, ficha e análise"
+      "label": "Brisa Hub: boletos, contrato (status/encontrado), ficha, busca de pessoas e análise"
     },
     {
       "id": "audit",
       "lane": "registro",
       "col": 3,
       "type": "database",
-      "label": "api_audit_log: ação e sucesso, sem PII"
+      "label": "api_audit_log: ação, sucesso técnico e status do contrato, sem PII"
     },
     {
       "id": "recibo",
@@ -133,6 +133,27 @@
       "col": 2,
       "type": "process",
       "label": "Extrato: terceiros na renda, familiares e tabela mensal"
+    },
+    {
+      "id": "analise_modal",
+      "lane": "inbox",
+      "col": 1,
+      "type": "frontend",
+      "label": "Modal Análise de inquilino: Dados, renda, FC, Migra, contrato"
+    },
+    {
+      "id": "pessoa_id",
+      "lane": "integracao",
+      "col": 3,
+      "type": "process",
+      "label": "Cabeçalho opcional de pessoa Superlógica (1–12 dígitos)"
+    },
+    {
+      "id": "busca_rota",
+      "lane": "servidor",
+      "col": 2,
+      "type": "route",
+      "label": "POST vinculos/busca: {pesquisa}, nome mascarado, sem CPF no log"
     }
   ],
   "edges": [
@@ -246,6 +267,42 @@
       "from": "extrato",
       "to": "ficha_rota",
       "label": "tabela mensal; declarado não é comprovado"
+    },
+    {
+      "id": "e23",
+      "from": "botoes",
+      "to": "analise_modal",
+      "label": "Abrir análise"
+    },
+    {
+      "id": "e24",
+      "from": "analise_modal",
+      "to": "ficha_botao",
+      "label": "aba Dados: ficha e relatório preliminar"
+    },
+    {
+      "id": "e25",
+      "from": "mcp",
+      "to": "pessoa_id",
+      "label": "contato_superlogica_vinculos.superlogica_pessoa_id quando válido"
+    },
+    {
+      "id": "e26",
+      "from": "pessoa_id",
+      "to": "hub",
+      "label": "toda tools/call da chave CRM"
+    },
+    {
+      "id": "e27",
+      "from": "analise_modal",
+      "to": "busca_rota",
+      "label": "busca inquilino/proprietário na aba Dados"
+    },
+    {
+      "id": "e28",
+      "from": "busca_rota",
+      "to": "mcp",
+      "label": "buscar_pessoas_superlogica só leitura"
     }
   ]
 }
