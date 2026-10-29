@@ -2,7 +2,8 @@
  * Lê lançamentos de um extrato em texto (layout Stone e genérico C/D).
  * Confere saldo entre páginas para detectar página faltando.
  */
-import { valoresNaLinha } from "./dinheiro";
+import { lerCentavos, valoresNaLinha } from "./dinheiro";
+import { conferirSaldo } from "./saldo";
 import { cpfDe, dataBrValida } from "./texto";
 import type { DirecaoLancamento, Lancamento, LeituraDeExtrato, TitularDoExtrato } from "./tipos";
 
@@ -137,7 +138,7 @@ function completarLinhaQuebrada(linhas: string[]): string[] {
   return saida;
 }
 
-function paginasDoTexto(texto: string): { texto: string; pagina: number | null }[] {
+export function paginasDoTexto(texto: string): { texto: string; pagina: number | null }[] {
   const blocos = texto.split(/\n{2,}/);
   if (blocos.length <= 1) {
     return [{ texto, pagina: 1 }];
@@ -146,6 +147,36 @@ function paginasDoTexto(texto: string): { texto: string; pagina: number | null }
     const m = bloco.match(PAGINA_DE);
     return { texto: bloco, pagina: m?.[1] ? Number(m[1]) : i + 1 };
   });
+}
+
+/** Lotes de páginas para a extração por IA, sem cortar no meio de uma página. */
+export function lotesDePaginas(
+  texto: string,
+  opcoes: { paginasPorLote?: number; charsPorLote?: number } = {},
+): string[] {
+  const paginasPorLote = opcoes.paginasPorLote ?? 5;
+  const charsPorLote = opcoes.charsPorLote ?? 20_000;
+  const paginas = paginasDoTexto(texto);
+  const lotes: string[] = [];
+  let atual: string[] = [];
+  let chars = 0;
+  for (const p of paginas) {
+    const caberia = atual.length >= paginasPorLote || chars + p.texto.length > charsPorLote;
+    if (caberia && atual.length > 0) {
+      lotes.push(atual.join("\n\n"));
+      atual = [];
+      chars = 0;
+    }
+    atual.push(p.texto);
+    chars += p.texto.length;
+  }
+  if (atual.length > 0) lotes.push(atual.join("\n\n"));
+  return lotes.length > 0 ? lotes : [texto];
+}
+
+function saldoAnteriorDoTexto(texto: string): number | null {
+  const m = texto.match(/saldo anterior[^\d]*(\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2})/i);
+  return m?.[1] ? lerCentavos(m[1]) : null;
 }
 
 function saldoInconsistente(lancamentos: readonly Lancamento[]): boolean {
@@ -206,7 +237,9 @@ export function lerLancamentos(
     }
   }
 
-  const saldoQuebra = saldoInconsistente(lancamentos);
+  const saldoAnteriorCentavos = saldoAnteriorDoTexto(texto);
+  const conferencia = conferirSaldo(lancamentos, { saldoAnteriorCentavos, periodo });
+  const saldoQuebra = saldoInconsistente(lancamentos) || (conferencia.conferido && !conferencia.fecha);
   const numeracaoQuebra = paginasFaltandoPorNumeracao(
     vistas,
     declaradas.total,
@@ -228,6 +261,8 @@ export function lerLancamentos(
     paginasDeclaradas: declaradas.total,
     paginasVistas: Math.max(vistas.size, blocos.length),
     paginasFaltando,
+    saldoAnteriorCentavos,
+    conferencia,
     lancamentos,
     avisos,
   };

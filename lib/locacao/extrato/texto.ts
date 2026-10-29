@@ -38,6 +38,15 @@ export function tokensDeNome(texto: string): string[] {
     .filter((t) => t.length > 1 && !PARTICULAS.has(t));
 }
 
+export function parecePessoaJuridica(texto: string): boolean {
+  if (/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/.test(texto)) return true;
+  const d = soDigitos(texto);
+  if (d.length === 14) return true;
+  return /\b(ltda|s\.?\s*a\.?|eireli|mei|me\b|epp|ss\b|associacao|associação|cooperativa|autarquia)\b/i.test(
+    texto,
+  );
+}
+
 export function nomesDoMesmoTitular(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
   const ta = tokensDeNome(a);

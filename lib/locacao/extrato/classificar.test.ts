@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { classificarLancamento, classificarLancamentos } from "./classificar";
 import { lerLancamentos } from "./lancamentos";
 import { EXTRATO_STONE_SINTETICO } from "./texto-sintetico";
+import type { FamiliarDaFicha } from "./familiar";
 import type { Lancamento, TitularDoExtrato } from "./tipos";
 
 const titular: TitularDoExtrato = {
@@ -62,6 +63,53 @@ describe("classificar lançamentos", () => {
     expect(classificarLancamento(l({ descricao: "PAGAMENTO FATURA", direcao: "D" }), titular)).toBe(
       "saida",
     );
+    expect(
+      classificarLancamento(l({ descricao: "REMUNERACAO ACME LTDA", direcao: "C" }), titular),
+    ).toBe("salario_prolabore");
+  });
+
+  it("pai e cônjuge da ficha saem; filho por parentesco também", () => {
+    const familiares: FamiliarDaFicha[] = [
+      { nome: "CONJUGE TESTE BETA", cpfDigits: "11144477735", papel: "conjuge" },
+      { nome: "JOAO ALFA PAI", cpfDigits: null, papel: "parente" },
+    ];
+    expect(
+      classificarLancamento(
+        l({ descricao: "PIX RECEBIDO CONJUGE TESTE BETA", direcao: "C" }),
+        titular,
+        familiares,
+      ),
+    ).toBe("conjuge");
+    expect(
+      classificarLancamento(
+        l({ descricao: "PIX CPF 111.444.777-35", direcao: "C" }),
+        titular,
+        familiares,
+      ),
+    ).toBe("conjuge");
+    expect(
+      classificarLancamento(
+        l({ descricao: "PIX RECEBIDO JOAO ALFA PAI", direcao: "C" }),
+        titular,
+        familiares,
+      ),
+    ).toBe("familiar");
+    expect(
+      classificarLancamento(
+        l({ descricao: "PIX RECEBIDO FILHO TESTE GAMA", direcao: "C" }),
+        titular,
+        familiares,
+      ),
+    ).toBe("familiar");
+  });
+
+  it("sobrenome em comum com o titular sai sinalizado como familiar provável", () => {
+    expect(
+      classificarLancamento(
+        l({ descricao: "PIX RECEBIDO MARIA ALFA", direcao: "C", contraparte: "MARIA ALFA" }),
+        titular,
+      ),
+    ).toBe("familiar_provavel");
   });
 
   it("classifica o extrato Stone sintético sem logar CPF", () => {

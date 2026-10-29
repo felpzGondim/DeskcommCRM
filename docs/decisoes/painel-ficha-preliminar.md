@@ -7,10 +7,50 @@
 
 No Painel do agente, o botão **Gerar relatório preliminar** lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão). Devolve:
 
-1. um relatório interno em 6 seções (Identificação, Renda comprovada, Comparação com declarado e 3x o pacote, Documentos, Alertas, Risco), só para a equipe — nunca "alugue"/"não alugue";
+1. um relatório interno em 6 seções da skill Análise De Inquilinos (1 Identificação, 2 Resumo da Análise, 3 Análise de Crédito, 4 Análise de Renda, 5 Análise Financeira e Despesas, 6 Análise de Risco para Locação), só para a equipe — nunca "alugue"/"não alugue";
 2. a **ficha de dados** (pessoas, renda, imóvel, documentos, pendências), que o atendente confere e corrige.
 
-A renda comprovada sai dos créditos do extrato, mês a mês, excluindo transferências entre contas próprias, estornos/devoluções, resgates/aplicações e empréstimos. O valor declarado **nunca** é tratado como comprovado. Se o extrato for escaneado, ilegível ou só movimento de negócio, o relatório diz isso e não estima. Sem o pacote (aluguel+condomínio+IPTU): `3x não calculado: falta o valor do pacote`. Sem renda comprovada o risco não pode ser baixo. O módulo `lib/locacao/extrato` é o mesmo que a análise 4.1 e o relatório 4.5 devem reusar.
+## Renda comprovada (correção 20:57 — vale acima da orientação anterior sobre PIX)
+
+**Entram** na renda comprovada, mês a mês:
+
+- salário / pró-labore / holerite líquido;
+- PIX/TED de **terceiros** (empregador, clientes fixos e **avulsos**). Para cada pagador a tabela mostra recorrência: meses em que aparece, número de lançamentos, total por mês;
+- vendas no cartão / maquininha (recebimento de clientes; linha própria no relatório).
+
+**Saem** da renda, com o volume informado à parte:
+
+1. transferências da própria pessoa (mesmo CPF ou nome, contas próprias);
+2. transferências de familiares diretos (pai, mãe, cônjuge, filhos, tios);
+3. poupança / resgates / aplicações / Rende Fácil, estornos e empréstimos.
+
+Regra de familiar (`lib/locacao/extrato/familiar.ts`):
+
+| Match                                                                           | Destino                                                                                                                                            |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nome ou CPF da ficha (cônjuge, pais/parente) ou palavra de parentesco           | Excluído confirmado. Volume à parte.                                                                                                               |
+| Só sobrenome em comum com o titular, sobrenome muito frequente, ou nome parcial | Excluído da **comprovada**, entra na lista **familiar provável — conferir** (com o valor) e na **renda com prováveis**. Nunca descarte silencioso. |
+
+O relatório mostra a renda **com** e **sem** os prováveis, para o analista reconsiderar. O valor declarado **nunca** é tratado como comprovado.
+
+## O que a skill NÃO decide (opção conservadora, CONFIRMADO neste fork)
+
+- Média só dos **meses completos** (dia 1–5 até 25–31). Mês parcial não entra na média.
+- Página faltando: a renda daquele período **não é estimada** (`pagina_faltando`).
+- Vários extratos: média das comprovadas.
+- Extrato escaneado/ilegível: diz e não estima.
+- Sem renda comprovada o risco não pode ser `baixo`.
+- Comprometimento = aluguel pretendido / renda comprovada × 100.
+
+## 3× o pacote (Q7, 20:51)
+
+3× = 3 × (aluguel + condomínio + IPTU + **seguro-incêndio**). Seguro-fiança **não** entra. Superlógica só GET, quando o imóvel está vinculado; neste repo não há cliente HTTP — a interface é injetável atrás da chave `locacao.pacote_superlogica_habilitado` (desligada). Fallback: conversa / ficha. Componente ausente é declarado, não vira zero silencioso. Sem o aluguel: `3x não calculado: falta o valor do pacote`.
+
+## Extração de qualquer banco (Q6, 20:51)
+
+Parser Stone + C/D genérico primeiro. Se o layout não for reconhecido ou o saldo não fechar, a IA extrai lançamentos em JSON (lotes de página, mesmo `painel_atendente` / `runModelCall`). A classificação e a conferência de saldo são as mesmas. Se ainda não fechar: pendência com extrato/período/diferença — não "sem lançamentos legíveis". Fonte marcada `parser` ou `IA`; a chamada vai para `llm_calls`.
+
+O módulo `lib/locacao/extrato` é o mesmo que a análise 4.1 e o relatório 4.5 devem reusar.
 
 **Salvar ficha** grava uma versão nova. O histórico mostra quem, quando e **quais caminhos** mudaram — nunca os valores.
 
@@ -30,7 +70,7 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 
 - Não cria `locacao_processos` nem participantes.
 - Não dispara FC Score+, não cria pedido de análise, não chama `confirmar-cobranca-fc`.
-- Não chama Migra, SuperLógica nem `/contrato/confirmar`.
+- Não chama Migra nem `/contrato/confirmar`. Superlógica no 3× é só GET, injetável, e a chave nasce desligada.
 - Não envia arquivo ao Hub (Q7 aberto).
 - Não cria bucket, não grava senha de PDF, não expurga as versões (retenção de 90 dias = Fase 3).
 

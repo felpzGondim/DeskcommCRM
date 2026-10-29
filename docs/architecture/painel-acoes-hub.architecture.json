@@ -118,7 +118,7 @@
       "lane": "servidor",
       "col": 2,
       "type": "process",
-      "label": "Extrato: lançamentos, exclusões e tabela mensal"
+      "label": "Extrato: terceiros na renda, familiares e tabela mensal"
     }
   ],
   "edges": [

@@ -285,8 +285,8 @@ describe("rota da ficha preliminar", () => {
     const corpo = await r.json();
     expect(corpo.data.ficha.renda.mensal.valor).toBeNull();
     expect(corpo.data.ficha.renda.alertas.join(" ")).toMatch(/não é comprovada/i);
-    expect(corpo.data.relatorio).toMatch(/## Risco\nmoderado/);
-    expect(corpo.data.relatorio).not.toMatch(/## Risco\nbaixo/);
+    expect(corpo.data.relatorio).toMatch(/Conclusão do Risco: moderado/);
+    expect(corpo.data.relatorio).not.toMatch(/Conclusão do Risco: baixo/);
     expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Ana renda 5000|11977776666/);
   });
 

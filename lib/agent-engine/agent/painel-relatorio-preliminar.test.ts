@@ -133,7 +133,7 @@ describe("fontes da ficha preliminar", () => {
     expect(blocoDasFontesDaFicha(fontes)).not.toMatch(/TEXTO CORTADO NO TETO DE DERIVAÇÃO/);
   });
 
-  it("fonte acima do limite da ficha gera aviso e pendência", () => {
+  it("fonte acima do limite da ficha gera aviso e pendência", async () => {
     const fontes = fontesDaFicha(
       [
         {
@@ -151,11 +151,11 @@ describe("fontes da ficha preliminar", () => {
     );
     expect(fontes[0]?.cortadoNaFicha).toBe(true);
     expect(blocoDasFontesDaFicha(fontes)).toContain(AVISO_FICHA_CORTADA);
-    const preparado = prepararFontesDoRelatorio(fontes);
+    const preparado = await prepararFontesDoRelatorio(fontes);
     expect(preparado.pendencias.join(" ")).toMatch(/cortado no teto da ficha/);
   });
 
-  it("extrato longo vira tabela calculada, não o texto bruto", () => {
+  it("extrato longo vira tabela calculada, não o texto bruto", async () => {
     const fontes = fontesDaFicha([
       {
         id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -169,22 +169,25 @@ describe("fontes da ficha preliminar", () => {
         metadata: { media_filename: "extrato.pdf" },
       },
     ]);
-    const preparado = prepararFontesDoRelatorio(fontes);
+    const preparado = await prepararFontesDoRelatorio(fontes);
     expect(preparado.fontes[0]?.texto).toMatch(/TABELA MENSAL CALCULADA/);
     expect(preparado.fontes[0]?.texto).not.toContain("529.982.247-25");
-    expect(preparado.analises[0]?.rendaComprovadaCentavos).toBe(530_000);
+    expect(preparado.analises[0]?.rendaComprovadaCentavos).toBe(640_000);
     expect(blocoDasFontesDaFicha(preparado.fontes)).toMatch(/paginas=2/);
   });
 
-  it("o prompt contém as regras de renda e as 6 seções, sem limite de 8 linhas", () => {
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/CRÉDITOS DO EXTRATO/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/NUNCA é renda comprovada/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Identificação/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Renda comprovada/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Comparação com declarado e 3x pacote/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Documentos/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Alertas/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## Risco/);
+  it("o prompt contém as regras de renda e as 6 seções da skill, sem limite de 8 linhas", () => {
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/PIX\/TED/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/créditos de TERCEIROS/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/familiar provável/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/vendas no cartão\/maquininha/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/NUNCA é comprovado/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 1\. Identificação/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 2\. Resumo da Análise/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 3\. Análise de Crédito/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 4\. Análise de Renda/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 5\. Análise Financeira e Despesas/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 6\. Análise de Risco para Locação/);
     expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toContain(FRASE_PACOTE_AUSENTE);
     expect(SYSTEM_DO_RELATORIO_PRELIMINAR).not.toMatch(/até 8 linhas/);
     expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(
@@ -210,7 +213,7 @@ describe("fontes da ficha preliminar", () => {
     });
     expect(saida.ficha.renda.mensal.valor).toBeNull();
     expect(saida.ficha.renda.alertas.join(" ")).toContain(FRASE_DECLARADO_ANULADO);
-    expect(saida.relatorio).toMatch(/Renda comprovada/);
+    expect(saida.relatorio).toMatch(/Análise de Renda/);
   });
 
   it("não sai risco baixo sem prova de renda", async () => {
@@ -228,12 +231,12 @@ describe("fontes da ficha preliminar", () => {
       contactId: "contato",
       fontes: "[M1] cliente text Ana",
     });
-    expect(saida.relatorio).not.toMatch(/## Risco\nbaixo/i);
-    expect(saida.relatorio).toMatch(/## Risco\nmoderado/i);
+    expect(saida.relatorio).not.toMatch(/Conclusão do Risco: baixo/i);
+    expect(saida.relatorio).toMatch(/Conclusão do Risco: moderado/i);
     expect(saida.ficha.renda.alertas.join(" ")).toMatch(/não pode ser baixo/);
   });
 
-  it("a seção de renda e o tipo extrato vêm do código, não do modelo", () => {
+  it("a seção de renda e o tipo extrato vêm do código, não do modelo", async () => {
     const fontes = fontesDaFicha([
       {
         id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -244,7 +247,7 @@ describe("fontes da ficha preliminar", () => {
         metadata: { media_filename: "extrato.pdf" },
       },
     ]);
-    const preparado = prepararFontesDoRelatorio(fontes);
+    const preparado = await prepararFontesDoRelatorio(fontes);
     const ficha = fichaVazia();
     ficha.renda.documentos = [
       {
@@ -262,11 +265,12 @@ describe("fontes da ficha preliminar", () => {
       { analises: preparado.analises, pendencias: [], rendaDeclaradaCentavos: 500_000 },
     );
     expect(saida.relatorio).toMatch(/TABELA MENSAL CALCULADA|renda considerada/i);
+    expect(saida.relatorio).toMatch(/## 4\. Análise de Renda/);
     expect(saida.ficha.renda.documentos[0]?.tipo).toBe("extrato");
-    expect(saida.ficha.renda.documentos[0]?.valor_comprovado).toBe(5300);
-    expect(saida.ficha.renda.mensal.valor).toBe(5300);
+    expect(saida.ficha.renda.documentos[0]?.valor_comprovado).toBe(6400);
+    expect(saida.ficha.renda.mensal.valor).toBe(6400);
     expect(saida.relatorio).toMatch(/3x o pacote/);
-    expect(saida.relatorio).toMatch(/## Risco\nbaixo/);
+    expect(saida.relatorio).toMatch(/Conclusão do Risco: baixo/);
   });
 
   it("sem pacote a comparação usa a frase fixa", () => {

@@ -1,8 +1,11 @@
 /**
- * Classifica lançamentos: próprias, resgates/aplicações, estornos,
- * empréstimos, vendas no cartão/antecipações, salário/pró-labore, terceiros.
+ * Classifica lançamentos (correção 20:57):
+ * próprias, familiares (ficha/parentesco) e prováveis (sobrenome),
+ * resgates/aplicações, estornos, empréstimos, vendas no cartão,
+ * salário/pró-labore, terceiros (PIX/TED entram na renda).
  */
-import { cpfDe, nomesDoMesmoTitular, normalizarNome, soDigitos } from "./texto";
+import { decidirFamiliar, juntarFamiliares, type FamiliarDaFicha } from "./familiar";
+import { cpfDe, nomesDoMesmoTitular, normalizarNome, parecePessoaJuridica } from "./texto";
 import type {
   ClasseLancamento,
   Lancamento,
@@ -14,32 +17,37 @@ function tem(texto: string, re: RegExp): boolean {
   return re.test(texto);
 }
 
-function cpfDaDescricao(descricao: string): string | null {
-  return cpfDe(descricao);
-}
-
-function cnpjNaDescricao(descricao: string): boolean {
-  if (/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/.test(descricao)) return true;
-  const d = soDigitos(descricao);
-  return d.length === 14;
-}
-
-function parecePj(descricao: string): boolean {
-  if (cnpjNaDescricao(descricao)) return true;
-  return /\b(ltda|s\.?\s*a\.?|eireli|mei|me\b|epp|ss\b|associacao|associação|cooperativa|autarquia)\b/i.test(
-    descricao,
+function mesmaPessoa(
+  titular: TitularDoExtrato | null | undefined,
+  lancamento: Lancamento,
+): boolean {
+  if (!titular) return false;
+  const cpfContra = cpfDe(lancamento.descricao);
+  return (
+    (titular.cpfDigits != null && cpfContra != null && titular.cpfDigits === cpfContra) ||
+    nomesDoMesmoTitular(titular.nome, lancamento.contraparte) ||
+    nomesDoMesmoTitular(titular.nome, lancamento.descricao)
   );
 }
 
 export function classificarLancamento(
   lancamento: Lancamento,
   titular: TitularDoExtrato,
+  familiares: readonly FamiliarDaFicha[] = [],
 ): ClasseLancamento {
+  return classificarDetalhe(lancamento, titular, familiares).classe;
+}
+
+export function classificarDetalhe(
+  lancamento: Lancamento,
+  titular: TitularDoExtrato,
+  familiares: readonly FamiliarDaFicha[] = [],
+): Pick<LancamentoClassificado, "classe" | "motivoFamiliar"> {
   const d = normalizarNome(lancamento.descricao);
   if (
     tem(d, /\bESTORNO\b|\bDEVOLUCAO\b|\bCHARGEBACK\b|\bREVERSO\b|\bPIX DEVOLVIDO\b|\bTED DEVOLVID/)
   ) {
-    return "estorno_devolucao";
+    return { classe: "estorno_devolucao" };
   }
   if (
     tem(
@@ -47,7 +55,7 @@ export function classificarLancamento(
       /\bRESGATE\b|\bAPLICACAO\b|\bCDB\b|\bTESOURO\b|\bPOUPANCA\b|\bRENDE FACIL\b|\bRENDA FIXA\b|\bINVESTIMENTO\b|\bFUNDO\b/,
     )
   ) {
-    return "resgate_aplicacao";
+    return { classe: "resgate_aplicacao" };
   }
   if (
     tem(
@@ -55,56 +63,72 @@ export function classificarLancamento(
       /\bEMPRESTIMO\b|\bCONSIGNADO\b|\bCREDITO PESSOAL\b|\bFINANCIAMENTO\b|\bPARCELA EMPREST|\bPAGAMENTO EMPREST/,
     )
   ) {
-    return "emprestimo";
+    return { classe: "emprestimo" };
   }
   if (
     tem(
       d,
-      /\bANTECIPACAO\b|\bVENDA STONE\b|\bVENDAS NO CARTAO\b|\bMDR\b|\bRECEBIVEL\b|\bLIQUIDACAO STONE\b|\bSTONE PAGAMENTO\b|\bRECEBIMENTO CARTAO\b/,
+      /\bANTECIPACAO\b|\bVENDA STONE\b|\bVENDAS NO CARTAO\b|\bMDR\b|\bRECEBIVEL\b|\bLIQUIDACAO STONE\b|\bSTONE PAGAMENTO\b|\bRECEBIMENTO CARTAO\b|\bMAQUININHA\b/,
     )
   ) {
-    return "venda_cartao";
+    return { classe: "venda_cartao" };
   }
 
-  const cpfContra = cpfDaDescricao(lancamento.descricao);
-  const mesmaPessoa =
-    (titular.cpfDigits != null && cpfContra != null && titular.cpfDigits === cpfContra) ||
-    nomesDoMesmoTitular(titular.nome, lancamento.contraparte) ||
-    nomesDoMesmoTitular(titular.nome, lancamento.descricao);
   const palavraPropria = tem(
     d,
     /\bTRANSFERENCIA ENTRE CONTAS\b|\bTRANSF ENTRE CONTAS\b|\bTEV\b|\bENVIO ENTRE CONTAS\b|\bCONTA PROPRIA\b|\bMESMA TITULARIDADE\b/,
   );
-  if (mesmaPessoa || palavraPropria) return "propria";
+  if (mesmaPessoa(titular, lancamento) || palavraPropria) return { classe: "propria" };
+
+  const familiar = decidirFamiliar(lancamento, titular, familiares);
+  if (familiar) return { classe: familiar.classe, motivoFamiliar: familiar.motivo };
 
   if (
     tem(
       d,
-      /\bSALARIO\b|\bPRO LABORE\b|\bPROLABORE\b|\bFOLHA DE PAGAMENTO\b|\bFOLHA PAGTO\b|\bPROVENTOS\b|\bHOLERITE\b/,
+      /\bSALARIO\b|\bREMUNERACAO\b|\bPRO LABORE\b|\bPROLABORE\b|\bFOLHA DE PAGAMENTO\b|\bFOLHA PAGTO\b|\bPROVENTOS\b|\bHOLERITE\b/,
     )
   ) {
-    return "salario_prolabore";
+    return { classe: "salario_prolabore" };
   }
 
-  if (lancamento.direcao === "D") return "saida";
+  if (lancamento.direcao === "D") return { classe: "saida" };
 
-  if (parecePj(lancamento.descricao) || parecePj(lancamento.contraparte ?? ""))
-    return "terceiro_pj";
-  return "terceiro_pf";
+  if (
+    parecePessoaJuridica(lancamento.descricao) ||
+    parecePessoaJuridica(lancamento.contraparte ?? "")
+  ) {
+    return { classe: "terceiro_pj" };
+  }
+  return { classe: "terceiro_pf" };
 }
 
 export function classificarLancamentos(
   lancamentos: readonly Lancamento[],
   titular: TitularDoExtrato,
+  familiares: readonly FamiliarDaFicha[] = [],
 ): LancamentoClassificado[] {
-  return lancamentos.map((l) => ({ ...l, classe: classificarLancamento(l, titular) }));
+  return lancamentos.map((l) => {
+    const detalhe = classificarDetalhe(l, titular, familiares);
+    return { ...l, ...detalhe };
+  });
 }
 
+/**
+ * Fora da renda comprovada. familiar_provavel também sai da comprovada, mas
+ * entra na renda COM prováveis. venda_cartao NÃO entra aqui: é recebimento
+ * de cliente.
+ */
 export const CLASSES_EXCLUIDAS_DA_RENDA: ReadonlySet<ClasseLancamento> = new Set([
   "propria",
+  "conjuge",
+  "familiar",
+  "familiar_provavel",
   "resgate_aplicacao",
   "estorno_devolucao",
   "emprestimo",
-  "venda_cartao",
   "saida",
 ]);
+
+export { juntarFamiliares };
+export type { FamiliarDaFicha };
