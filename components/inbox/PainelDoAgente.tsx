@@ -25,9 +25,8 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { randomId } from "@/lib/random-id";
 import { ACOES_HUB, type AcaoHub } from "@/lib/agent-engine/agent/painel-acoes-hub";
-import { ProcessoDeLocacaoPainel } from "@/components/locacao/ProcessoDeLocacaoPainel";
-import { FichaPreliminarPainel } from "./FichaPreliminarPainel";
-import { GerarContratoDialog } from "./GerarContratoDialog";
+import { ResumoLocacaoPainel } from "@/components/locacao/ResumoLocacaoPainel";
+import { AnaliseInquilinoDialog } from "./AnaliseInquilinoDialog";
 
 type Acao = "resumir" | "sugerir" | "pergunta";
 
@@ -81,6 +80,7 @@ export function PainelDoAgente({
   const [ultimaPergunta, setUltimaPergunta] = useState("");
   const [ultimoModo, setUltimoModo] = useState<"normal" | "analise" | null>(null);
   const [esconderAnaliseAntiga, setEsconderAnaliseAntiga] = useState(false);
+  const [analiseAberta, setAnaliseAberta] = useState(false);
   const conversaAtual = useRef(conversationId);
   const esperandoConsulta = useRef(false);
   const inicioDaConsulta = useRef(0);
@@ -406,11 +406,6 @@ export function PainelDoAgente({
             </Button>
           </div>
           <div className="flex flex-wrap gap-2" aria-label={t("Ações do Brisa Hub")}>
-            <GerarContratoDialog
-              key={conversationId}
-              conversationId={conversationId}
-              desabilitado={desabilitado || carregando !== null}
-            />
             {(["boletos", "contrato", "ficha"] as const).map((acao) => (
               <Button
                 key={acao}
@@ -435,16 +430,19 @@ export function PainelDoAgente({
             </Button>
             )}
           </div>
-          <FichaPreliminarPainel
+          <ResumoLocacaoPainel
+            conversationId={conversationId}
+            desabilitado={desabilitado || carregando !== null}
+            onAbrirAnalise={() => setAnaliseAberta(true)}
+          />
+          <AnaliseInquilinoDialog
+            aberto={analiseAberta}
+            onAbertoChange={setAnaliseAberta}
             conversationId={conversationId}
             desabilitado={desabilitado || carregando !== null}
             senhasPdf={Object.entries(senhasPdf)
               .filter(([, senha]) => senha)
               .map(([nome, senha]) => ({ nome, senha }))}
-          />
-          <ProcessoDeLocacaoPainel
-            conversationId={conversationId}
-            desabilitado={desabilitado || carregando !== null}
           />
           {turnos.length > 0 && (
             <ol className="max-h-80 space-y-2 overflow-y-auto" aria-live="polite">

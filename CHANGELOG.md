@@ -8,6 +8,10 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Análise de inquilino numa tela só, com vínculo Superlógica** No Painel, Abrir análise abre Dados, renda, FC, cotação e contrato. A aba Dados mostra o vínculo atual e busca inquilino/proprietário/fiador no Hub por nome ou CPF; o CPF só vai na consulta e não fica salvo nem no log. A consulta de contrato trata “não encontrado” e “indisponível” como aviso à equipe, sem afirmar ao cliente que ele não tem contrato. Quem já instalou não precisa fazer nada; as chaves de análise continuam desligadas.
+
 ## [1.88.0-felpz.12] — 2026-10-28
 
 ### Adicionado

@@ -603,7 +603,7 @@ const TELEFONE_NO_BANCO = "+5511987654321";
 const CONVERSA = "4f1c2d3e-0000-4000-8000-0000000c0a7a";
 
 function bancoDoAtendimento(op: {
-  contato?: { id: string; organization_id: string; phone_number: string | null } | null;
+  contato?: { id: string; organization_id: string; phone_number: string | null; custom_fields?: unknown } | null;
   erroNoContato?: boolean;
   canal?: string;
 }) {
@@ -630,7 +630,12 @@ function bancoDoAtendimento(op: {
             // Service role não tem RLS: quem separa as organizações é o filtro.
             const casa =
               c && c.id === filtros.id && c.organization_id === filtros.organization_id;
-            return { data: casa ? { id: c.id, phone_number: c.phone_number } : null, error: null };
+            return {
+              data: casa
+                ? { id: c.id, phone_number: c.phone_number, custom_fields: c.custom_fields ?? null }
+                : null,
+              error: null,
+            };
           }
           if (tabela === "conversations") {
             // A conversa do turno, e só se for DESTE contato nesta organização.
@@ -657,6 +662,7 @@ function identidadeNoFio(cab: IncomingHttpHeaders) {
     id: cab[CABECALHOS_DO_CONTATO.id.toLowerCase()],
     telefone: cab[CABECALHOS_DO_CONTATO.telefone.toLowerCase()],
     canal: cab[CABECALHOS_DO_CONTATO.canal.toLowerCase()],
+    pessoa: cab[CABECALHOS_DO_CONTATO.pessoaSuperlogica.toLowerCase()],
   };
 }
 
@@ -690,7 +696,7 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     expect(montado?.ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
     expect(montado?.contato).toBe(CONTATO);
 
-    const esperado = { id: CONTATO, telefone: "5511987654321", canal: "whatsapp" };
+    const esperado = { id: CONTATO, telefone: "5511987654321", canal: "whatsapp", pessoa: undefined };
     const daListagem = requisicoes.filter((r) => r.metodo === "POST");
     expect(daListagem.length).toBeGreaterThan(0);
     for (const r of daListagem) expect(identidadeNoFio(r.cabecalhos)).toEqual(esperado);
@@ -732,7 +738,7 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     });
     expect(montado).not.toBeNull();
     for (const r of requisicoes.filter((x) => x.metodo === "POST")) {
-      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: CONTATO, telefone: undefined, canal: undefined });
+      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: CONTATO, telefone: undefined, canal: undefined, pessoa: undefined });
     }
   });
 
@@ -751,10 +757,12 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
       "X-Deskcomm-Contato-Telefone": "5599000000000",
       "x-deskcomm-contato-id": OUTRA_ORG,
       "X-DESKCOMM-CANAL": "sms",
+      "X-Deskcomm-Superlogica-Pessoa-Id": "999",
       headers: {
         "X-Deskcomm-Contato-Telefone": "5599000000000",
         "x-deskcomm-contato-id": OUTRA_ORG,
         "X-Deskcomm-Extra": "1",
+        "X-Deskcomm-Superlogica-Pessoa-Id": "999",
         Authorization: "Bearer outra",
       },
     };
@@ -766,7 +774,7 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     const posts = requisicoes.filter((r) => r.metodo === "POST");
     expect(posts.length).toBeGreaterThan(0);
     for (const r of posts) {
-      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: CONTATO, telefone: "5511987654321", canal: "whatsapp" });
+      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: CONTATO, telefone: "5511987654321", canal: "whatsapp", pessoa: undefined });
       expect(r.cabecalhos["x-deskcomm-extra"], "argumento acrescentou cabeçalho").toBeUndefined();
       expect(r.cabecalhos.authorization).toBe(`Bearer ${CHAVE}`);
     }
@@ -824,7 +832,47 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     expect(montado?.ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
     expect(montado).not.toHaveProperty("cabecalhos");
     for (const r of requisicoes) {
-      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: undefined, telefone: undefined, canal: undefined });
+      expect(identidadeNoFio(r.cabecalhos)).toEqual({ id: undefined, telefone: undefined, canal: undefined, pessoa: undefined });
+    }
+  });
+
+  it("cabeçalho opcional de pessoa Superlógica sai só com id de 1 a 12 dígitos no custom_fields", async () => {
+    const { cliente } = bancoDoAtendimento({
+      contato: {
+        ...contatoDaOrg,
+        custom_fields: { superlogica_id_pessoa: "7788", superlogica_tipo: "locatario" },
+      },
+      canal: "whatsapp",
+    });
+    const montado = await carregarServidorMcpExterno(cliente, ORG, {
+      contatoDoTurno: CONTATO,
+      noAtendimento: true,
+      conversaDoTurno: CONVERSA,
+      fetch: fetchDoStub(),
+    });
+    expect(montado).not.toBeNull();
+    for (const r of requisicoes.filter((x) => x.metodo === "POST")) {
+      expect(identidadeNoFio(r.cabecalhos)).toEqual({
+        id: CONTATO,
+        telefone: "5511987654321",
+        canal: "whatsapp",
+        pessoa: "7788",
+      });
+    }
+
+    requisicoes.length = 0;
+    const { cliente: semId } = bancoDoAtendimento({
+      contato: { ...contatoDaOrg, custom_fields: { superlogica_id_pessoa: "abc" } },
+      canal: "whatsapp",
+    });
+    await carregarServidorMcpExterno(semId, ORG, {
+      contatoDoTurno: CONTATO,
+      noAtendimento: true,
+      conversaDoTurno: CONVERSA,
+      fetch: fetchDoStub(),
+    });
+    for (const r of requisicoes.filter((x) => x.metodo === "POST")) {
+      expect(identidadeNoFio(r.cabecalhos).pessoa).toBeUndefined();
     }
   });
 

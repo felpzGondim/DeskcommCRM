@@ -117,6 +117,29 @@ describe("rota das ações do painel", () => {
     expect(r.status).toBe(200);
     expect(mocks.call.mock.calls.map((call: unknown[]) => call[1])).toEqual(["buscar_contrato", "buscar_inquilino"]);
     expect(JSON.stringify(await r.json())).toContain("Rua A");
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "ai.painel_atendente.contrato",
+      metadata: expect.objectContaining({ sucesso: true, encontrado: true, status: "ok" }),
+    }));
+  });
+
+  it("contrato não encontrado grava status separado do sucesso técnico", async () => {
+    mocks.load.mockResolvedValue({ servidor: {}, cabecalhos: {}, ferramentas: [
+      { name: "consultar_contrato_inquilino", somenteLeitura: true },
+    ] });
+    mocks.call.mockResolvedValue({
+      dados: { resultado: "nao_encontrado", encontrado: false, status: "nao_encontrado" },
+      texto: "",
+    });
+    const r = await POST(req({ acao: "contrato" }), ctx);
+    expect(r.status).toBe(200);
+    const corpo = JSON.stringify(await r.json());
+    expect(corpo).toMatch(/não prova que o cliente não tem contrato/i);
+    expect(corpo).not.toContain("sugestao");
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "ai.painel_atendente.contrato",
+      metadata: expect.objectContaining({ sucesso: true, encontrado: false, status: "nao_encontrado" }),
+    }));
   });
 
   it("envia somente a ficha efêmera da conversa ao Hub", async () => {

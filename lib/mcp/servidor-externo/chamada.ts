@@ -95,6 +95,8 @@ export const CABECALHOS_DO_CONTATO = {
   id: "X-Deskcomm-Contato-Id",
   telefone: "X-Deskcomm-Contato-Telefone",
   canal: "X-Deskcomm-Canal",
+  /** Opcional: `contacts.custom_fields.superlogica_id_pessoa` (1–12 dígitos). */
+  pessoaSuperlogica: "X-Deskcomm-Superlogica-Pessoa-Id",
 } as const;
 
 const TIMEOUT_PADRAO_MS = 15_000;

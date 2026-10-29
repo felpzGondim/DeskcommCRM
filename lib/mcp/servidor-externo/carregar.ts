@@ -37,6 +37,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { logger } from "@/lib/logger";
+import { vinculoEmCustomFields } from "@/lib/locacao/superlogica-id";
 import {
   CABECALHOS_DO_CONTATO,
   listarFerramentasDoServidor,
@@ -107,11 +108,11 @@ async function cabecalhosDoContato(
 ): Promise<Record<string, string> | null> {
   const { data, error } = await supabase
     .from("contacts")
-    .select("id, phone_number")
+    .select("id, phone_number, custom_fields")
     .eq("organization_id", organizationId)
     .eq("id", contatoId)
     .maybeSingle();
-  const contato = data as { id?: unknown; phone_number?: unknown } | null;
+  const contato = data as { id?: unknown; phone_number?: unknown; custom_fields?: unknown } | null;
   if (error || typeof contato?.id !== "string" || contato.id !== contatoId) {
     logger.warn("contato do turno nao resolvido — servidor MCP externo fica fora deste turno", {
       organization_id: organizationId,
@@ -124,6 +125,8 @@ async function cabecalhosDoContato(
   const digitos =
     typeof contato.phone_number === "string" ? contato.phone_number.replace(/\D/g, "") : "";
   if (digitos !== "") cabecalhos[CABECALHOS_DO_CONTATO.telefone] = digitos;
+  const pessoaId = vinculoEmCustomFields(contato.custom_fields).superlogica_id_pessoa;
+  if (pessoaId) cabecalhos[CABECALHOS_DO_CONTATO.pessoaSuperlogica] = pessoaId;
 
   if (!conversaId) return cabecalhos;
   const { data: conversa } = await supabase

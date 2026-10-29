@@ -61,15 +61,15 @@ describe("Painel do agente (UI)", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Gerar contrato" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Abrir análise" })).toBeDisabled();
   });
 
-  it("oferece Gerar contrato no painel e abre a preparação sem gravar", () => {
+  it("oferece Abrir análise no painel e a aba Gerar contrato sem gravar", async () => {
     render(<PainelDoAgente conversationId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Gerar contrato" }));
-    expect(screen.getByRole("dialog", { name: "Gerar contrato no SuperLógica" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Preparar locação" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
+    expect(screen.getByRole("dialog", { name: "Análise de inquilino" })).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
+    expect(await screen.findByRole("button", { name: "Preparar locação" })).toBeVisible();
     expect(postMock).not.toHaveBeenCalled();
   });
 
@@ -405,6 +405,7 @@ describe("Painel do agente (UI)", () => {
     });
     const usar = vi.fn();
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeEnabled(),
     );

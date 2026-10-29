@@ -68,7 +68,7 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
   },
   {
     nome: "consultar_contrato",
-    descricao: "Consulta o contrato ativo no Brisa Hub (só leitura). Mesma ação do botão Consultar contrato e inquilino.",
+    descricao: "Consulta o contrato ativo no Brisa Hub (só leitura). Mesma ação do botão Consultar contrato e inquilino. Se encontrado for falso ou o status não for ok, avise a equipe e NÃO afirme ao cliente que ele não tem contrato.",
     nivel: "L",
     entrada: vazio,
     rotuloAndamento: "consultando Superlógica…",

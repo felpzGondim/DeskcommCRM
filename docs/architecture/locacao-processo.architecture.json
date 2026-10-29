@@ -15,7 +15,8 @@
   ],
   "mainPath": ["painel", "flag", "processo", "etapa"],
   "nodes": [
-    { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: Abrir processo (papel contato)" },
+    { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: resumo + Abrir análise (papel contato)" },
+    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal Análise de inquilino com vínculo Superlógica" },
     { "id": "lista", "lane": "inbox", "col": 1, "type": "frontend", "label": "/app/locacao e detalhe com aprovar/reprovar" },
     { "id": "config", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: chaves desligadas" },
     { "id": "flag", "lane": "servidor", "col": 2, "type": "process", "label": "organizations.settings.locacao.* e superlogica_vinculo" },
@@ -61,6 +62,10 @@
     { "id": "e25", "from": "flag", "to": "chaves4", "label": "Fase 4 não liga nada" },
     { "id": "e26", "from": "chaves4", "to": "seguro", "label": "chave seguro desligada: tabela vazia" },
     { "id": "e27", "from": "chaves4", "to": "relatorio", "label": "chave relatorio desligada: botão some" },
-    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" }
+    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" },
+    { "id": "e29", "from": "painel", "to": "analise_modal", "label": "Abrir análise mesmo com processos desligados" },
+    { "id": "e30", "from": "analise_modal", "to": "rotas", "label": "busca, ligar, desligar, ficha, contrato" },
+    { "id": "e31", "from": "analise_modal", "to": "vinculo", "label": "custom_fields + POST/DELETE vinculos" },
+    { "id": "e32", "from": "rotas", "to": "hub", "label": "buscar_pessoas_superlogica {pesquisa}" }
   ]
 }
