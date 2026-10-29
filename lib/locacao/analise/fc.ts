@@ -9,6 +9,7 @@ import type { FichaPreliminar, PapelDaFicha, PessoaDaFicha } from "@/lib/locacao
 import type { StatusAnaliseInquilino } from "@/lib/locacao/analise/status-hub";
 import { hashCpfDoParticipante } from "@/lib/locacao/cpf";
 import type { EstadoDaAnaliseFc, PapelDoProcesso } from "@/lib/locacao/vocabulario";
+import { exigirObrigatorios, type ValoresDoImovel } from "@/lib/locacao/valores-imovel";
 
 export { lerStatusDoHub, type StatusAnaliseInquilino } from "@/lib/locacao/analise/status-hub";
 
@@ -121,6 +122,7 @@ export function pendenciaDoPayloadFc(
   ficha: FichaPreliminar,
   pessoa: PessoaDaFicha | null,
   telefone: string | null,
+  valores: ValoresDoImovel,
 ): string | null {
   if (!pessoa) {
     return "Inclua o inquilino principal como locatário no processo antes de analisar a FC.";
@@ -146,9 +148,11 @@ export function pendenciaDoPayloadFc(
       numero: imovel.numero.valor,
       complemento: imovel.complemento.valor,
     });
-  if (!codigo || !logradouro || typeof imovel.aluguel.valor !== "number") {
-    return "Informe o imóvel (endereço e aluguel) na ficha antes de analisar a FC.";
+  if (!codigo || !logradouro) {
+    return "Informe o imóvel (endereço) na ficha antes de analisar a FC.";
   }
+  const faltaValor = exigirObrigatorios(valores, "fc");
+  if (faltaValor) return faltaValor;
   const renda = ficha.renda.proposta_fc.valor ?? ficha.renda.mensal.valor;
   if (typeof renda !== "number") {
     return "Confirme a renda antes de analisar o seguro-fiança ou a FC.";
@@ -163,8 +167,9 @@ export function montarArgumentosFc(input: {
   conversaId: string;
   orgId: string;
   telefone: string;
+  valores: ValoresDoImovel;
 }): PayloadFcOk | FalhaDoPayloadFc {
-  const motivo = pendenciaDoPayloadFc(input.ficha, input.pessoa, input.telefone);
+  const motivo = pendenciaDoPayloadFc(input.ficha, input.pessoa, input.telefone, input.valores);
   if (motivo) return { ok: false, motivo };
   const imovel = input.ficha.imovel;
   const logradouro = imovel.logradouro.valor!.trim();
@@ -198,7 +203,7 @@ export function montarArgumentosFc(input: {
         codigo_fc: codigo,
         logradouro,
         apartamento,
-        aluguel: imovel.aluguel.valor!,
+        aluguel: input.valores.aluguel.valor!,
       },
       renda: { mensal: renda },
     },

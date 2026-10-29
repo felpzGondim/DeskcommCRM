@@ -1,10 +1,11 @@
 /**
  * Chaves liga/desliga das Fases 3, 3.5, 3b e 4. Moram em
  * `organizations.settings`. Ausente = desligado. Rollback = gravar `false`;
- * as tabelas ficam. A migration 0770 NÃO liga nada.
+ * as tabelas ficam. As migrations 0770 e 0771 NÃO ligam nada.
  *
  * Padrões sujeitos à revisão do Felipe estão documentados em
- * `docs/decisoes/locacao-fases-3-3b.md` e `docs/decisoes/locacao-fase4-analise.md`.
+ * `docs/decisoes/locacao-fases-3-3b.md`, `docs/decisoes/locacao-fase4-analise.md`
+ * e `docs/decisoes/locacao-valores-imovel.md`.
  */
 import { z } from "zod";
 

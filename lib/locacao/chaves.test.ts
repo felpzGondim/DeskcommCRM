@@ -19,6 +19,7 @@ describe("chaves de locação", () => {
     expect(driveLigado({ locacao: { processos_habilitado: true, arquivos_habilitado: true } })).toBe(false);
     expect(vinculoLigado({})).toBe(false);
     expect(pacoteSuperlogicaLigado({})).toBe(false);
+    expect(pacoteSuperlogicaLigado({ locacao: { processos_habilitado: true } })).toBe(false);
   });
 
   it("drive só liga se processos, arquivos e drive estão true", () => {

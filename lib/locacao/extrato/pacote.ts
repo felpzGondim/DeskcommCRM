@@ -27,6 +27,7 @@ export interface LeitorDePacoteSuperlogica {
   ler(input: {
     orgId: string;
     contactId: string;
+    superlogicaImovelId?: number | null;
   }): Promise<{
     aluguelCentavos?: number | null;
     condominioCentavos?: number | null;

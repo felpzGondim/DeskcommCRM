@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { chaveEndereco, codigoFc, type PartesDoEndereco } from "@/lib/locacao/endereco";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { ehStatusFinal, transicaoPermitida, type StatusDoProcesso } from "@/lib/locacao/status";
+import { COLUNAS_SQL_VALORES_DO_IMOVEL } from "@/lib/locacao/valores-imovel";
 import type {
   EstadoDaAnaliseFc,
   EstadoDaAnaliseSeguro,
@@ -160,7 +161,7 @@ export async function lerProcesso(
   processoId: string,
 ): Promise<Record<string, unknown> | null> {
   const { data } = await tabelaLocacao(admin, "locacao_processos")
-    .select("id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at,renda_confirmada_em,renda_confirmada_por,renda_confirmada_ficha_versao,relatorio_rascunho,relatorio_rascunho_em,relatorio_rascunho_por,relatorio_aprovado_em,relatorio_aprovado_por,relatorio_documento_id")
+    .select(`id,imovel_id,status,status_mudou_em,motivo_status,motivo_cancelamento,ficha_versao_atual,aprovado_por,aprovado_em,superlogica_contrato_id,encerrado_em,created_at,renda_confirmada_em,renda_confirmada_por,renda_confirmada_ficha_versao,relatorio_rascunho,relatorio_rascunho_em,relatorio_rascunho_por,relatorio_aprovado_em,relatorio_aprovado_por,relatorio_documento_id,${COLUNAS_SQL_VALORES_DO_IMOVEL}`)
     .eq("organization_id", orgId).eq("id", processoId).maybeSingle();
   return data ? asRec(data) : null;
 }

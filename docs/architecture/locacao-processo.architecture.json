@@ -31,7 +31,9 @@
     { "id": "relatorio", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: Gerar/aprovar relatório (6 seções, desligado)" },
     { "id": "hub", "lane": "fora", "col": 4, "type": "external", "label": "Superlógica via Hub: só GET; FC só a pedido, reuso 90d" },
     { "id": "drive", "lane": "fora", "col": 4, "type": "external", "label": "Drive Aluguéis: DESKCOMM_* env, chave desligada, nunca apaga" },
-    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" }
+    { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" },
+    { "id": "valores", "lane": "registro", "col": 3, "type": "database", "label": "valores do imóvel no processo: origem e edição" },
+    { "id": "camposImovel", "lane": "inbox", "col": 1, "type": "frontend", "label": "CamposImovelProcesso na ficha (aba Dados depois)" }
   ],
   "edges": [
     { "id": "e1", "from": "painel", "to": "flag", "label": "só cria se processos_habilitado" },
@@ -61,6 +63,10 @@
     { "id": "e25", "from": "flag", "to": "chaves4", "label": "Fase 4 não liga nada" },
     { "id": "e26", "from": "chaves4", "to": "seguro", "label": "chave seguro desligada: tabela vazia" },
     { "id": "e27", "from": "chaves4", "to": "relatorio", "label": "chave relatorio desligada: botão some" },
-    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" }
+    { "id": "e28", "from": "relatorio", "to": "processo", "label": "grava rascunho e aprovação; bloco de renda já calculado" },
+    { "id": "e29", "from": "rotas", "to": "valores", "label": "GET pré-preenche; PATCH manual não é sobrescrito" },
+    { "id": "e30", "from": "valores", "to": "hub", "label": "FC/Migra usam os quatro; recusa se faltar" },
+    { "id": "e31", "from": "camposImovel", "to": "valores", "label": "atendente edita na ficha; origem visível" },
+    { "id": "e32", "from": "valores", "to": "camposImovel", "label": "mostra valor e origem de cada campo" }
   ]
 }
