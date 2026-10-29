@@ -58,6 +58,24 @@ describe("mapeamento da análise FC Score+", () => {
     expect(JSON.stringify(r.argumentos.candidato.cpf)).toBe(JSON.stringify("52998224725"));
   });
 
+  it("sem renda comprovada recusa e não inventa valor", () => {
+    const ficha = fichaPronta();
+    ficha.renda.mensal.valor = null;
+    ficha.renda.proposta_fc.valor = null;
+    const pessoa = pessoaDaFichaParaFc(ficha)!;
+    const r = montarArgumentosFc({
+      ficha,
+      pessoa,
+      pedidoId: "00000000-0000-4000-8000-000000000099",
+      conversaId: "conv-1",
+      orgId: "org-1",
+      telefone: "11987654321",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.motivo).toMatch(/renda/i);
+  });
+
   it("casa a pessoa da ficha pelo hash do CPF sem devolver o número", () => {
     const ficha = fichaPronta();
     const hash = hashCpfDoParticipante("52998224725");

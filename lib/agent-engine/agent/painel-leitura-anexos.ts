@@ -3,11 +3,15 @@
  * PDF com texto, PDF escaneado (OCR/visão), foto documental e PDF com senha.
  * Nada disto é gravado — só vive na prévia efêmera até a Fase 3.
  */
-import { extractPdfText, PdfExtractError } from "@/lib/ai/rag/extractors/pdf";
+import { extractPdfDocument, PdfExtractError } from "@/lib/ai/rag/extractors/pdf";
 import { rasterizarPaginasPdf } from "@/lib/ai/rag/extractors/pdf-paginas";
 import { ehErroDeSenhaDePdf } from "@/lib/ai/rag/extractors/pdf-senha";
 import type { LerDocumentoFn } from "@/lib/ai/visao/ler-documento";
-import { LIMITES_ANEXOS_PADRAO, type LimitesAnexos, ehDescricaoGenericaDeMidia } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import {
+  LIMITES_ANEXOS_PADRAO,
+  type LimitesAnexos,
+  ehDescricaoGenericaDeMidia,
+} from "@/lib/agent-engine/agent/painel-anexos-limites";
 import { isMediaPathOwnedBy } from "@/lib/messaging/media/upload-validation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -18,7 +22,10 @@ export type AvisoAnexo = {
 };
 
 export function nomeDoAnexo(linha: Record<string, unknown>): string {
-  const meta = linha.metadata && typeof linha.metadata === "object" ? linha.metadata as Record<string, unknown> : {};
+  const meta =
+    linha.metadata && typeof linha.metadata === "object"
+      ? (linha.metadata as Record<string, unknown>)
+      : {};
   if (typeof meta.media_filename === "string" && meta.media_filename.trim()) {
     return meta.media_filename.trim().slice(0, 120);
   }
@@ -52,7 +59,10 @@ async function ocrDePdf(
   // Caminho feliz: uma chamada com o PDF inteiro (Gemini lê até 30 páginas).
   const direto = await lerDocumento({ organizationId, buffer, mime: "application/pdf" });
   if (direto.ok && direto.texto.trim()) return direto.texto.trim();
-  const paginas = await rasterizarPaginasPdf(buffer, { maxPaginas: limites.paginas_ocr, password: senha });
+  const paginas = await rasterizarPaginasPdf(buffer, {
+    maxPaginas: limites.paginas_ocr,
+    password: senha,
+  });
   if (paginas.length === 0) return null;
   const lote = Math.max(1, limites.paginas_por_lote_ocr);
   const partes: string[] = [];
@@ -90,7 +100,13 @@ export async function lerPdfsOriginais(
   let documentos = 0;
   let caracteres = 0;
   for (const linha of saida) {
-    if (linha.type !== "document" || linha.direction === "outbound" || linha.media_mime !== "application/pdf" || linha.revoked_at) continue;
+    if (
+      linha.type !== "document" ||
+      linha.direction === "outbound" ||
+      linha.media_mime !== "application/pdf" ||
+      linha.revoked_at
+    )
+      continue;
     const path = linha.media_storage_path;
     const tamanho = linha.media_size_bytes;
     const nome = nomeDoAnexo(linha);
@@ -110,15 +126,22 @@ export async function lerPdfsOriginais(
       if (!buffer) continue;
       let bruto = "";
       try {
-        bruto = await extractPdfText(buffer, senha ? { password: senha } : {});
+        const extraido = await extractPdfDocument(buffer, senha ? { password: senha } : {});
+        bruto = extraido.texto;
+        linha.pdf_paginas = extraido.paginas;
       } catch (err) {
-        if ((err instanceof PdfExtractError && err.motivo === "protegido") || ehErroDeSenhaDePdf(err)) {
+        if (
+          (err instanceof PdfExtractError && err.motivo === "protegido") ||
+          ehErroDeSenhaDePdf(err)
+        ) {
           linha.pdf_protegido = true;
           linha.tentativas_senha = tentativas;
-          linha.pendencia_anexo = tentativas >= limites.tentativas_senha ? "pdf_protegido_esgotado" : "pdf_protegido";
+          linha.pendencia_anexo =
+            tentativas >= limites.tentativas_senha ? "pdf_protegido_esgotado" : "pdf_protegido";
           continue;
         }
         if (err instanceof PdfExtractError && err.motivo === "sem_texto") {
+          if (typeof err.paginas === "number") linha.pdf_paginas = err.paginas;
           if (!opcoes.lerDocumento) {
             linha.pendencia_anexo = "pdf_escaneado";
             continue;
@@ -135,7 +158,11 @@ export async function lerPdfsOriginais(
           continue;
         }
       }
-      if (!bruto || bruto.length > limites.chars_por_arquivo || caracteres + bruto.length > limites.chars_conjunto) {
+      if (
+        !bruto ||
+        bruto.length > limites.chars_por_arquivo ||
+        caracteres + bruto.length > limites.chars_conjunto
+      ) {
         linha.pendencia_anexo = "arquivo_extenso";
         continue;
       }
@@ -189,7 +216,10 @@ export async function lerImagensDocumentais(
         linha.pendencia_anexo = "imagem_sem_leitura";
         continue;
       }
-      if (lido.texto.length > limites.chars_por_arquivo || caracteres + lido.texto.length > limites.chars_conjunto) {
+      if (
+        lido.texto.length > limites.chars_por_arquivo ||
+        caracteres + lido.texto.length > limites.chars_conjunto
+      ) {
         linha.pendencia_anexo = "arquivo_extenso";
         continue;
       }
@@ -213,9 +243,12 @@ export function frasesDosAvisos(avisos: readonly AvisoAnexo[], tentativasMax = 3
         ? `PDF protegido por senha: ${a.nome}. Três tentativas falharam; este arquivo fica pendente.`
         : `PDF protegido por senha: ${a.nome}. Informe a senha no painel para ler o arquivo.`;
     }
-    if (a.tipo === "pdf_escaneado") return `Não consegui ler o PDF escaneado ${a.nome}. Confira o original.`;
-    if (a.tipo === "imagem_sem_leitura") return `A foto ${a.nome} ainda não tem leitura documental.`;
-    if (a.tipo === "arquivo_extenso") return `O arquivo ${a.nome} passou do tamanho ou do limite de texto desta análise.`;
+    if (a.tipo === "pdf_escaneado")
+      return `Não consegui ler o PDF escaneado ${a.nome}. Confira o original.`;
+    if (a.tipo === "imagem_sem_leitura")
+      return `A foto ${a.nome} ainda não tem leitura documental.`;
+    if (a.tipo === "arquivo_extenso")
+      return `O arquivo ${a.nome} passou do tamanho ou do limite de texto desta análise.`;
     return `Há anexos demais nesta conversa. ${a.nome} ficou de fora do teto.`;
   });
 }
@@ -240,7 +273,9 @@ export function avisosDosAnexos(linhas: readonly Record<string, unknown>[]): Avi
   return avisos;
 }
 
-export function leiturasDocumentais(linhas: readonly Record<string, unknown>[]): Record<string, string> {
+export function leiturasDocumentais(
+  linhas: readonly Record<string, unknown>[],
+): Record<string, string> {
   const mapa: Record<string, string> = {};
   for (const linha of linhas) {
     if (linha.leitura_documental !== true && linha.original_completo !== true) continue;
@@ -284,7 +319,14 @@ export async function enriquecerAnexosDaAnalise(
   const admin = opcoes.admin ?? createAdminClient();
   const comPdf = await lerPdfsOriginais(linhas, orgId, conversaId, admin, opcoes);
   const comImagens = opcoes.lerDocumento
-    ? await lerImagensDocumentais(comPdf, orgId, conversaId, opcoes.lerDocumento, admin, opcoes.limites)
+    ? await lerImagensDocumentais(
+        comPdf,
+        orgId,
+        conversaId,
+        opcoes.lerDocumento,
+        admin,
+        opcoes.limites,
+      )
     : comPdf;
   return { linhas: comImagens, avisos: avisosDosAnexos(comImagens) };
 }

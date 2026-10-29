@@ -9,7 +9,9 @@ function statusDoCodigo(codigo: string): number {
     codigo === "tool_unavailable" ||
     codigo === "hub_contract_error" ||
     codigo === "validation_error" ||
-    codigo === "reply_context_unavailable"
+    codigo === "reply_context_unavailable" ||
+    codigo === "saida_truncada" ||
+    codigo === "invalid_format"
   ) {
     return 422;
   }

@@ -176,7 +176,12 @@ export function montarArgumentosFc(input: {
       complemento: imovel.complemento.valor,
     });
   const apartamento = imovel.complemento.valor?.trim() || imovel.numero.valor?.trim() || "";
-  const renda = (input.ficha.renda.proposta_fc.valor ?? input.ficha.renda.mensal.valor)!;
+  // Sem comprovada o motor do #31 deixa mensal/proposta null. Não assumir
+  // valor: a pendência já recusou; se chegar aqui sem número, recusa de novo.
+  const renda = input.ficha.renda.proposta_fc.valor ?? input.ficha.renda.mensal.valor;
+  if (typeof renda !== "number") {
+    return { ok: false, motivo: "Confirme a renda antes de analisar o seguro-fiança ou a FC." };
+  }
   return {
     ok: true,
     argumentos: {

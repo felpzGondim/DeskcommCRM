@@ -1,9 +1,11 @@
 /**
- * Regras da skill de análise financeira do inquilino, aplicadas em texto de
- * mentira e no JSON do modelo. Sem rede, sem banco: o teste cobre isto.
+ * APOSENTADO. A classificação por regex da 4.1 excluía PIX de terceiros e
+ * contradizia a regra do Felipe. A comprovada sai de `lib/locacao/extrato`.
+ * Este arquivo permanece só para leitura histórica — ninguém no caminho de
+ * produção o importa.
  *
- * Tira da renda comprovada: autotransferência, poupança e Rende Fácil.
- * PIX de terceiros fica à parte — não entra na proposta para a FC.
+ * Tira da renda comprovada (legado): autotransferência, poupança e Rende Fácil.
+ * PIX de terceiros ficava à parte — isso está errado e não vale mais.
  */
 export const MOTIVOS_DE_EXCLUSAO = [
   "autotransferencia",

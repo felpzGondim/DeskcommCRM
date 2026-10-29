@@ -11,6 +11,9 @@ Nada disto manda mensagem a contato. Nada escreve na Superlógica. Sem preço na
 
 ## O que este PR faz
 
+- Sem renda comprovada o motor do #31 deixa `renda.mensal` e `proposta_fc` em
+  `null`. O payload **não assume valor**: `pendenciaDoPayloadFc` e
+  `montarArgumentosFc` recusam. Conservador: sem número, não dispara a FC.
 - Clique 1: ferramenta `analisar_fc` (L). O agente pode executar. Dispara
   `iniciar_analise_inquilino` com `acao: "fc_salvar"` (grátis, gera o ID-FC).
 - Clique 2: ferramenta `confirmar_cobranca_fc` (S). Só o atendente; qualquer
