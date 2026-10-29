@@ -1,6 +1,17 @@
 export const TEXTOS_PAINEL_FICHA = {
   "Gerar relatório preliminar": { es: "Generar informe preliminar" },
   "Gerando relatório…": { es: "Generando informe…" },
+  "gerando…": { es: "generando…" },
+  "O relatório preliminar já está sendo gerado.": {
+    es: "El informe preliminar ya se está generando.",
+  },
+  "O relatório preliminar está sendo gerado. A ficha atualiza sozinha quando ficar pronta.": {
+    es: "El informe preliminar se está generando. La ficha se actualiza sola cuando quede lista.",
+  },
+  "Não foi possível gerar o relatório preliminar. A extração do extrato veio em formato inválido. Tente de novo.":
+    {
+      es: "No fue posible generar el informe preliminar. La extracción del extracto vino en formato inválido. Inténtalo de nuevo.",
+    },
   "Salvar ficha": { es: "Guardar ficha" },
   "Salvando ficha…": { es: "Guardando ficha…" },
   "Relatório preliminar": { es: "Informe preliminar" },

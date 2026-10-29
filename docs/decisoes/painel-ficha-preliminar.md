@@ -5,7 +5,7 @@
 
 ## O que o atendente vê
 
-No Painel do agente, o botão **Gerar relatório preliminar** lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão). Devolve:
+No Painel do agente, o botão **Gerar relatório preliminar** enfileira o trabalho (`event_log` `painel.relatorio_preliminar_requested`) e responde na hora. O painel mostra “gerando…” e consulta o andamento; o worker lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão — senha só no Redis, TTL curto, nunca no evento). Dois cliques na mesma conversa reaproveitam o evento em curso. Devolve:
 
 1. um relatório interno em 6 seções da skill Análise De Inquilinos (1 Identificação, 2 Resumo da Análise, 3 Análise de Crédito, 4 Análise de Renda, 5 Análise Financeira e Despesas, 6 Análise de Risco para Locação), só para a equipe — nunca "alugue"/"não alugue";
 2. a **ficha de dados** (pessoas, renda, imóvel, documentos, pendências), que o atendente confere e corrige.
@@ -84,5 +84,11 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 6. Anti-morte: pendências na ficha; sem celular do inquilino a análise para e pede o número.
 7. Configuração: mesmos limites de `organizations.settings.locacao.anexos` (Fase 2). Sem tela nova.
 8. Continuidade: a IA rascunha; o atendente corrige e salva. A IA não confirma FC.
-9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga.
-10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_tabela`, `extrato`).
+9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga. Falha de JSON/zod/corte fecha o evento com motivo visível na tela — retry automático gastaria o mesmo teto.
+10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_fila`, `ficha_worker`, `ficha_tabela`, `extrato`).
+
+## Correções de concorrência e continuidade (2026-10-29)
+
+CONFIRMADO no código: o hook inicia a consulta periódica somente depois do POST de geração aceito. A resposta do agente incrementa `atualizacaoFicha` em `PainelDoAgente`; o sinal passa por `AnaliseInquilinoDialog` e `FichaPreliminarPainel` até `useFichaPreliminar`. A consulta de atualização preserva a edição local quando não há geração nem versão nova. Se a ficha estiver desmontada, a leitura inicial retoma o andamento ao abrir a análise.
+
+A eleição em `event_log` ordena por `created_at` e `id`. Worker e ação usam `eventoVencedor`: o mais antigo continua, mesmo havendo duplicados mais novos. Os demais encerram sem ler documentos ou chamar IA. Sem schema novo, sem mudança nos limites, nas confirmações de cobrança ou no envio ao cliente.

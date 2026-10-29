@@ -16,9 +16,8 @@ import {
   lerVersaoDaFicha,
   listarHistoricoDaFicha,
 } from "@/lib/locacao/ficha-repositorio";
-import { montarContexto } from "@/lib/painel/contexto";
-import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
-import { respostaDaFerramenta } from "@/lib/painel/http";
+import { textoDaFalhaDoRelatorio } from "@/lib/painel/relatorio-preliminar-motivo";
+import { enfileirarRelatorioPreliminar, lerGeracaoDaFicha } from "@/lib/painel/relatorio-preliminar-fila";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -69,11 +68,12 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const versaoQ = Number(new URL(req.url).searchParams.get("versao") ?? "");
   const admin = createAdminClient();
   try {
-    const [atual, historico] = await Promise.all([
+    const [atual, historico, geracao] = await Promise.all([
       Number.isInteger(versaoQ) && versaoQ > 0
         ? lerVersaoDaFicha(admin, orgId!, id, versaoQ)
         : lerFichaAtual(admin, orgId!, id),
       listarHistoricoDaFicha(admin, orgId!, id),
+      lerGeracaoDaFicha(admin, orgId!, id),
     ]);
     return ok({
       atual: atual ? {
@@ -85,6 +85,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         alterado_em: atual.alterado_em,
       } : null,
       historico,
+      geracao: geracao
+        ? {
+            status: geracao.status,
+            motivo: geracao.motivo,
+            mensagem: geracao.motivo ? t(textoDaFalhaDoRelatorio(geracao.motivo)) : null,
+            evento_id: geracao.eventoId,
+          }
+        : null,
     }, { requestId });
   } catch {
     return fail("internal_error", t("Não foi possível ler a ficha preliminar."), 500, { requestId });
@@ -98,7 +106,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const gate = await autenticar(requestId, id);
   if ("erro" in gate && gate.erro) return gate.erro;
-  const { auth, orgId, db, contato } = gate;
+  const { auth, orgId, contato } = gate;
   const t = (s: string) => traduzir(s, auth!.user.idioma);
   const parsed = corpo.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return fail("validation_error", t("Pedido inválido."), 400, { requestId });
@@ -151,25 +159,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   }
 
-  const { data: orgLinha } = await db!.from("organizations").select("settings")
-    .eq("id", orgId!).maybeSingle();
   const senhas = Object.fromEntries((pedido.senhasPdf ?? []).map((s) => [s.nome, s.senha]));
-  const contexto = montarContexto({
-    orgId: orgId!, conversationId: id, contactId: contato!.id, userId: auth!.user.id, requestId,
-    dbSessao: db!, admin, settings: orgLinha?.settings, idioma: auth!.user.idioma, origem: "botao",
-  });
-  const r = await executarFerramenta("gerar_relatorio_preliminar", contexto, { senhas });
-  registrar(r.ok, r.ok ? { versao: r.extra?.versao, campos: ["*"] } : {});
-  if (r.ok) {
-    return ok({
-      versao: r.extra?.versao,
-      origem: r.extra?.origem,
-      ficha: r.extra?.ficha,
-      relatorio: r.extra?.relatorio ?? r.texto,
-      campos_alterados: r.extra?.campos_alterados,
-      avisos: r.avisos,
-      historico: r.extra?.historico,
-    }, { requestId });
+  try {
+    const fila = await enfileirarRelatorioPreliminar(admin, {
+      orgId: orgId!,
+      conversationId: id,
+      contactId: contato!.id,
+      userId: auth!.user.id,
+      requestId,
+      senhas,
+    });
+    registrar(true, { enfileirado: true, existente: fila.existente, evento_id: fila.eventoId });
+    return ok(
+      { status: "gerando", evento_id: fila.eventoId, existente: fila.existente },
+      { status: 202, requestId },
+    );
+  } catch {
+    registrar(false, { enfileirado: false });
+    return fail("internal_error", t("Não foi possível gerar o relatório preliminar."), 500, { requestId });
   }
-  return respostaDaFerramenta(r, t, requestId);
 }

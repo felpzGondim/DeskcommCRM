@@ -53,6 +53,7 @@ import { lgpdRedactHandler } from "@/workers/lgpd-redact-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
 import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { ragIndexerHandler } from "@/workers/rag-indexer.handler";
+import { painelRelatorioPreliminarHandler } from "@/workers/painel-relatorio-preliminar.handler";
 
 const RODA: EventHandler[] = [
   followupReactivityHandler,
@@ -89,6 +90,7 @@ const PULA: EventHandler[] = [
   conversaoDeQualificacaoHandler,
   conversaoDeEtapaMetaHandler,
   pinoReintentoHandler,
+  painelRelatorioPreliminarHandler,
 ];
 
 const PREFIXO_DE_TESTE = "teste-org-parada";

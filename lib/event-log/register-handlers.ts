@@ -22,6 +22,7 @@ import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler"
 import { casoNaCentralHandler } from "@/lib/escalacao/caso-na-central.handler";
 import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
+import { painelRelatorioPreliminarHandler } from "@/workers/painel-relatorio-preliminar.handler";
 import { CONSUMIDORES_DOS_CANAIS } from "@/lib/channels/consumidores";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
 import { conversaoDeQualificacaoHandler } from "@/lib/conversoes/qualificacao.handler";
@@ -79,6 +80,8 @@ export function ensureHandlersRegistered(): void {
   registerHandler(followupGatilhoPresencaHandler);
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
+  // Relatório preliminar do painel: custa IA, então depois de quem só escreve.
+  registerHandler(painelRelatorioPreliminarHandler);
   // Os consumidores dos canais (ex.: o pino que entrou sem coordenadas).
   for (const consumidor of CONSUMIDORES_DOS_CANAIS) registerHandler(consumidor);
   registerHandler(webPushInboundHandler);

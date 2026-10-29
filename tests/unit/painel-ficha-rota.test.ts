@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   visao: vi.fn(),
   logError: vi.fn(),
   runModel: vi.fn(),
+  enfileirar: vi.fn(),
+  lerGeracao: vi.fn(),
+  listarGeracoes: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -66,6 +69,19 @@ vi.mock("@/lib/mcp/servidor-externo/chamada", () => ({
 vi.mock("@/lib/logger", () => ({
   logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
+vi.mock("@/lib/painel/relatorio-preliminar-fila", async () => {
+  const real = await vi.importActual<typeof import("@/lib/painel/relatorio-preliminar-fila")>(
+    "@/lib/painel/relatorio-preliminar-fila",
+  );
+  return {
+    ...real,
+    enfileirarRelatorioPreliminar: mocks.enfileirar,
+    lerGeracaoDaFicha: mocks.lerGeracao,
+    listarGeracoesEmCurso: mocks.listarGeracoes,
+  };
+});
+
+import { gerarRelatorioPreliminarDoPainel } from "@/lib/painel/acoes/ficha";
 
 import { GET, POST } from "@/app/api/v1/conversations/[id]/painel-agente/ficha/route";
 
@@ -124,6 +140,12 @@ describe("rota da ficha preliminar", () => {
     });
     mocks.lerAtual.mockResolvedValue(null);
     mocks.historico.mockResolvedValue([]);
+    mocks.lerGeracao.mockResolvedValue(null);
+    mocks.listarGeracoes.mockResolvedValue([]);
+    mocks.enfileirar.mockResolvedValue({
+      eventoId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      existente: false,
+    });
     mocks.gravar.mockImplementation(
       async (_admin: unknown, input: { ficha: unknown; relatorio: string; origem: string }) => ({
         id: "linha-1",
@@ -159,24 +181,69 @@ describe("rota da ficha preliminar", () => {
     mocks.admin.mockReturnValue({});
   });
 
-  it("gera o relatório sem chamar Hub, FC ou contrato", async () => {
+  it("o evento eleito continua mesmo com duplicado mais novo em curso", async () => {
+    mocks.listarGeracoes.mockResolvedValue([{ id: "antigo" }, { id: "novo" }]);
+    const select = vi.fn();
+    const q = {
+      select: () => { select(); return q; },
+      eq: () => q, order: () => q,
+      limit: async () => ({ data: null, error: { message: "fontes indisponíveis" } }),
+    };
+    const r = await gerarRelatorioPreliminarDoPainel({
+      admin: {}, orgId: "org-1", conversationId: "conversa-1",
+      dbSessao: { from: () => q }, settings: {},
+    } as never, {}, { eventoId: "antigo" });
+    expect(select).toHaveBeenCalled();
+    expect(r.codigo).toBe("internal_error");
+    expect(r.texto).toMatch(/ler a conversa/);
+    expect(mocks.gerar).not.toHaveBeenCalled();
+  });
+
+  it("o evento mais novo não lê documentos nem gera outra ficha", async () => {
+    mocks.listarGeracoes.mockResolvedValue([{ id: "antigo" }, { id: "novo" }]);
+    const from = vi.fn();
+    const r = await gerarRelatorioPreliminarDoPainel({
+      admin: {}, orgId: "org-1", conversationId: "conversa-1",
+      dbSessao: { from }, settings: {},
+    } as never, {}, { eventoId: "novo" });
+    expect(r.codigo).toBe("idempotency_in_progress");
+    expect(from).not.toHaveBeenCalled();
+    expect(mocks.gerar).not.toHaveBeenCalled();
+  });
+
+  it("enfileira o relatório e responde na hora", async () => {
     const r = await POST(req({ etapa: "gerar" }), ctx);
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(202);
     const corpo = await r.json();
-    expect(corpo.data.relatorio).toContain("Maria");
-    expect(corpo.data.ficha.pessoas[0].papel).toBe("inquilino");
-    expect(mocks.gerar).toHaveBeenCalled();
-    expect(mocks.gravar).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ origem: "preliminar_ia" }),
-    );
+    expect(corpo.data).toEqual({
+      status: "gerando",
+      evento_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      existente: false,
+    });
+    expect(mocks.enfileirar).toHaveBeenCalled();
+    expect(mocks.gerar).not.toHaveBeenCalled();
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toMatch(/11977776666|Maria quer/);
     expect(mocks.audit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "ai.painel_atendente.ficha_preliminar",
-        metadata: expect.objectContaining({ sucesso: true, campos: ["*"] }),
+        metadata: expect.objectContaining({
+          sucesso: true,
+          enfileirado: true,
+          evento_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+        }),
       }),
     );
+  });
+
+  it("segundo clique devolve o mesmo evento sem gerar de novo", async () => {
+    mocks.enfileirar.mockResolvedValue({
+      eventoId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      existente: true,
+    });
+    const r = await POST(req({ etapa: "gerar" }), ctx);
+    expect(r.status).toBe(202);
+    expect((await r.json()).data.existente).toBe(true);
+    expect(mocks.gerar).not.toHaveBeenCalled();
   });
 
   it("salva correção do atendente sem valores no audit", async () => {
@@ -207,10 +274,22 @@ describe("rota da ficha preliminar", () => {
       campos_alterados: ["pessoas[0].celular"],
       alterado_em: "2026-10-28T00:00:00Z",
     });
+    mocks.lerGeracao.mockResolvedValue({
+      status: "gerando",
+      motivo: null,
+      eventoId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    });
     const r = await GET(req(null, "GET"), ctx);
     expect(r.status).toBe(200);
     expect(mocks.gerar).not.toHaveBeenCalled();
-    expect((await r.json()).data.atual.versao).toBe(2);
+    const corpo = await r.json();
+    expect(corpo.data.atual.versao).toBe(2);
+    expect(corpo.data.geracao).toEqual({
+      status: "gerando",
+      motivo: null,
+      mensagem: null,
+      evento_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    });
   });
 
   it("o fonte da rota não importa Hub, FC nem /contrato/confirmar", async () => {
@@ -228,85 +307,16 @@ describe("rota da ficha preliminar", () => {
     expect(mocks.gerar).not.toHaveBeenCalled();
   });
 
-  it("saída truncada não culpa os documentos e loga só o código", async () => {
-    mocks.gerar.mockRejectedValue(new Error("saida_truncada"));
-    const r = await POST(req({ etapa: "gerar" }), ctx);
-    expect(r.status).toBe(422);
-    const corpo = await r.json();
-    expect(corpo.error.code).toBe("saida_truncada");
-    expect(corpo.error.message).toMatch(/incompleta/);
-    expect(corpo.error.message).not.toMatch(/documentos/);
-    expect(mocks.logError).toHaveBeenCalledWith(
-      "[painel-ficha] falha ao gerar relatório",
-      expect.objectContaining({
-        codigo: "saida_truncada",
-        motivo: "saida_truncada",
-        etapa: "relatorio",
-        organizationId: "org-1",
-      }),
-    );
-    expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Maria|11977776666/);
-  });
-
-  it("modelo simulado que copia o declarado e marca risco baixo é corrigido", async () => {
-    const real = await vi.importActual<
-      typeof import("@/lib/agent-engine/agent/painel-relatorio-preliminar")
-    >("@/lib/agent-engine/agent/painel-relatorio-preliminar");
-    mocks.gerar.mockImplementation((db: unknown, cfg: unknown, input: unknown, deps: unknown) =>
-      real.gerarRelatorioPreliminarNoPainel(
-        db as never,
-        cfg as never,
-        input as never,
-        deps as never,
-      ),
-    );
-    mocks.runModel.mockResolvedValue({
-      result: {
-        text: JSON.stringify({
-          relatorio: "## Identificação\nAna\n## Risco\nbaixo",
-          ficha: {
-            renda: {
-              mensal: { valor: 5000, fonte: "M1", trecho: "renda 5000" },
-              documentos: [{ fonte: "M1", tipo: "outro", resumo: "conversa" }],
-            },
-          },
-        }),
-      },
-      callId: "c-sim",
+  it("GET de erro traz motivo legível sem dado pessoal", async () => {
+    mocks.lerGeracao.mockResolvedValue({
+      status: "erro",
+      motivo: "saida_truncada",
+      eventoId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     });
-    mocks.enriquecer.mockResolvedValue({
-      linhas: [
-        {
-          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-          type: "text",
-          body: "Ana renda 5000",
-          direction: "inbound",
-        },
-      ],
-      avisos: [],
-    });
-    const r = await POST(req({ etapa: "gerar" }), ctx);
-    expect(r.status).toBe(200);
+    const r = await GET(req(null, "GET"), ctx);
     const corpo = await r.json();
-    expect(corpo.data.ficha.renda.mensal.valor).toBeNull();
-    expect(corpo.data.ficha.renda.alertas.join(" ")).toMatch(/não é comprovada/i);
-    expect(corpo.data.relatorio).toMatch(/Conclusão do Risco: moderado/);
-    expect(corpo.data.relatorio).not.toMatch(/Conclusão do Risco: baixo/);
-    expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Ana renda 5000|11977776666/);
-  });
-
-  it("JSON inválido não culpa os documentos", async () => {
-    mocks.gerar.mockRejectedValue(new Error("relatorio_ausente"));
-    const r = await POST(req({ etapa: "gerar" }), ctx);
-    expect(r.status).toBe(422);
-    const corpo = await r.json();
-    expect(corpo.error.code).toBe("invalid_format");
-    expect(corpo.error.message).toMatch(/formato inválido/);
-    expect(corpo.error.message).not.toMatch(/documentos/);
-    expect(mocks.logError).toHaveBeenCalledWith(
-      "[painel-ficha] falha ao gerar relatório",
-      expect.objectContaining({ motivo: "relatorio_json", etapa: "relatorio", codigo: "invalid_format" }),
-    );
-    expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Maria|11977776666|relatorio_ausente/);
+    expect(corpo.data.geracao.motivo).toBe("saida_truncada");
+    expect(corpo.data.geracao.mensagem).toMatch(/incompleta/);
+    expect(JSON.stringify(corpo)).not.toMatch(/11977776666|Maria/);
   });
 });
