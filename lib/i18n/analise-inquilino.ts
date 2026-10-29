@@ -6,10 +6,6 @@ export const TEXTOS_ANALISE_INQUILINO = {
   },
   "Análise FC": { es: "Análisis FC" },
   "Análise Migra": { es: "Análisis Migra" },
-  "Valores do imóvel": { es: "Valores del inmueble" },
-  "Aluguel, condomínio, IPTU, seguro-incêndio e seguro-fiança entram aqui quando o cadastro do imóvel estiver disponível.": {
-    es: "Alquiler, condominio, IPTU, seguro contra incendio y seguro de caución entran aquí cuando el registro del inmueble esté disponible.",
-  },
   "Vínculo Superlógica": { es: "Vínculo Superlógica" },
   "Pessoa Superlógica": { es: "Persona Superlógica" },
   "Sem vínculo Superlógica neste contato.": { es: "Sin vínculo Superlógica en este contacto." },

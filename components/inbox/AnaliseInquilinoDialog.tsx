@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { FormularioGerarContrato } from "@/components/inbox/GerarContratoDialog";
 import { FichaPreliminarPainel } from "@/components/inbox/FichaPreliminarPainel";
-import { EncaixeCamposDoImovel } from "@/components/locacao/EncaixeCamposDoImovel";
+import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
 import { ProcessoDeLocacaoPainel, type SecaoDoProcessoPainel } from "@/components/locacao/ProcessoDeLocacaoPainel";
 import { VinculoSuperlogica } from "@/components/locacao/VinculoSuperlogica";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -93,7 +93,10 @@ export function AnaliseInquilinoDialog({
           </TabsList>
         </Tabs>
         <div className={aba === "dados" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "dados"}>
-          <EncaixeCamposDoImovel />
+          <CamposImovelProcessoNaFicha
+            conversationId={conversationId}
+            desabilitado={desabilitado}
+          />
           <VinculoSuperlogica
             conversationId={conversationId}
             contato={contato}

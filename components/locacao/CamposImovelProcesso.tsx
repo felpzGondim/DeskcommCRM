@@ -142,7 +142,7 @@ function valoresDeJson(bruto: Record<string, ValorJson> | undefined): ValoresDoI
   return saida;
 }
 
-/** Ilha cliente: GET/PATCH do processo. Encaixa na aba Dados do modal paralelo. */
+/** Ilha cliente: GET/PATCH do processo. Usado na aba Dados. */
 export function CamposImovelProcessoDoProcesso({
   processoId,
   desabilitado = false,
