@@ -5,7 +5,11 @@
  */
 import { classificarLancamentos } from "./classificar";
 import { juntarFamiliares, type FamiliarDaFicha } from "./familiar";
-import { precisaExtracaoPorIa, type ExtratorDeLancamentos } from "./extrair-ia";
+import {
+  normalizarResultadoExtrator,
+  precisaExtracaoPorIa,
+  type ExtratorDeLancamentos,
+} from "./extrair-ia";
 import { lerLancamentos, pareceExtrato } from "./lancamentos";
 import { conferirSaldo, recadoDeSaldo } from "./saldo";
 import { resumirMeses, resumoVazio, textoDoResumoParaIa } from "./resumo-mensal";
@@ -21,6 +25,11 @@ import type {
 const FRASE_ILEGIVEL =
   "Extrato sem lançamentos legíveis (escaneado ou ilegível). Não estime a renda.";
 const FRASE_ESCANEADO = "PDF escaneado sem lançamentos legíveis. Não estime a renda.";
+export const FRASE_SALDO_NAO_FECHOU_CONFERIR = "saldo não fechou, conferir";
+
+function avisosUnicos(avisos: readonly string[]): string[] {
+  return [...new Set(avisos.filter((a) => a.trim().length > 0))];
+}
 
 const CONFERENCIA_VAZIA: ConferenciaDeSaldo = {
   conferido: false,
@@ -217,8 +226,29 @@ export async function analisarExtratoComIa(
     return parser;
   }
 
-  const daIa = await opcoes.extrator({ texto, nomeArquivo: opcoes.nomeArquivo });
-  if (daIa.length === 0) return parser;
+  let extraido: ReturnType<typeof normalizarResultadoExtrator>;
+  try {
+    extraido = normalizarResultadoExtrator(
+      await opcoes.extrator({ texto, nomeArquivo: opcoes.nomeArquivo }),
+    );
+  } catch {
+    return {
+      ...parser,
+      avisos: avisosUnicos([...parser.avisos, FRASE_SALDO_NAO_FECHOU_CONFERIR]),
+    };
+  }
+
+  const daIa = extraido.lancamentos;
+  if (daIa.length === 0) {
+    return {
+      ...parser,
+      avisos: avisosUnicos([
+        ...parser.avisos,
+        ...extraido.pendencias,
+        FRASE_SALDO_NAO_FECHOU_CONFERIR,
+      ]),
+    };
+  }
 
   const conferenciaIa = conferirSaldo(daIa, {
     saldoAnteriorCentavos: leitura.saldoAnteriorCentavos,
@@ -226,11 +256,19 @@ export async function analisarExtratoComIa(
   });
   const saldoFecha = !conferenciaIa.conferido || conferenciaIa.fecha;
   if (parser.lancamentos > 0 && !saldoFecha && parser.conferencia.fecha) {
-    return parser;
+    return {
+      ...parser,
+      avisos: avisosUnicos([...parser.avisos, ...extraido.pendencias]),
+    };
   }
   const usarIa = parser.lancamentos === 0 || saldoFecha || !parser.conferencia.fecha;
 
-  if (!usarIa) return parser;
+  if (!usarIa) {
+    return {
+      ...parser,
+      avisos: avisosUnicos([...parser.avisos, ...extraido.pendencias]),
+    };
+  }
 
   return fecharAnalise({
     ehExtrato: true,
@@ -239,10 +277,11 @@ export async function analisarExtratoComIa(
     lancamentos: daIa,
     titular: leitura.titular,
     paginasPdf: opcoes.paginasPdf ?? leitura.paginasDeclaradas,
-    paginasFaltando: conferenciaIa.conferido && !conferenciaIa.fecha,
+    paginasFaltando:
+      extraido.pendencias.length > 0 || (conferenciaIa.conferido && !conferenciaIa.fecha),
     conferencia: conferenciaIa,
     periodo: leitura.periodo,
-    avisos: [],
+    avisos: extraido.pendencias,
     fonteId: opcoes.fonteId ?? null,
     messageId: opcoes.messageId ?? null,
     nomeArquivo: opcoes.nomeArquivo ?? null,

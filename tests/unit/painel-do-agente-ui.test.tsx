@@ -420,7 +420,7 @@ describe("Painel do agente (UI)", () => {
     expect(postMock).toHaveBeenCalledWith(
       "/api/v1/conversations/c1/painel-agente/ficha",
       { etapa: "gerar" },
-      expect.objectContaining({ timeoutMs: 120000 }),
+      expect.objectContaining({ timeoutMs: 240000 }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Salvar ficha" }));
     await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));

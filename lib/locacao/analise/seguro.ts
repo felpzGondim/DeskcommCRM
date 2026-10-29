@@ -11,6 +11,7 @@ import { inquilinoPrincipalDaFicha } from "@/lib/locacao/ficha-telefone";
 import type { FichaPreliminar } from "@/lib/locacao/ficha-schema";
 import type { StatusAnaliseInquilino } from "@/lib/locacao/analise/status-hub";
 import type { EstadoDaAnaliseSeguro } from "@/lib/locacao/vocabulario";
+import { exigirObrigatorios, type ValoresDoImovel } from "@/lib/locacao/valores-imovel";
 
 export { lerStatusDoHub, type StatusAnaliseInquilino } from "@/lib/locacao/analise/status-hub";
 
@@ -87,6 +88,7 @@ function emailValido(bruto: string): string | null {
 export function pendenciaDoPayloadSeguro(
   ficha: FichaPreliminar,
   telefone: string | null,
+  valores: ValoresDoImovel,
 ): string | null {
   if (!telefone) {
     return "Informe o celular do inquilino principal na ficha antes de cotar o seguro.";
@@ -110,9 +112,11 @@ export function pendenciaDoPayloadSeguro(
       numero: imovel.numero.valor,
       complemento: imovel.complemento.valor,
     });
-  if (!codigo || !logradouro || typeof imovel.aluguel.valor !== "number") {
-    return "Informe o imóvel (endereço e aluguel) na ficha antes de cotar o seguro.";
+  if (!codigo || !logradouro) {
+    return "Informe o imóvel (endereço) na ficha antes de cotar o seguro.";
   }
+  const faltaValor = exigirObrigatorios(valores, "seguro");
+  if (faltaValor) return faltaValor;
   const renda = ficha.renda.proposta_fc.valor ?? ficha.renda.mensal.valor;
   if (typeof renda !== "number") {
     return "Confirme a renda antes de analisar o seguro-fiança ou a FC.";
@@ -126,8 +130,9 @@ export function montarArgumentosSeguro(input: {
   conversaId: string;
   orgId: string;
   telefone: string;
+  valores: ValoresDoImovel;
 }): PayloadSeguroOk | FalhaDoPayloadSeguro {
-  const motivo = pendenciaDoPayloadSeguro(input.ficha, input.telefone);
+  const motivo = pendenciaDoPayloadSeguro(input.ficha, input.telefone, input.valores);
   if (motivo) return { ok: false, motivo };
   const pessoa = inquilinoPrincipalDaFicha(input.ficha)!;
   const imovel = input.ficha.imovel;
@@ -162,7 +167,7 @@ export function montarArgumentosSeguro(input: {
         codigo_fc: codigo,
         logradouro,
         apartamento,
-        aluguel: imovel.aluguel.valor!,
+        aluguel: input.valores.aluguel.valor!,
       },
       renda: { mensal: renda },
     },

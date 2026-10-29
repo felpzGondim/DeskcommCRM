@@ -8,9 +8,17 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.13] — 2026-10-29
+
 ### Adicionado
 
 - **Análise de inquilino numa tela só, com vínculo Superlógica** No Painel, Abrir análise abre Dados, renda, FC, cotação e contrato. A aba Dados mostra o vínculo atual e busca inquilino/proprietário/fiador no Hub por nome ou CPF; o CPF só vai na consulta e não fica salvo nem no log. A consulta de contrato trata “não encontrado” e “indisponível” como aviso à equipe, sem afirmar ao cliente que ele não tem contrato. Quem já instalou não precisa fazer nada; as chaves de análise continuam desligadas.
+
+- **Valores do imóvel no processo de locação** Aluguel, condomínio (inclui rateio), IPTU, seguro-incêndio e seguro-fiança (informativo) passam a viver no processo, pré-preenchidos e editáveis. Superlógica só GET, e só se a chave `locacao.pacote_superlogica_habilitado` estiver ligada (continua desligada). Senão, sai da conversa/ficha. Edição humana grava origem `manual` e não é sobrescrita. 3× = aluguel+condomínio+IPTU+seguro-incêndio; seguro-fiança fica de fora e não é obrigatório. FC e Migra usam esses valores e recusam se faltar um dos quatro, apontando o campo. Formulário `CamposImovelProcesso` na aba Dados do modal (editável, com origem Superlógica/conversa visível). Chaves da Fase 4 continuam desligadas. Rollback: as colunas ficam; o código deixa de exigí-las.
+
+### Corrigido
+
+- **Gerar relatório preliminar deixa de falhar com formato inválido em extrato longo** O botão não cai mais quando a IA corta o JSON do extrato. A extração vai em blocos de 2–3 páginas, em paralelo, e bloco cortado ou ilegível vira pendência (“lote N não lido”) — nenhuma página some em silêncio. Se a IA falhar, o relatório mantém o que o leitor automático já leu e pede conferência. Layout Stone multilinha entra só como atalho (Entrada/Saída). Timeout do botão sobe para 4 minutos. Quem já instalou não precisa fazer nada.
 
 ## [1.88.0-felpz.12] — 2026-10-28
 

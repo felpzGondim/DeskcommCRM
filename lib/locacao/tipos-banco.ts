@@ -50,3 +50,26 @@ export type LocacaoProcessoColunasFase4 = {
   relatorio_aprovado_por: string | null;
   relatorio_documento_id: string | null;
 };
+
+export type LocacaoProcessoColunasValoresImovel = {
+  aluguel: number | string | null;
+  condominio: number | string | null;
+  iptu: number | string | null;
+  seguro_incendio: number | string | null;
+  seguro_fianca: number | string | null;
+  aluguel_origem: string | null;
+  condominio_origem: string | null;
+  iptu_origem: string | null;
+  seguro_incendio_origem: string | null;
+  seguro_fianca_origem: string | null;
+  aluguel_editado_por: string | null;
+  condominio_editado_por: string | null;
+  iptu_editado_por: string | null;
+  seguro_incendio_editado_por: string | null;
+  seguro_fianca_editado_por: string | null;
+  aluguel_editado_em: string | null;
+  condominio_editado_em: string | null;
+  iptu_editado_em: string | null;
+  seguro_incendio_editado_em: string | null;
+  seguro_fianca_editado_em: string | null;
+};

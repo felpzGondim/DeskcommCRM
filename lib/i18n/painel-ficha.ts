@@ -70,4 +70,33 @@ export const TEXTOS_PAINEL_FICHA = {
   "Não foi possível ler a ficha preliminar.": { es: "No fue posible leer la ficha preliminar." },
   Papel: { es: "Rol" },
   Nome: { es: "Nombre" },
+  "Valores do imóvel": { es: "Valores del inmueble" },
+  "3× usa aluguel + condomínio + IPTU + seguro-incêndio. O seguro-fiança é informativo.": {
+    es: "3× usa alquiler + condominio + IPTU + seguro de incendio. El seguro fianza es informativo.",
+  },
+  "Informe um valor mensal válido, em reais.": {
+    es: "Informe un valor mensual válido, en reales.",
+  },
+  "Não foi possível gravar os valores do imóvel.": {
+    es: "No fue posible guardar los valores del inmueble.",
+  },
+  "Não foi possível ler os valores do imóvel.": {
+    es: "No fue posible leer los valores del inmueble.",
+  },
+  "Aluguel (R$/mês)": { es: "Alquiler (R$/mes)" },
+  "Condomínio (R$/mês, inclui rateio)": { es: "Condominio (R$/mes, incluye prorrateo)" },
+  "IPTU (R$/mês)": { es: "IPTU (R$/mes)" },
+  "Seguro-incêndio (R$/mês)": { es: "Seguro de incendio (R$/mes)" },
+  "Seguro-fiança (R$/mês, informativo)": { es: "Seguro fianza (R$/mes, informativo)" },
+  "(não entra no 3×)": { es: "(no entra en el 3×)" },
+  "obrigatório para FC e Migra": { es: "obligatorio para FC y Migra" },
+  "Salvando valores…": { es: "Guardando valores…" },
+  "Salvar valores do imóvel": { es: "Guardar valores del inmueble" },
+  "Abra o processo para gravar os valores do imóvel. A edição humana não é sobrescrita.": {
+    es: "Abra el proceso para guardar los valores del inmueble. La edición humana no se sobrescribe.",
+  },
+  Superlógica: { es: "Superlógica" },
+  "conversa/ficha": { es: "conversación/ficha" },
+  editado: { es: "editado" },
+  ausente: { es: "ausente" },
 };

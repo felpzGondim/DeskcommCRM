@@ -58,6 +58,21 @@ export const TEXTOS_PAINEL_SEGURO = {
   "Informe o e-mail do inquilino principal na ficha antes de cotar o seguro.": {
     es: "Informe el correo del inquilino principal en la ficha antes de cotizar el seguro.",
   },
+  "Informe o imóvel (endereço) na ficha antes de cotar o seguro.": {
+    es: "Informe el inmueble (dirección) en la ficha antes de cotizar el seguro.",
+  },
+  "Informe o aluguel no processo antes de cotar o seguro.": {
+    es: "Informe el alquiler en el proceso antes de cotizar el seguro.",
+  },
+  "Informe o condomínio (inclui rateio) no processo antes de cotar o seguro.": {
+    es: "Informe el condominio (incluye prorrateo) en el proceso antes de cotizar el seguro.",
+  },
+  "Informe o IPTU no processo antes de cotar o seguro.": {
+    es: "Informe el IPTU en el proceso antes de cotizar el seguro.",
+  },
+  "Informe o seguro-incêndio no processo antes de cotar o seguro.": {
+    es: "Informe el seguro de incendio en el proceso antes de cotizar el seguro.",
+  },
   "Informe o imóvel (endereço e aluguel) na ficha antes de cotar o seguro.": {
     es: "Informe el inmueble (dirección y alquiler) en la ficha antes de cotizar el seguro.",
   },
