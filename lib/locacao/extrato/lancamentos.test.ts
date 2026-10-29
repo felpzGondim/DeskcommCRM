@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { lerLancamentos, pareceExtrato } from "./lancamentos";
-import { EXTRATO_STONE_SINTETICO } from "./texto-sintetico";
+import { lerLancamentos, lotesDePaginas, paginasDoTexto, pareceExtrato } from "./lancamentos";
+import { EXTRATO_STONE_MULTILINHA, EXTRATO_STONE_SINTETICO } from "./texto-sintetico";
 
 const EXTRATO_GENERICO_CD = `
 Extrato bancário
@@ -82,5 +82,41 @@ Extrato
 
   it("filename extrato conta mesmo sem a marca Stone", () => {
     expect(pareceExtrato("saldo e lançamentos", "extrato-agosto.pdf")).toBe(true);
+  });
+
+  it("lê Stone multilinha: Entrada é crédito, cabeçalho repetido some, saldo fecha, titular via Nome/Documento", () => {
+    const r = lerLancamentos(EXTRATO_STONE_MULTILINHA);
+    expect(r.layout).toBe("stone");
+    expect(r.titular.nome).toMatch(/TITULAR TESTE ALFA/i);
+    expect(r.titular.cpfDigits).toBe("52998224725");
+    expect(r.lancamentos).toHaveLength(4);
+    const creditos = r.lancamentos.filter((l) => l.direcao === "C");
+    const debitos = r.lancamentos.filter((l) => l.direcao === "D");
+    expect(creditos).toHaveLength(2);
+    expect(debitos).toHaveLength(2);
+    expect(creditos[0]?.valorCentavos).toBe(450_000);
+    expect(debitos[0]?.valorCentavos).toBe(120_000);
+    expect(debitos[1]?.valorCentavos).toBe(1_000);
+    expect(r.conferencia.conferido).toBe(true);
+    expect(r.conferencia.fecha).toBe(true);
+    expect(r.paginasFaltando).toBe(false);
+    expect(r.lancamentos.some((l) => /DATA TIPO/i.test(l.descricao))).toBe(false);
+  });
+
+  it("parte 42 páginas fictícias sem perder página no lote", () => {
+    const paginas = Array.from({ length: 42 }, (_, i) => {
+      const n = i + 1;
+      return `Página ${n} de 42\nLANC-P${String(n).padStart(2, "0")}\nlinha`;
+    });
+    const texto = `Nu Pagamentos S.A.\nextrato da conta\n\n${paginas.join("\n\n")}`;
+    const vistas = paginasDoTexto(texto);
+    expect(vistas).toHaveLength(42);
+    expect(vistas.map((p) => p.pagina)).toEqual(Array.from({ length: 42 }, (_, i) => i + 1));
+    const lotes = lotesDePaginas(texto, { paginasPorLote: 3 });
+    expect(lotes.length).toBe(14);
+    const cobertos = lotes.join("\n");
+    for (let n = 1; n <= 42; n++) {
+      expect(cobertos).toContain(`LANC-P${String(n).padStart(2, "0")}`);
+    }
   });
 });

@@ -96,7 +96,8 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
       } }>(
         `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
         { etapa: "gerar", ...(senhasPdf.length ? { senhasPdf } : {}) },
-        { timeoutMs: 120_000 },
+        // 240s cobre extração em paralelo de extrato longo. Alternativa: rodar em segundo plano.
+        { timeoutMs: 240_000 },
       );
       setFicha(r.data.ficha);
       setRelatorio(r.data.relatorio);

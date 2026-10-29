@@ -238,7 +238,12 @@ describe("rota da ficha preliminar", () => {
     expect(corpo.error.message).not.toMatch(/documentos/);
     expect(mocks.logError).toHaveBeenCalledWith(
       "[painel-ficha] falha ao gerar relatório",
-      expect.objectContaining({ codigo: "saida_truncada", organizationId: "org-1" }),
+      expect.objectContaining({
+        codigo: "saida_truncada",
+        motivo: "saida_truncada",
+        etapa: "relatorio",
+        organizationId: "org-1",
+      }),
     );
     expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Maria|11977776666/);
   });
@@ -298,5 +303,10 @@ describe("rota da ficha preliminar", () => {
     expect(corpo.error.code).toBe("invalid_format");
     expect(corpo.error.message).toMatch(/formato inválido/);
     expect(corpo.error.message).not.toMatch(/documentos/);
+    expect(mocks.logError).toHaveBeenCalledWith(
+      "[painel-ficha] falha ao gerar relatório",
+      expect.objectContaining({ motivo: "relatorio_json", etapa: "relatorio", codigo: "invalid_format" }),
+    );
+    expect(JSON.stringify(mocks.logError.mock.calls)).not.toMatch(/Maria|11977776666|relatorio_ausente/);
   });
 });
