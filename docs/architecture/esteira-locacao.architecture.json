@@ -1,0 +1,29 @@
+{
+  "id": "esteira-locacao-modal",
+  "nodes": [
+    "components/inbox/AnaliseInquilinoDialog.tsx",
+    "components/locacao/DocumentosLocacaoPainel.tsx",
+    "lib/locacao/ficha-repositorio.ts",
+    "lib/locacao/ficha-compartilhada.ts",
+    "lib/locacao/repositorio.ts",
+    "app/api/v1/conversations/[id]/locacao/documentos/route.ts"
+  ],
+  "edges": [
+    [
+      "components/inbox/AnaliseInquilinoDialog.tsx",
+      "components/locacao/DocumentosLocacaoPainel.tsx"
+    ],
+    [
+      "components/locacao/DocumentosLocacaoPainel.tsx",
+      "app/api/v1/conversations/[id]/locacao/documentos/route.ts"
+    ],
+    [
+      "lib/locacao/ficha-repositorio.ts",
+      "lib/locacao/ficha-compartilhada.ts"
+    ],
+    [
+      "lib/locacao/ficha-compartilhada.ts",
+      "lib/locacao/repositorio.ts"
+    ]
+  ]
+}

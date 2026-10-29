@@ -146,7 +146,7 @@ export function extrairValoresDaConversa(input: {
     aluguel: numeroDaFicha(ficha?.imovel.aluguel),
     condominio: numeroDaFicha(ficha?.imovel.condominio),
     iptu: numeroDaFicha(ficha?.imovel.iptu) ?? numeroDaFicha(ficha?.contrato.iptu_mensal),
-    seguro_incendio: centavosParaReais(incendioTexto),
+    seguro_incendio: numeroDaFicha(ficha?.imovel.seguro_incendio) ?? centavosParaReais(incendioTexto),
     seguro_fianca:
       numeroDaFicha(ficha?.garantia.valor_mensal)
       ?? numeroDaFicha(ficha?.contrato.seguro_fianca_mensal),

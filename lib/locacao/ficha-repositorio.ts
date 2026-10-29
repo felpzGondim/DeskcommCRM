@@ -7,6 +7,9 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { lerFichaAtualDoProcesso } from "@/lib/locacao/repositorio";
+import { processoAtivoDaConversa, sincronizarFichaCompartilhada } from "@/lib/locacao/ficha-compartilhada";
+import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import { caminhosAlterados } from "@/lib/locacao/ficha-diff";
 import {
   fichaPreliminarSchema,
@@ -33,6 +36,8 @@ export interface LinhaDaFicha {
   campos_alterados: string[];
   alterado_por: string | null;
   alterado_em: string;
+  processo_id?: string;
+  processo_versao?: number;
 }
 
 export interface ResumoDaVersao {
@@ -75,7 +80,11 @@ export async function lerFichaAtual(
     .maybeSingle();
   if (error) throw new Error("ficha_leitura");
   if (!data) return null;
-  return asLinha(data as Record<string, unknown>);
+  const linha = asLinha(data as Record<string, unknown>);
+  const processo = await processoAtivoDaConversa(admin, organizationId, conversationId);
+  const compartilhada = processo ? await lerFichaAtualDoProcesso(admin, organizationId, String(processo.id)) : null;
+  return {...linha, processo_id: processo ? String(processo.id) : undefined, processo_versao: compartilhada?.versao ?? 0, ficha: compartilhada && compartilhada.alterado_em && compartilhada.alterado_em >= linha.alterado_em ? normalizarRendaUtilizada(fichaPreliminarSchema.parse(compartilhada.ficha)) : normalizarRendaUtilizada(linha.ficha)};
+
 }
 
 export async function listarHistoricoDaFicha(
@@ -134,8 +143,10 @@ export async function gravarVersaoDaFicha(
     baseVersao: number | null;
     alteradoPor: string;
     processoId?: string | null;
+    criarProcesso?: boolean;
   },
 ): Promise<LinhaDaFicha> {
+  input = { ...input, ficha: normalizarRendaUtilizada(input.ficha) };
   const atual = await lerFichaAtual(admin, input.organizationId, input.conversationId);
   const versaoAtual = atual?.versao ?? 0;
   if (input.baseVersao !== versaoAtual) throw new FichaConflitoDeVersao();
@@ -162,5 +173,9 @@ export async function gravarVersaoDaFicha(
     .select("id,versao,base_versao,origem,ficha,relatorio,campos_alterados,alterado_por,alterado_em")
     .single();
   if (error || !data) throw new Error("ficha_gravacao");
+  await sincronizarFichaCompartilhada(admin, {
+    orgId: input.organizationId, conversaId: input.conversationId, userId: input.alteradoPor,
+    ficha: input.ficha, origem: input.origem, criar: input.criarProcesso,
+  });
   return asLinha(data as Record<string, unknown>);
 }

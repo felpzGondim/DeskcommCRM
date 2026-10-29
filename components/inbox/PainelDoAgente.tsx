@@ -309,6 +309,7 @@ export function PainelDoAgente({
   }
 
   async function prepararAnalise() {
+    if (esconderAnaliseAntiga) { setAnaliseAberta(true); return; }
     if (carregando || desabilitado) return;
     const daConversa = conversationId;
     setErro(null);

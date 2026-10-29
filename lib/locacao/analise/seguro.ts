@@ -6,6 +6,7 @@
  * `status-hub.ts` — a 4.3 reusa. Aqui só se descarta: tela e jsonb da cotação
  * não exibem score nem risco.
  */
+import { rendaDaPessoa } from "@/lib/locacao/renda-utilizada";
 import { codigoFc } from "@/lib/locacao/endereco";
 import { inquilinoPrincipalDaFicha } from "@/lib/locacao/ficha-telefone";
 import type { FichaPreliminar } from "@/lib/locacao/ficha-schema";
@@ -117,8 +118,8 @@ export function pendenciaDoPayloadSeguro(
   }
   const faltaValor = exigirObrigatorios(valores, "seguro");
   if (faltaValor) return faltaValor;
-  const renda = ficha.renda.proposta_fc.valor ?? ficha.renda.mensal.valor;
-  if (typeof renda !== "number") {
+  const renda = pessoa ? rendaDaPessoa(ficha, pessoa) : null;
+  if (typeof renda !== "number" || renda <= 0) {
     return "Confirme a renda antes de analisar o seguro-fiança ou a FC.";
   }
   return null;
@@ -147,8 +148,8 @@ export function montarArgumentosSeguro(input: {
   const apartamento = imovel.complemento.valor?.trim() || imovel.numero.valor?.trim() || "";
   // Sem comprovada o motor do #31 deixa mensal/proposta null. Não assumir
   // valor: a pendência já recusou; se chegar aqui sem número, recusa de novo.
-  const renda = input.ficha.renda.proposta_fc.valor ?? input.ficha.renda.mensal.valor;
-  if (typeof renda !== "number") {
+  const renda = rendaDaPessoa(input.ficha, pessoa);
+  if (typeof renda !== "number" || renda <= 0) {
     return { ok: false, motivo: "Confirme a renda antes de analisar o seguro-fiança ou a FC." };
   }
   return {

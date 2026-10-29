@@ -117,7 +117,7 @@ export async function aprovarRelatorioDoPainel(
   if ("ok" in alvo) return alvo;
   const processo = await lerProcesso(ctx.admin, ctx.orgId, alvo.id);
   const rascunho = typeof processo?.relatorio_rascunho === "string" ? processo.relatorio_rascunho : "";
-  if (!rascunho.trim()) {
+  if (!rascunho.trim() || !processo?.relatorio_rascunho_em) {
     return { ok: false, texto: TEXTO_SEM_RASCUNHO, codigo: "validation_error" };
   }
   try {

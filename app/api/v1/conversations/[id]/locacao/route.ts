@@ -81,6 +81,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     const ficha = linha?.ficha ? completarFicha(linha.ficha) : null;
     return {
       id: idProc,
+      ficha_versao: linha?.versao ?? 0,
       renda_mensal: ficha?.renda.mensal.valor ?? null,
       renda_proposta_fc: ficha?.renda.proposta_fc.valor ?? null,
       alertas: ficha?.renda.alertas ?? [],
@@ -100,6 +101,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       pedido_id: typeof linha?.pedido_id === "string" ? linha.pedido_id : null,
       estado: typeof linha?.estado === "string" ? linha.estado : null,
       cards: sanitizarCards(resultado.cards),
+      ficha_versao: Number(linha?.ficha_versao ?? 0),
       documento_id: typeof linha?.documento_id === "string" ? linha.documento_id : null,
     };
   }));
@@ -125,6 +127,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       pedido_id: typeof linha?.pedido_id === "string" ? linha.pedido_id : null,
       estado: typeof linha?.estado === "string" ? linha.estado : null,
       score: resultado.score,
+      ficha_versao: Number(linha?.ficha_versao ?? 0),
       risco: resultado.risco,
       id_fc: resultado.id_fc,
       documento_id: typeof linha?.documento_id === "string" ? linha.documento_id : null,
@@ -146,16 +149,20 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       return {
         id: p.id,
         status: p.status,
+        ficha_versao: extra?.ficha_versao ?? 0,
+        relatorio_desatualizado: !!p.relatorio_rascunho && !p.relatorio_rascunho_em,
         imovel: rotulos.get(String(p.imovel_id ?? "")) ?? "",
         encerrado_em: p.encerrado_em ?? null,
         renda_confirmada_em: p.renda_confirmada_em ?? null,
         renda_mensal: extra?.renda_mensal ?? null,
         renda_proposta_fc: extra?.renda_proposta_fc ?? null,
         alertas: extra?.alertas ?? [],
+        seguro_desatualizado: !!seguro?.pedido_id && seguro.ficha_versao < (extra?.ficha_versao ?? 0),
         seguro_pedido_id: seguro?.pedido_id ?? null,
         seguro_estado: seguro?.estado ?? null,
         seguro_cards: seguro?.cards ?? [],
         seguro_documento_id: seguro?.documento_id ?? null,
+        fc_desatualizado: !!fc?.pedido_id && fc.ficha_versao < (extra?.ficha_versao ?? 0),
         fc_pedido_id: fc?.pedido_id ?? null,
         fc_estado: fc?.estado ?? null,
         fc_score: fc?.score ?? null,

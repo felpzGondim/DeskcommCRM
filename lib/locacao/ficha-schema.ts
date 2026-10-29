@@ -159,6 +159,7 @@ export const fichaPreliminarSchema = z.object({
     aluguel: numeroSchema,
     iptu: numeroSchema,
     condominio: numeroSchema,
+    seguro_incendio: numeroSchema.default(NUMERO_VAZIO),
   }),
   garantia: z.object({
     tipo: z.enum(TIPOS_DE_GARANTIA).nullable(),
@@ -197,7 +198,7 @@ export const fichaPreliminarSchema = z.object({
 export type FichaPreliminar = z.infer<typeof fichaPreliminarSchema>;
 
 export const saidaDoRelatorioSchema = z.object({
-  relatorio: z.string().trim().min(1).max(4000),
+  relatorio: z.string().trim().min(1).max(60000),
   ficha: fichaPreliminarSchema,
 });
 
@@ -241,7 +242,7 @@ export function fichaVazia(): FichaPreliminar {
       codigo_fc: { ...CAMPO_VAZIO }, tipo: null,
       logradouro: { ...CAMPO_VAZIO }, numero: { ...CAMPO_VAZIO }, complemento: { ...CAMPO_VAZIO },
       bairro: { ...CAMPO_VAZIO }, cep: { ...CAMPO_VAZIO }, cidade: { ...CAMPO_VAZIO }, uf: { ...CAMPO_VAZIO },
-      aluguel: { ...NUMERO_VAZIO }, iptu: { ...NUMERO_VAZIO }, condominio: { ...NUMERO_VAZIO },
+      aluguel: { ...NUMERO_VAZIO }, iptu: { ...NUMERO_VAZIO }, condominio: { ...NUMERO_VAZIO }, seguro_incendio: { ...NUMERO_VAZIO },
     },
     garantia: {
       tipo: null, caucao_valor: { ...NUMERO_VAZIO }, seguradora_preferida: { ...CAMPO_VAZIO },
@@ -434,6 +435,7 @@ export function completarFicha(bruto: unknown): FichaPreliminar {
       aluguel: completarNumero(imovel.aluguel),
       iptu: completarNumero(imovel.iptu),
       condominio: completarNumero(imovel.condominio),
+      seguro_incendio: completarNumero(imovel.seguro_incendio),
     },
     garantia: {
       tipo: TIPOS_DE_GARANTIA.includes(garantia.tipo as (typeof TIPOS_DE_GARANTIA)[number])

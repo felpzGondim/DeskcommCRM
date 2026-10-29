@@ -33,7 +33,7 @@ function fichaPronta() {
   f.imovel.complemento.valor = "ap 12";
   f.imovel.aluguel.valor = 2500;
   f.renda.mensal.valor = 8000;
-  f.renda.proposta_fc.valor = 7500;
+  f.renda.proposta_fc.valor = 7500; // legado ignorado se RENDA mensal já estiver preenchida
   return f;
 }
 
@@ -58,7 +58,7 @@ describe("mapeamento da cotação de seguro-fiança", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.argumentos.pedido_id).toBe("00000000-0000-4000-8000-000000000099");
-    expect(r.argumentos.renda.mensal).toBe(7500);
+    expect(r.argumentos.renda.mensal).toBe(8000);
     expect(r.argumentos).not.toHaveProperty("acao");
     expect(r.argumentos).not.toHaveProperty("vigencia");
     expect(r.argumentos).not.toHaveProperty("solidarios");

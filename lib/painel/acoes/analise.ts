@@ -18,6 +18,7 @@ import {
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
+import { montarRelatorioDeRenda } from "@/lib/locacao/analise/relatorio-renda";
 import { aplicarRendaNaFicha, textoDoResumo } from "@/lib/locacao/analise/renda";
 import { analiseLigada, pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import {
@@ -141,7 +142,7 @@ export async function analisarRendaDoPainel(
       lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
     });
     const fontes = fontesDaFicha(enriquecido.linhas, {
-      charsPorAnexo: limites.chars_ficha_por_anexo,
+      charsPorAnexo: limites.chars_por_arquivo,
     });
     const base = await fichaBase(ctx, alvo.id);
     const familiares = familiaresDaFicha(base.ficha);
@@ -179,7 +180,7 @@ export async function analisarRendaDoPainel(
         aluguelCentavos: reaisParaCentavos(base.ficha.imovel.aluguel.valor),
         condominioCentavos: reaisParaCentavos(base.ficha.imovel.condominio.valor),
         iptuCentavos: reaisParaCentavos(base.ficha.imovel.iptu.valor),
-        seguroIncendioCentavos: incendio,
+        seguroIncendioCentavos: reaisParaCentavos(base.ficha.imovel.seguro_incendio.valor) ?? incendio,
       },
     });
     const ficha = aplicarRendaNaFicha(base.ficha, {
@@ -217,7 +218,7 @@ export async function analisarRendaDoPainel(
         organizationId: ctx.orgId,
         conversationId: ctx.conversationId,
         ficha,
-        relatorio: resumo,
+        relatorio: montarRelatorioDeRenda(ficha, preparado.analises, [...preparado.pendencias, ...avisos]),
         origem: "preliminar_ia",
         baseVersao: base.conversaVersao,
         alteradoPor: ctx.userId,

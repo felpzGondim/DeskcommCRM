@@ -4,6 +4,7 @@
  * preliminar (#31). Sem classificação por regex. Sem prompt que lista
  * lançamentos. Nada vai ao cliente.
  */
+import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import {
   comprovadaDasAnalises,
   FRASE_DECLARADO_ANULADO,
@@ -229,13 +230,21 @@ export function aplicarRendaNaFicha(
     ? "média dos meses completos, sem familiares prováveis"
     : null);
 
-  return {
+  return normalizarRendaUtilizada({
     ...base,
+    pessoas: base.pessoas.map((p) => {
+      if (p.papel === "contato" || p.renda_individual.fonte === "atendente") return p;
+      const cpf = p.cpf.valor?.replace(/\D/g, "");
+      const nome = p.nome.valor?.normalize("NFD").replace(/\p{M}/gu, "").trim().toUpperCase();
+      const proprias = analises.filter((a) => cpf ? a.titular.cpfDigits === cpf : nome && a.titular.nome?.normalize("NFD").replace(/\p{M}/gu, "").trim().toUpperCase() === nome);
+      const valor = proprias.length ? reais(comprovadaDasAnalises(proprias, null)) : null;
+      return valor != null && valor > 0 ? { ...p, renda_individual: numeroDaRenda(valor, "analise", "Apurada nos documentos deste titular") } : p;
+    }),
     pendencias: [...new Set([...base.pendencias, ...(entrada.pendencias ?? [])])].slice(0, 20),
     renda: {
       ...base.renda,
-      mensal: numeroDaRenda(comprovada, fonte ? fonteDaAnalise(fonte) : "extrato", trecho),
-      proposta_fc: numeroDaRenda(comprovada, fonte ? fonteDaAnalise(fonte) : "extrato", trecho),
+      mensal: comprovada != null && comprovada > 0 ? numeroDaRenda(comprovada, fonte ? fonteDaAnalise(fonte) : "extrato", trecho) : base.renda.mensal,
+      proposta_fc: comprovada != null && comprovada > 0 ? numeroDaRenda(comprovada, fonte ? fonteDaAnalise(fonte) : "extrato", trecho) : base.renda.mensal,
       alertas: [...new Set(alertas)].slice(0, 20),
       excluida: {
         autotransferencias: proprias,
@@ -251,7 +260,7 @@ export function aplicarRendaNaFicha(
       evidencias,
       bloco_calculado: bloco,
     },
-  };
+  });
 }
 
 export function textoDoResumo(ficha: FichaPreliminar): string {

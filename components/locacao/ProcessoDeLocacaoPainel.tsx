@@ -43,6 +43,9 @@ type ProcessoResumo = {
   imovel: string;
   encerrado_em: string | null;
   renda_confirmada_em?: string | null;
+  relatorio_desatualizado?: boolean;
+  seguro_desatualizado?: boolean;
+  fc_desatualizado?: boolean;
   renda_mensal?: number | null;
   renda_proposta_fc?: number | null;
   alertas?: string[];
@@ -100,10 +103,12 @@ export function ProcessoDeLocacaoPainel({
   conversationId,
   desabilitado = false,
   secoes,
+  atualizacao = 0,
 }: {
   conversationId: string;
   desabilitado?: boolean;
   secoes?: readonly SecaoDoProcessoPainel[];
+  atualizacao?: number;
 }) {
   const t = useT();
   const [habilitado, setHabilitado] = useState(false);
@@ -173,7 +178,7 @@ export function ProcessoDeLocacaoPainel({
       }
     })();
     return () => { vivo = false; };
-  }, [conversationId]);
+  }, [conversationId, atualizacao]);
 
   const processoAtivo = processos[0];
   const seguroEmCurso =
@@ -772,6 +777,7 @@ export function ProcessoDeLocacaoPainel({
         {criando ? t("Abrindo…") : t("Abrir processo")}
       </Button>
       </> : null}
+      {processo?.relatorio_desatualizado && <p role="status" className="text-xs text-amber-600">{t("Os dados foram alterados. Atualize o relatório consolidado; consultas anteriores preservam os dados da emissão.")}</p>}
       {verRenda && analiseRenda ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-renda">
           <p className="text-xs font-medium">{t("Análise de renda")}</p>
@@ -780,10 +786,7 @@ export function ProcessoDeLocacaoPainel({
           ) : (
             <>
               {typeof processo.renda_mensal === "number" ? (
-                <p className="text-xs">{t("Renda comprovada")}: R$ {processo.renda_mensal.toFixed(2)}</p>
-              ) : null}
-              {typeof processo.renda_proposta_fc === "number" ? (
-                <p className="text-xs">{t("Renda proposta para a FC")}: R$ {processo.renda_proposta_fc.toFixed(2)}</p>
+                <p className="text-xs">{t("RENDA")}: R$ {processo.renda_mensal.toFixed(2)}</p>
               ) : null}
               {resumo ? <p className="text-xs whitespace-pre-wrap">{resumo}</p> : null}
               {(processo.alertas ?? []).slice(0, 5).map((a) => (
@@ -832,6 +835,7 @@ export function ProcessoDeLocacaoPainel({
       {verSeguro && analiseSeguro ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-seguro">
           <p className="text-xs font-medium">{t("Seguro-fiança")}</p>
+          {processo?.seguro_desatualizado && <p role="status" className="text-xs text-amber-600">{t("Esta cotação utilizou uma versão anterior dos dados. Confira antes de continuar.")}</p>}
           {!processo ? (
             <p className="text-xs text-text-muted">{t("Abra um processo antes de cotar o seguro-fiança.")}</p>
           ) : !processo.renda_confirmada_em ? (
@@ -877,6 +881,7 @@ export function ProcessoDeLocacaoPainel({
       {verFc && analiseFc ? (
         <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-fc">
           <p className="text-xs font-medium">{t("FC Score+")}</p>
+          {processo?.fc_desatualizado && <p role="status" className="text-xs text-amber-600">{t("Esta FC utilizou uma versão anterior dos dados. Confira antes de continuar.")}</p>}
           {!processo ? (
             <p className="text-xs text-text-muted">{t("Abra um processo antes de analisar a FC.")}</p>
           ) : !processo.renda_confirmada_em ? (

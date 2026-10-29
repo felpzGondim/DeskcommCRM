@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { FormularioGerarContrato } from "@/components/inbox/GerarContratoDialog";
 import { FichaPreliminarPainel } from "@/components/inbox/FichaPreliminarPainel";
-import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
+import { DocumentosLocacaoPainel } from "@/components/locacao/DocumentosLocacaoPainel";
 import { ProcessoDeLocacaoPainel, type SecaoDoProcessoPainel } from "@/components/locacao/ProcessoDeLocacaoPainel";
 import { VinculoSuperlogica } from "@/components/locacao/VinculoSuperlogica";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 
-type Aba = "dados" | "renda" | "fc" | "migra" | "contrato";
+type Aba = "dados" | "renda" | "fc" | "migra" | "relatorio" | "contrato" | "documentos" | "sincronizacao";
 
 type ContatoLocacao = {
   id: string | null;
@@ -21,11 +21,14 @@ type ContatoLocacao = {
 };
 
 const SECOES_DA_ABA: Record<Aba, readonly SecaoDoProcessoPainel[]> = {
-  dados: ["cabecalho"],
-  renda: ["renda", "relatorio"],
+  dados: [],
+  renda: ["renda"],
   fc: ["fc", "manual"],
   migra: ["seguro", "manual"],
+  relatorio: ["relatorio"],
   contrato: [],
+  documentos: [],
+  sincronizacao: [],
 };
 
 export function AnaliseInquilinoDialog({
@@ -54,6 +57,12 @@ export function AnaliseInquilinoDialog({
   }, []);
 
   useEffect(() => {
+    const atualizar = (e: Event) => { if ((e as CustomEvent<{conversationId: string}>).detail?.conversationId === conversationId) setEpoch((n) => n + 1); };
+    window.addEventListener("locacao:atualizada", atualizar);
+    return () => window.removeEventListener("locacao:atualizada", atualizar);
+  }, [conversationId]);
+
+  useEffect(() => {
     if (!aberto) return;
     let vivo = true;
     void apiClient
@@ -80,33 +89,26 @@ export function AnaliseInquilinoDialog({
         data-testid="analise-inquilino-dialog"
       >
         <DialogHeader>
-          <DialogTitle>{t("Análise de inquilino")}</DialogTitle>
+          <DialogTitle>{t("Cadastro e locação")}</DialogTitle>
           <DialogDescription>
             {t("A ficha, o vínculo Superlógica, a renda, a FC, a cotação e o contrato ficam nesta tela. Nada é enviado ao cliente.")}
           </DialogDescription>
         </DialogHeader>
         <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
-          <TabsList aria-label={t("Análise de inquilino")}>
-            <TabsTrigger value="dados" onClick={() => setAba("dados")}>{t("Dados")}</TabsTrigger>
-            <TabsTrigger value="renda" onClick={() => setAba("renda")}>{t("Análise de renda")}</TabsTrigger>
-            <TabsTrigger value="fc" onClick={() => setAba("fc")}>{t("Análise FC")}</TabsTrigger>
-            <TabsTrigger value="migra" onClick={() => setAba("migra")}>{t("Análise Migra")}</TabsTrigger>
-            <TabsTrigger value="contrato" onClick={() => setAba("contrato")}>{t("Gerar contrato")}</TabsTrigger>
+          <TabsList className="h-auto flex-wrap justify-start" aria-label={t("Cadastro e locação")}>
+            <TabsTrigger value="dados" onClick={() => setAba("dados")}>{t("1. Dados")}</TabsTrigger>
+            <TabsTrigger value="renda" onClick={() => setAba("renda")}>{t("2. Renda")}</TabsTrigger>
+            <TabsTrigger value="fc" onClick={() => setAba("fc")}>{t("3. FCAnálise")}</TabsTrigger>
+            <TabsTrigger value="migra" onClick={() => setAba("migra")}>{t("4. Migra")}</TabsTrigger>
+            <TabsTrigger value="relatorio">{t("5. Relatório")}</TabsTrigger>
+            <TabsTrigger value="contrato">{t("6. Contrato")}</TabsTrigger>
+            <TabsTrigger value="documentos">{t("Documentos e relatórios")}</TabsTrigger>
+            <TabsTrigger value="sincronizacao">{t("Superlógica")}</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className={aba === "dados" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "dados"}>
-          <CamposImovelProcessoNaFicha
-            conversationId={conversationId}
-            desabilitado={desabilitado}
-          />
-          <VinculoSuperlogica
-            conversationId={conversationId}
-            contato={contato}
-            desabilitado={desabilitado}
-            onAtualizado={recarregarContato}
-          />
           <FichaPreliminarPainel
-            atualizacao={atualizacaoFicha}
+            atualizacao={atualizacaoFicha + epoch}
             conversationId={conversationId}
             desabilitado={desabilitado}
             senhasPdf={senhasPdf}
@@ -114,16 +116,28 @@ export function AnaliseInquilinoDialog({
         </div>
         <div className={aba === "contrato" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "contrato"}>
           <FormularioGerarContrato
+            key={epoch}
             conversationId={conversationId}
             desabilitado={desabilitado}
             onOcupadoChange={setOcupado}
           />
         </div>
-        {aba !== "contrato" ? (
+        {aba === "documentos" && <DocumentosLocacaoPainel conversationId={conversationId} atualizacao={epoch + atualizacaoFicha} desabilitado={desabilitado} />}
+        <div hidden={aba !== "sincronizacao"} role="tabpanel">
+          <VinculoSuperlogica
+            conversationId={conversationId}
+            contato={contato}
+            desabilitado={desabilitado}
+            onAtualizado={recarregarContato}
+          />
+        </div>
+        {SECOES_DA_ABA[aba].length > 0 ? (
           <ProcessoDeLocacaoPainel
+            key={aba}
             conversationId={conversationId}
             desabilitado={desabilitado}
             secoes={SECOES_DA_ABA[aba]}
+            atualizacao={epoch + atualizacaoFicha}
           />
         ) : null}
       </DialogContent>
