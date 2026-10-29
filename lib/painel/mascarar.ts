@@ -5,6 +5,7 @@
 const CPF_PONTUADO = /\d{3}\.\d{3}\.\d{3}-\d{2}/g;
 const CPF_NU = /(?<!\d)\d{11}(?!\d)/g;
 const TEL_BR = /(?:\+?55)?\s*\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}/g;
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 export function mascararCpfNoTexto(texto: string): string {
   return texto
@@ -13,7 +14,7 @@ export function mascararCpfNoTexto(texto: string): string {
 }
 
 export function mascararPessoaNoTexto(texto: string): string {
-  return mascararCpfNoTexto(texto).replace(TEL_BR, "[telefone]");
+  return mascararCpfNoTexto(texto).replace(TEL_BR, "[telefone]").replace(EMAIL, "[email]");
 }
 
 export function temCpfCompleto(texto: string): boolean {

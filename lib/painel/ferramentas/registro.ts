@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { analisarRendaDoPainel, confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
 import { consultarLeituraHub, executarConsultaHub, NOMES_HUB_IMOVEL, NOMES_HUB_PESSOAS, confirmarAnaliseHub, prepararAnaliseHub } from "@/lib/painel/acoes/hub";
+import { analisarSeguroDoPainel, statusSeguroDoPainel } from "@/lib/painel/acoes/seguro";
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
 import { lerConversaDoPainel, resumirOuSugerir } from "@/lib/painel/acoes/conversa";
@@ -240,6 +241,35 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     executar: (ctx, args) =>
       confirmarRendaDoPainel(ctx, (args ?? {}) as { processo_id?: string; renda_proposta_fc?: number }),
   },
+  {
+    nome: "analisar_seguro",
+    descricao: "Dispara a cotação gratuita de seguro-fiança (só Analisar, nunca Contratar). Nível L: o agente pode executar. Exige renda confirmada e um pedido_id próprio, distinto da FC.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "cotando seguro-fiança…",
+    acaoDoBotao: "analisar_seguro",
+    padraoLigada: true,
+    exigeChaveAnalise: "seguro",
+    executar: (ctx, args) =>
+      analisarSeguroDoPainel(ctx, (args ?? {}) as { processo_id?: string }),
+  },
+  {
+    nome: "status_seguro",
+    descricao: "Consulta o andamento da cotação de seguro-fiança e, se houver, guarda o print. Não mostra score nem risco (isso é da FC).",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "consultando cotação…",
+    acaoDoBotao: "status_seguro",
+    padraoLigada: true,
+    exigeChaveAnalise: "seguro",
+    executar: (ctx, args) =>
+      statusSeguroDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
+  },
 ];
 
 const POR_NOME = new Map(FERRAMENTAS_DO_PAINEL.map((f) => [f.nome, f]));
@@ -266,4 +296,6 @@ export const FERRAMENTAS_DE_ANALISE = new Set([
   "preparar_analise",
   "iniciar_analise",
   "analisar_renda",
+  "analisar_seguro",
+  "status_seguro",
 ]);

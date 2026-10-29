@@ -558,6 +558,19 @@ describe("Painel do agente (UI)", () => {
     expect(screen.queryByText(/30000ms/)).toBeNull();
   });
 
+  it("esconde o botão antigo só quando seguro e fc estão ligados", async () => {
+    getMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes("/locacao")) {
+        return { data: { analise: { seguro: true, fc: true } } };
+      }
+      return { data: { atual: null, historico: [] } };
+    });
+    render(<PainelDoAgente conversationId="c1" />);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Iniciar análise de inquilino" })).toBeNull();
+    });
+  });
+
   it("mostra link seguro da segunda via na consulta de boletos", async () => {
     postMock.mockResolvedValue({
       data: {

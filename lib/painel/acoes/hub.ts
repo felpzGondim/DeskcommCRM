@@ -45,13 +45,39 @@ import { comIdempotencia } from "@/lib/api/idempotency";
 import { env } from "@/lib/env";
 import { telefoneDoInquilinoPrincipal } from "@/lib/locacao/ficha-telefone";
 import { lerFichaAtual } from "@/lib/locacao/ficha-repositorio";
-import { chamarFerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
+import { chamarFerramentaRemota, type FerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
 import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar";
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
 export const NOMES_HUB_IMOVEL = ["buscar_imoveis", "buscar_imovel"] as const;
 export const NOMES_HUB_PESSOAS = ["buscar_pessoas", "buscar_inquilino"] as const;
+
+/**
+ * Lista fechada das ferramentas H1/H2 (Fase 4). Só estes nomes são chamados
+ * para cotação/status/print. Com a chave do Hub desligada elas não entram no
+ * `tools/list` — trate como inexistentes, sem disparar o caminho antigo
+ * (Migra+FC juntas, sem campo `acao`).
+ */
+export const NOMES_INICIAR_ANALISE_INQUILINO = [
+  "iniciar_analise_inquilino",
+  "brisa-hub-analise",
+  "brisa_hub_analise",
+] as const;
+export const NOME_STATUS_ANALISE_INQUILINO = "status_analise_inquilino";
+export const NOME_BAIXAR_RESULTADO_ANALISE = "baixar_resultado_analise";
+export const LISTA_FECHADA_HUB_ANALISE = [
+  ...NOMES_INICIAR_ANALISE_INQUILINO,
+  NOME_STATUS_ANALISE_INQUILINO,
+  NOME_BAIXAR_RESULTADO_ANALISE,
+] as const;
+export const ACOES_INICIAR_ANALISE = ["seguro", "fc_salvar"] as const;
+export type AcaoIniciarAnalise = (typeof ACOES_INICIAR_ANALISE)[number];
+
+export const TEXTO_FERRAMENTA_HUB_AUSENTE =
+  "Esta ferramenta ainda não está disponível no Brisa Hub (chave desligada ou versão antiga). Nada foi disparado.";
+export const TEXTO_INICIAR_SEM_ACAO =
+  "O Brisa Hub desta instalação ainda não separa a cotação do seguro da análise paga. Nada foi disparado.";
 
 class FalhaDoHub extends Error {
   constructor(
@@ -77,6 +103,134 @@ async function carregarHub(ctx: ContextoDaFerramenta) {
     conversaDoTurno: ctx.conversationId,
     noAtendimento: true,
   });
+}
+
+export function ferramentaNaListaFechada(
+  anunciadas: readonly FerramentaRemota[],
+  nomes: readonly string[],
+): FerramentaRemota | null {
+  const permitidos = new Set<string>(nomes.filter((n) => (LISTA_FECHADA_HUB_ANALISE as readonly string[]).includes(n)));
+  if (permitidos.size === 0) return null;
+  return anunciadas.find((f) => permitidos.has(f.name)) ?? null;
+}
+
+export function schemaTemCampo(ferramenta: FerramentaRemota, campo: string): boolean {
+  const props = ferramenta.inputSchema?.properties;
+  return !!props && typeof props === "object" && campo in props;
+}
+
+export function iniciarAnaliseComAcao(anunciadas: readonly FerramentaRemota[]): FerramentaRemota | null {
+  const f = ferramentaNaListaFechada(anunciadas, NOMES_INICIAR_ANALISE_INQUILINO);
+  if (!f || !schemaTemCampo(f, "acao")) return null;
+  return f;
+}
+
+function recusaComoAusente(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return /unknown tool|not found|inexistent|não encontr|nao encontr|indispon|unavailable|not announced|not exist/.test(msg);
+}
+
+function dadosDoHub(r: { dados?: unknown; texto: string }): Record<string, unknown> {
+  if (r.dados && typeof r.dados === "object") return r.dados as Record<string, unknown>;
+  try {
+    const p = JSON.parse(r.texto) as unknown;
+    if (p && typeof p === "object") return p as Record<string, unknown>;
+  } catch {
+    /* resposta sem JSON */
+  }
+  return {};
+}
+
+async function chamarNaListaFechada(
+  ctx: ContextoDaFerramenta,
+  ferramenta: FerramentaRemota,
+  argumentos: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (!(LISTA_FECHADA_HUB_ANALISE as readonly string[]).includes(ferramenta.name)) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  const montado = await carregarHub(ctx);
+  if (!montado) throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  try {
+    const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, argumentos, {
+      cabecalhos: montado.cabecalhos,
+    });
+    return dadosDoHub(r);
+  } catch (err) {
+    if (recusaComoAusente(err)) throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+    throw new FalhaDoHub("hub_unavailable", "Não foi possível consultar o Brisa Hub agora. Tente novamente.");
+  }
+}
+
+/** Confere H1 (iniciar com `acao` + status) antes de gravar pedido. */
+export async function exigirFerramentasDeSeguro(ctx: ContextoDaFerramenta): Promise<void> {
+  const montado = await carregarHub(ctx);
+  if (!montado) throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  if (!iniciarAnaliseComAcao(montado.ferramentas)) {
+    const anunciada = ferramentaNaListaFechada(montado.ferramentas, NOMES_INICIAR_ANALISE_INQUILINO);
+    throw new FalhaDoHub("tool_unavailable", anunciada ? TEXTO_INICIAR_SEM_ACAO : TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  const status = ferramentaNaListaFechada(montado.ferramentas, [NOME_STATUS_ANALISE_INQUILINO]);
+  if (!status || !schemaTemCampo(status, "pedido_id")) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+}
+
+export async function chamarIniciarAnaliseInquilino(
+  ctx: ContextoDaFerramenta,
+  argumentos: Record<string, unknown> & { acao: AcaoIniciarAnalise; pedido_id: string },
+): Promise<Record<string, unknown>> {
+  const montado = await carregarHub(ctx);
+  const ferramenta = montado ? iniciarAnaliseComAcao(montado.ferramentas) : null;
+  if (!montado || !ferramenta) {
+    const anunciada = montado
+      ? ferramentaNaListaFechada(montado.ferramentas, NOMES_INICIAR_ANALISE_INQUILINO)
+      : null;
+    throw new FalhaDoHub("tool_unavailable", anunciada ? TEXTO_INICIAR_SEM_ACAO : TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  const dados = await chamarNaListaFechada(ctx, ferramenta, argumentos);
+  const resultado = dados.resultado;
+  if (resultado !== "aceito" && resultado !== "ja_existia") {
+    if (resultado === "indisponivel" || resultado === "indisponível") {
+      throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+    }
+    throw new FalhaDoHub("hub_contract_error", "O Brisa Hub não aceitou a cotação de seguro-fiança.");
+  }
+  return dados;
+}
+
+export async function chamarStatusAnaliseInquilino(
+  ctx: ContextoDaFerramenta,
+  pedidoId: string,
+): Promise<Record<string, unknown>> {
+  const montado = await carregarHub(ctx);
+  const ferramenta = montado
+    ? ferramentaNaListaFechada(montado.ferramentas, [NOME_STATUS_ANALISE_INQUILINO])
+    : null;
+  if (!montado || !ferramenta || !schemaTemCampo(ferramenta, "pedido_id")) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  return chamarNaListaFechada(ctx, ferramenta, { pedido_id: pedidoId });
+}
+
+export async function chamarBaixarResultadoAnalise(
+  ctx: ContextoDaFerramenta,
+  pedidoId: string,
+  tipo: "print_migra" | "laudo",
+): Promise<Record<string, unknown>> {
+  const montado = await carregarHub(ctx);
+  const ferramenta = montado
+    ? ferramentaNaListaFechada(montado.ferramentas, [NOME_BAIXAR_RESULTADO_ANALISE])
+    : null;
+  if (!montado || !ferramenta || !schemaTemCampo(ferramenta, "pedido_id") || !schemaTemCampo(ferramenta, "tipo")) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  const spec = ferramenta.inputSchema?.properties?.tipo;
+  const enumVals = spec && typeof spec === "object" ? (spec as { enum?: unknown }).enum : undefined;
+  if (Array.isArray(enumVals) && !enumVals.includes(tipo)) {
+    throw new FalhaDoHub("tool_unavailable", TEXTO_FERRAMENTA_HUB_AUSENTE);
+  }
+  return chamarNaListaFechada(ctx, ferramenta, { pedido_id: pedidoId, tipo });
 }
 
 export async function executarConsultaHub(

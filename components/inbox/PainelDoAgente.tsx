@@ -80,6 +80,7 @@ export function PainelDoAgente({
   const [podeContinuar, setPodeContinuar] = useState(false);
   const [ultimaPergunta, setUltimaPergunta] = useState("");
   const [ultimoModo, setUltimoModo] = useState<"normal" | "analise" | null>(null);
+  const [esconderAnaliseAntiga, setEsconderAnaliseAntiga] = useState(false);
   const conversaAtual = useRef(conversationId);
   const esperandoConsulta = useRef(false);
   const inicioDaConsulta = useRef(0);
@@ -89,6 +90,22 @@ export function PainelDoAgente({
   // descarta uma resposta que chegue depois da troca.
   useEffect(() => {
     conversaAtual.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    let vivo = true;
+    void (async () => {
+      try {
+        const r = await apiClient.get<{ data: { analise?: { seguro?: boolean; fc?: boolean } } }>(
+          `/api/v1/conversations/${conversationId}/locacao`,
+        );
+        if (!vivo) return;
+        setEsconderAnaliseAntiga(r.data?.analise?.seguro === true && r.data?.analise?.fc === true);
+      } catch {
+        if (vivo) setEsconderAnaliseAntiga(false);
+      }
+    })();
+    return () => { vivo = false; };
   }, [conversationId]);
 
   useEffect(() => {
@@ -406,6 +423,7 @@ export function PainelDoAgente({
                 {t(ACOES_HUB[acao].rotulo)}
               </Button>
             ))}
+            {esconderAnaliseAntiga ? null : (
             <Button
               size="sm"
               variant="outline"
@@ -415,6 +433,7 @@ export function PainelDoAgente({
             >
               {t(ACOES_HUB.analise.rotulo)}
             </Button>
+            )}
           </div>
           <FichaPreliminarPainel
             conversationId={conversationId}
