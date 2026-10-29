@@ -84,7 +84,11 @@ describe("rota da cotação de seguro-fiança", () => {
     expect(painel).toContain("analiseSeguro");
     expect(painel).toContain('data-testid="analise-seguro"');
     expect(painel).toContain("15_000");
-    expect(painel).not.toMatch(/\bscore\b|\brisco\b/);
+    const seguroBloco = painel.slice(
+      painel.indexOf('data-testid="analise-seguro"'),
+      painel.indexOf('data-testid="analise-fc"'),
+    );
+    expect(seguroBloco).not.toMatch(/\bscore\b|\brisco\b/);
     expect(painel).not.toMatch(/["']Contratar["']/);
     const config = readFileSync("components/locacao/PainelConfigLocacao.tsx", "utf8");
     expect(config).toContain("Ligar cotação de seguro-fiança (desligada por padrão)");

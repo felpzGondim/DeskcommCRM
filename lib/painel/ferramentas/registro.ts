@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { analisarRendaDoPainel, confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
 import { consultarLeituraHub, executarConsultaHub, NOMES_HUB_IMOVEL, NOMES_HUB_PESSOAS, confirmarAnaliseHub, prepararAnaliseHub } from "@/lib/painel/acoes/hub";
+import { analisarFcDoPainel, confirmarCobrancaFcDoPainel, statusFcDoPainel } from "@/lib/painel/acoes/fc";
 import { analisarSeguroDoPainel, statusSeguroDoPainel } from "@/lib/painel/acoes/seguro";
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
@@ -270,6 +271,52 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     executar: (ctx, args) =>
       statusSeguroDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
   },
+  {
+    nome: "analisar_fc",
+    descricao: "Salva a ficha na FC Score+ (grátis, gera o ID-FC). Nível L: o agente pode executar. Não cobra. Fiador só entra se o atendente pedir. Reusa score/risco de até 90 dias da mesma pessoa; não copia o laudo.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      participante_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "salvando FC Score+…",
+    acaoDoBotao: "analisar_fc",
+    padraoLigada: true,
+    exigeChaveAnalise: "fc",
+    executar: (ctx, args) =>
+      analisarFcDoPainel(ctx, (args ?? {}) as { processo_id?: string; participante_id?: string }),
+  },
+  {
+    nome: "status_fc",
+    descricao: "Consulta o andamento da FC Score+ e, se houver, guarda o laudo. Não confirma cobrança.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+      participante_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "consultando FC…",
+    acaoDoBotao: "status_fc",
+    padraoLigada: true,
+    exigeChaveAnalise: "fc",
+    executar: (ctx, args) =>
+      statusFcDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string; participante_id?: string }),
+  },
+  {
+    nome: "confirmar_cobranca_fc",
+    descricao: "Confirma a cobrança da FC Score+ (vai gastar créditos). Nível S: o modelo só PROPÕE; qualquer atendente clica no painel. Sem preço na tela.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      pedido_id: z.string().uuid().optional(),
+    }).strict(),
+    rotuloAndamento: "confirmando cobrança da FC…",
+    acaoDoBotao: "confirmar_cobranca_fc",
+    padraoLigada: true,
+    exigeChaveAnalise: "fc",
+    executar: (ctx, args) =>
+      confirmarCobrancaFcDoPainel(ctx, (args ?? {}) as { processo_id?: string; pedido_id?: string }),
+  },
 ];
 
 const POR_NOME = new Map(FERRAMENTAS_DO_PAINEL.map((f) => [f.nome, f]));
@@ -298,4 +345,6 @@ export const FERRAMENTAS_DE_ANALISE = new Set([
   "analisar_renda",
   "analisar_seguro",
   "status_seguro",
+  "analisar_fc",
+  "status_fc",
 ]);

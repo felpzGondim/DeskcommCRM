@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 
 type CardSeguro = { seguradora?: string; codigo?: string; codigo_cotacao?: string; status?: string; plano?: string };
+type FiadorFc = { id: string; papel?: string; cpf_mascarado?: string | null };
 
 type ProcessoResumo = {
   id: string;
@@ -22,6 +23,15 @@ type ProcessoResumo = {
   seguro_estado?: string | null;
   seguro_cards?: CardSeguro[];
   seguro_documento_id?: string | null;
+  fc_pedido_id?: string | null;
+  fc_estado?: string | null;
+  fc_score?: number | string | null;
+  fc_risco?: string | null;
+  fc_id?: string | null;
+  fc_documento_id?: string | null;
+  fc_reaproveitada?: boolean;
+  fc_cobranca?: "ja_cobrado" | "incerta" | null;
+  fc_fiadores?: FiadorFc[];
 };
 
 type AvisoSenha = { tipo?: string; nome: string; tentativas?: number };
@@ -35,6 +45,18 @@ function rotuloEstadoSeguro(estado: string): string {
   return "Cotação em andamento";
 }
 
+function rotuloEstadoFc(estado: string): string {
+  if (estado === "solicitada") return "FC em andamento";
+  if (estado === "aguardando_cobranca") return "FC aguardando confirmação";
+  if (estado === "cobrando") return "FC em cobrança";
+  if (estado === "concluida") return "FC concluída";
+  if (estado === "reaproveitada") return "FC reaproveitada (90 dias)";
+  if (estado === "login_necessario") return "Login necessário no Hub";
+  if (estado === "erro") return "FC com erro";
+  if (estado === "cancelada") return "FC cancelada";
+  return "FC em andamento";
+}
+
 export function ProcessoDeLocacaoPainel({
   conversationId,
   desabilitado = false,
@@ -46,16 +68,20 @@ export function ProcessoDeLocacaoPainel({
   const [habilitado, setHabilitado] = useState(false);
   const [analiseRenda, setAnaliseRenda] = useState(false);
   const [analiseSeguro, setAnaliseSeguro] = useState(false);
+  const [analiseFc, setAnaliseFc] = useState(false);
   const [processos, setProcessos] = useState<ProcessoResumo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [cotando, setCotando] = useState(false);
+  const [salvandoFc, setSalvandoFc] = useState(false);
+  const [confirmandoFc, setConfirmandoFc] = useState(false);
   const [avisos, setAvisos] = useState<AvisoSenha[]>([]);
   const [senhas, setSenhas] = useState<Record<string, string>>({});
   const [resumo, setResumo] = useState<string | null>(null);
   const [resumoSeguro, setResumoSeguro] = useState<string | null>(null);
+  const [resumoFc, setResumoFc] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -64,7 +90,7 @@ export function ProcessoDeLocacaoPainel({
         const r = await apiClient.get<{
           data: {
             habilitado?: boolean;
-            analise?: { renda?: boolean; seguro?: boolean };
+            analise?: { renda?: boolean; seguro?: boolean; fc?: boolean };
             processos?: ProcessoResumo[];
           };
         }>(`/api/v1/conversations/${conversationId}/locacao`);
@@ -72,6 +98,7 @@ export function ProcessoDeLocacaoPainel({
         setHabilitado(r.data?.habilitado === true);
         setAnaliseRenda(r.data?.analise?.renda === true);
         setAnaliseSeguro(r.data?.analise?.seguro === true);
+        setAnaliseFc(r.data?.analise?.fc === true);
         setProcessos(r.data?.processos ?? []);
       } catch {
         if (vivo) setHabilitado(false);
@@ -84,6 +111,9 @@ export function ProcessoDeLocacaoPainel({
   const seguroEmCurso =
     analiseSeguro
     && (processoAtivo?.seguro_estado === "solicitada" || processoAtivo?.seguro_estado === "cotando");
+  const fcEmCurso =
+    analiseFc
+    && (processoAtivo?.fc_estado === "solicitada" || processoAtivo?.fc_estado === "cobrando");
 
   useEffect(() => {
     if (!seguroEmCurso || !processoAtivo) return;
@@ -124,6 +154,54 @@ export function ProcessoDeLocacaoPainel({
     }, 15_000);
     return () => window.clearInterval(tick);
   }, [conversationId, seguroEmCurso, processoAtivo?.id, processoAtivo?.seguro_pedido_id, processoAtivo?.seguro_estado]);
+
+  useEffect(() => {
+    if (!fcEmCurso || !processoAtivo) return;
+    const tick = window.setInterval(() => {
+      void (async () => {
+        try {
+          const r = await apiClient.post<{
+            data: {
+              resumo?: string;
+              estado?: string;
+              score?: number | string | null;
+              risco?: string | null;
+              id_fc?: string | null;
+              documento_id?: string | null;
+              pedido_id?: string;
+              cobranca?: "ja_cobrado" | "incerta" | null;
+              reaproveitada?: boolean;
+            };
+          }>(`/api/v1/conversations/${conversationId}/painel-agente/fc`, {
+            etapa: "status",
+            processo_id: processoAtivo.id,
+            pedido_id: processoAtivo.fc_pedido_id ?? undefined,
+          });
+          setResumoFc(r.data?.resumo ?? null);
+          setProcessos((atual) =>
+            atual.map((p) =>
+              p.id === processoAtivo.id
+                ? {
+                    ...p,
+                    fc_pedido_id: r.data?.pedido_id ?? p.fc_pedido_id,
+                    fc_estado: r.data?.estado ?? p.fc_estado,
+                    fc_score: r.data?.score ?? p.fc_score,
+                    fc_risco: r.data?.risco ?? p.fc_risco,
+                    fc_id: r.data?.id_fc ?? p.fc_id,
+                    fc_documento_id: r.data?.documento_id ?? p.fc_documento_id,
+                    fc_cobranca: r.data?.cobranca ?? p.fc_cobranca,
+                    fc_reaproveitada: r.data?.reaproveitada ?? p.fc_reaproveitada,
+                  }
+                : p,
+            ),
+          );
+        } catch {
+          /* o próximo tick tenta de novo; o erro pontual não tapa a tela */
+        }
+      })();
+    }, 15_000);
+    return () => window.clearInterval(tick);
+  }, [conversationId, fcEmCurso, processoAtivo?.id, processoAtivo?.fc_pedido_id, processoAtivo?.fc_estado]);
 
   if (!habilitado) return null;
 
@@ -256,6 +334,104 @@ export function ProcessoDeLocacaoPainel({
       aplicarSeguro(r.data ?? {});
     } catch (e) {
       setErro(e instanceof Error && e.message ? e.message : t("Não foi possível consultar a cotação."));
+    }
+  }
+
+  type DadosFc = {
+    resumo?: string;
+    estado?: string;
+    score?: number | string | null;
+    risco?: string | null;
+    id_fc?: string | null;
+    documento_id?: string | null;
+    pedido_id?: string;
+    cobranca?: "ja_cobrado" | "incerta" | null;
+    reaproveitada?: boolean;
+  };
+
+  function aplicarFc(data: DadosFc) {
+    setResumoFc(data.resumo ?? null);
+    setProcessos((atual) =>
+      atual.map((p) =>
+        p.id === processo?.id
+          ? {
+              ...p,
+              fc_pedido_id: data.pedido_id ?? p.fc_pedido_id,
+              fc_estado: data.estado ?? p.fc_estado,
+              fc_score: data.score ?? p.fc_score,
+              fc_risco: data.risco ?? p.fc_risco,
+              fc_id: data.id_fc ?? p.fc_id,
+              fc_documento_id: data.documento_id ?? p.fc_documento_id,
+              fc_cobranca: data.cobranca ?? p.fc_cobranca,
+              fc_reaproveitada: data.reaproveitada ?? p.fc_reaproveitada,
+            }
+          : p,
+      ),
+    );
+  }
+
+  async function salvarFc(participanteId?: string) {
+    if (salvandoFc || desabilitado || !processo || !processo.renda_confirmada_em) return;
+    setErro(null);
+    setSalvandoFc(true);
+    try {
+      const r = await apiClient.post<{ data: DadosFc }>(
+        `/api/v1/conversations/${conversationId}/painel-agente/fc`,
+        {
+          etapa: "analisar",
+          processo_id: processo.id,
+          participante_id: participanteId,
+        },
+      );
+      aplicarFc(r.data ?? {});
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível analisar a FC."));
+    } finally {
+      setSalvandoFc(false);
+    }
+  }
+
+  async function atualizarFc() {
+    if (salvandoFc || desabilitado || !processo) return;
+    try {
+      const r = await apiClient.post<{ data: DadosFc }>(
+        `/api/v1/conversations/${conversationId}/painel-agente/fc`,
+        {
+          etapa: "status",
+          processo_id: processo.id,
+          pedido_id: processo.fc_pedido_id ?? undefined,
+        },
+      );
+      aplicarFc(r.data ?? {});
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível consultar a FC."));
+    }
+  }
+
+  async function confirmarFc() {
+    if (confirmandoFc || desabilitado || !processo) return;
+    setErro(null);
+    setConfirmandoFc(true);
+    try {
+      const r = await apiClient.post<{ data: DadosFc }>(
+        `/api/v1/conversations/${conversationId}/painel-agente/fc`,
+        {
+          etapa: "confirmar",
+          processo_id: processo.id,
+          pedido_id: processo.fc_pedido_id ?? undefined,
+        },
+      );
+      aplicarFc(r.data ?? {});
+    } catch (e) {
+      const msg = e instanceof Error && e.message ? e.message : t("Não foi possível confirmar a cobrança da FC.");
+      setErro(msg);
+      if (/incerta/i.test(msg)) {
+        setProcessos((atual) =>
+          atual.map((p) => (p.id === processo.id ? { ...p, fc_cobranca: "incerta" } : p)),
+        );
+      }
+    } finally {
+      setConfirmandoFc(false);
     }
   }
 
@@ -399,6 +575,74 @@ export function ProcessoDeLocacaoPainel({
                   </Button>
                 ) : null}
               </div>
+            </>
+          )}
+        </div>
+      ) : null}
+      {analiseFc ? (
+        <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-fc">
+          <p className="text-xs font-medium">{t("FC Score+")}</p>
+          {!processo ? (
+            <p className="text-xs text-text-muted">{t("Abra um processo antes de analisar a FC.")}</p>
+          ) : !processo.renda_confirmada_em ? (
+            <p className="text-xs text-text-muted">
+              {t("Confirme a renda antes de analisar o seguro-fiança ou a FC.")}
+            </p>
+          ) : (
+            <>
+              {processo.fc_estado ? (
+                <p className="text-xs text-text-muted">
+                  {t("Estado da FC")}: {t(rotuloEstadoFc(processo.fc_estado))}
+                </p>
+              ) : null}
+              {processo.fc_score != null ? (
+                <p className="text-xs">{t("Score")}: {String(processo.fc_score)}</p>
+              ) : null}
+              {processo.fc_risco ? (
+                <p className="text-xs">{t("Risco")}: {processo.fc_risco}</p>
+              ) : null}
+              {processo.fc_id ? (
+                <p className="text-xs text-text-muted">{t("ID-FC")}: {processo.fc_id}</p>
+              ) : null}
+              {resumoFc ? <p className="text-xs whitespace-pre-wrap">{resumoFc}</p> : null}
+              {processo.fc_cobranca === "incerta" ? (
+                <p className="text-xs text-destructive" role="alert">
+                  {t("A cobrança da FC ficou incerta. Nada foi confirmado daqui. Não repetimos sozinhos — clique de novo só se tiver conferido no Hub.")}
+                </p>
+              ) : null}
+              {processo.fc_documento_id ? (
+                <p className="text-xs text-text-muted">{t("Laudo da FC guardado.")}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                  disabled={desabilitado || salvandoFc || confirmandoFc}
+                  onClick={() => void salvarFc()}>
+                  {salvandoFc ? t("Salvando FC Score+…") : t("Analisar FC")}
+                </Button>
+                {processo.fc_estado === "aguardando_cobranca" || processo.fc_estado === "login_necessario" || processo.fc_cobranca === "incerta" ? (
+                  <Button size="sm" className="h-7 px-2 text-xs"
+                    disabled={desabilitado || salvandoFc || confirmandoFc}
+                    onClick={() => void confirmarFc()}>
+                    {confirmandoFc
+                      ? t("Confirmando cobrança da FC…")
+                      : t("Confirmar cobrança da FC (vai gastar créditos)")}
+                  </Button>
+                ) : null}
+                {processo.fc_pedido_id ? (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    disabled={desabilitado || salvandoFc || confirmandoFc}
+                    onClick={() => void atualizarFc()}>
+                    {t("Atualizar FC")}
+                  </Button>
+                ) : null}
+              </div>
+              {(processo.fc_fiadores ?? []).map((f) => (
+                <Button key={String(f.id)} size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                  disabled={desabilitado || salvandoFc || confirmandoFc}
+                  onClick={() => void salvarFc(String(f.id))}>
+                  {t("Pedir FC do fiador")}{f.cpf_mascarado ? ` ${f.cpf_mascarado}` : ""}
+                </Button>
+              ))}
             </>
           )}
         </div>

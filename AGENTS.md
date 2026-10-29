@@ -550,16 +550,21 @@ grava processo, pessoas e imóvel; `processo_id` na ficha preliminar passou a te
 opcional. A análise paga usa o celular do inquilino principal da ficha, nunca o de quem
 só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
 [`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md).
-Fase 4.1 (renda) e 4.2 (cotação de seguro-fiança) ficam atrás de
-`locacao.analise.{renda,seguro}` (desligadas). A 4.2 chama Hub H1/H2
+Fase 4.1 (renda), 4.2 (cotação de seguro-fiança) e 4.3 (FC Score+) ficam atrás
+de `locacao.analise.{renda,seguro,fc}` (desligadas). A 4.2/4.3 chamam Hub H1/H2
 (`iniciar_analise_inquilino` com `acao`, `status_analise_inquilino`,
-`baixar_resultado_analise`) por lista fechada; ferramenta ausente vira aviso,
-não o caminho antigo. Cada ação tem `pedido_id` próprio. Status parseia
-`score`/`risco` opcionais (`lib/locacao/analise/status-hub.ts`; a 4.3
-reusa) e a tela do seguro não os mostra. Decisões:
+`baixar_resultado_analise`) por lista fechada; a 4.3 acrescenta
+`confirmar_cobranca_fc_analise`. Ferramenta ausente vira aviso, não o caminho
+antigo. Cada ação tem `pedido_id` próprio. Salvamento da FC é L (o agente
+executa); a confirmação paga é S (só clique humano, aviso «vai gastar
+créditos», sem preço). Reusa FC `concluida` de até 90 dias da mesma pessoa.
+Fiador/solidário só com clique do atendente. Status parseia `fc.score` /
+`fc.risco` / `id_fc` / `reconfirmacao` (`lib/locacao/analise/status-hub.ts`).
+Decisões:
 [`docs/decisoes/locacao-fase4-analise.md`](docs/decisoes/locacao-fase4-analise.md),
 [`docs/decisoes/locacao-fase4-renda.md`](docs/decisoes/locacao-fase4-renda.md),
-[`docs/decisoes/locacao-fase4-seguro.md`](docs/decisoes/locacao-fase4-seguro.md).
+[`docs/decisoes/locacao-fase4-seguro.md`](docs/decisoes/locacao-fase4-seguro.md),
+[`docs/decisoes/locacao-fase4-fc.md`](docs/decisoes/locacao-fase4-fc.md).
 Não chamar FC, Migra nem `/contrato/confirmar` a partir do relatório preliminar. Não
 pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superlógica
 é só GET. Drive atrás de `locacao.drive_habilitado` (desligado) e das variáveis

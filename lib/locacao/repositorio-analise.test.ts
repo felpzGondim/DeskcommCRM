@@ -17,6 +17,10 @@ describe("acesso mínimo da análise (4.0, sem tela)", () => {
     expect(src).toContain("export async function confirmarRendaDoProcesso");
     expect(src).toContain("export async function lerFichaAtualDoProcesso");
     expect(src).toContain("export async function gravarRascunhoRelatorio");
+    expect(src).toContain("export async function guardarLaudoFc");
+    expect(src).toContain("export async function listarParticipantesParaFc");
+    expect(src).toContain("export async function lerAnaliseFcMaisRecenteDoParticipante");
+    expect(src).toContain('.is("concluida_em", null)');
     expect(src.toLowerCase()).not.toContain("contratar");
   });
 

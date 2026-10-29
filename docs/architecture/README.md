@@ -21,6 +21,7 @@ ser fonte sem ninguém decidir isso.
 | `painel-pergunta-agente.architecture.json` | campo /pergunta do painel → registro único `executarFerramenta` compartilhado com os botões; C/S só com clique humano; polling de `etapa_atual`; chave desligada |
 | `painel-analise-renda.architecture.json` | Analisar renda (PR 4.1): chave `locacao.analise.renda` off; botão e /pergunta compartilham `executarFerramenta`; PDFs originais; confirmar só com clique |
 | `painel-analise-seguro.architecture.json` | Cotação de seguro-fiança (PR 4.2): chave `locacao.analise.seguro` off; pedido_id próprio; H1/H2 lista fechada; print base64; status sem score/risco na tela |
+| `painel-analise-fc.architecture.json` | FC Score+ (PR 4.3): chave `locacao.analise.fc` off; dois cliques; L salva grátis; S confirma créditos sem preço; reuso 90 dias; laudo base64 |
 | `nomes-internos-das-conexoes.architecture.json` | renomeação interna dos canais — cartões de WhatsApp, parceiro e redes sociais → rota tenant-aware → `channel_sessions.display_name` → cartões e seletores, com auditoria e sem alterar o nome público no provedor |
 | `conversoes-de-anuncios.architecture.json` | venda, entrega, protocolo assíncrono, pendências e reprocessamento |
 | `prospeccao-nativa.architecture.json` | busca comercial, fila gradual, configuração conversacional persistente, sandbox e assistente de voz opcional |
