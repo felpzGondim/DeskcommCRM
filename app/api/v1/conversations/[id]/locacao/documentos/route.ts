@@ -19,21 +19,21 @@ const objeto = (v: unknown): Record<string, unknown> => v && typeof v === "objec
 
 async function contexto(id: string, requestId: string) {
   const auth = await requireRole("agent", {requestId, resource: "locacao"});
-  if (!auth.ok) return {erro: auth.response};
+  if (!auth.ok) return {ok: false as const, response: auth.response};
   const db = await createClient();
   const {data: conv, error} = await db.from("conversations").select("id")
     .eq("organization_id", auth.org.orgId).eq("id", id).maybeSingle();
-  if (error || !conv) return {erro: fail("not_found", "Conversa não encontrada.", 404, {requestId})};
+  if (error || !conv) return {ok: false as const, response: fail("not_found", "Conversa não encontrada.", 404, {requestId})};
   const admin = createAdminClient();
   const processo = await processoAtivoDaConversa(admin, auth.org.orgId, id);
-  return {auth, db, admin, processo, orgId: auth.org.orgId};
+  return {ok: true as const, auth, db, admin, processo, orgId: auth.org.orgId};
 }
 
 export async function GET(req: NextRequest, ctx: Ctx) {
   const requestId = randomUUID();
   const {id} = await ctx.params;
   const c = await contexto(id, requestId);
-  if ("erro" in c) return c.erro;
+  if (!c.ok) return c.response;
   const url = new URL(req.url);
   const arquivo = url.searchParams.get("arquivo");
   const origem = url.searchParams.get("origem");
@@ -52,7 +52,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const {data, error} = await tabelaLocacao(c.admin, "locacao_processo_documentos").select("storage_path")
         .eq("organization_id", c.orgId).eq("processo_id", processoId).eq("id", arquivo).is("removido_em", null).maybeSingle();
       if (error) return fail("internal_error", "Não foi possível consultar o arquivo.", 500, {requestId});
-      storagePath = typeof data?.storage_path === "string" ? data.storage_path : null;
+      const row = objeto(data);
+      storagePath = typeof row.storage_path === "string" ? row.storage_path : null;
     }
     if (!storagePath || !storagePath.startsWith(c.orgId + "/")) return fail("not_found", "Arquivo indisponível.", 404, {requestId});
     const {data, error} = await c.admin.storage.from(bucket).createSignedUrl(storagePath, 300, {download: url.searchParams.get("download") === "1"});
@@ -79,17 +80,18 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   if (docs.error || partes.error) return fail("internal_error", "Não foi possível listar o processo.", 500, {requestId});
   const recebidos = (mensagens ?? []).slice(0, 100).map((m) => {
     const meta = objeto(m.metadata);
-    const porProcesso = objeto(objeto(meta.locacao_documentos)[processoId ?? "conversa"]);
+    const classificacoes = objeto(meta.locacao_documentos);
+    const porProcesso = objeto(classificacoes[processoId ?? "conversa"] ?? classificacoes.conversa);
     return {id: m.id, origem: "mensagem", nome: typeof meta.media_filename === "string" ? meta.media_filename : m.type === "image" ? "Imagem recebida" : "Documento recebido",
       categoria: typeof porProcesso.categoria === "string" ? porProcesso.categoria : "outro",
       participante_id: typeof porProcesso.participante_id === "string" ? porProcesso.participante_id : null,
       mime: m.media_mime, data: m.sent_at,
       situacao: !m.media_storage_path ? "Aguardando armazenamento" : m.media_derived_status === "ready" ? "Texto disponível" : "Leitura a conferir"};
   });
-  const documentos = (docs.data ?? []).map((d) => ({
+  const documentos = (docs.data ?? []).map((documento) => { const d = objeto(documento); return {
     ...d, origem: "processo", nome: String(d.categoria).replaceAll("_", " "), data: d.created_at,
     situacao: "Arquivo disponível",
-  }));
+  }; });
   return ok({
     processo_id: processoId, recebidos, documentos, participantes: partes.data ?? [],
     pendencias: ficha?.ficha.documentos.faltantes ?? [],
@@ -112,7 +114,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (suporte) return suporte;
   const {id} = await ctx.params;
   const c = await contexto(id, requestId);
-  if ("erro" in c) return c.erro;
+  if (!c.ok) return c.response;
   const p = edicao.safeParse(await req.json().catch(() => null));
   if (!p.success) return fail("validation_failed", "Classificação inválida.", 422, {requestId});
   const processoId = c.processo ? String(c.processo.id) : null;

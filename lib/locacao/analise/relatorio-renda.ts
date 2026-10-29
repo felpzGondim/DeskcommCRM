@@ -26,6 +26,8 @@ export function montarRelatorioDeRenda(ficha: FichaPreliminar, analises: readonl
       "", "| Mês | Cobertura | Créditos brutos | Débitos | Entradas consideradas pelo motor |", "|---|---|---:|---:|---:|");
     for (const m of a.resumo.linhas) {
       linhas.push("| " + m.mes + " | " + m.cobertura + " | " + dinheiro(m.creditosBrutosCentavos) + " | " + dinheiro(m.saidasCentavos) + " | " + dinheiro(m.rendaConsideradaCentavos) + " |");
+    }
+    for (const m of a.resumo.linhas) {
       if (Object.keys(m.excluidos).length) {
         linhas.push("", "Exclusões de " + m.mes + ": " + Object.entries(m.excluidos).map(([classe, valor]) => classe + " = " + dinheiro(valor ?? 0)).join("; ") + ".", "");
       }

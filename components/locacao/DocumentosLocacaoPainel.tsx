@@ -69,7 +69,7 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
   }
   function lista(titulo: string, docs: Documento[]) {
     return <section className="space-y-2">
-      <h3 className="text-sm font-semibold">{t(titulo)}</h3>
+      <h3 className="text-sm font-semibold">{titulo}</h3>
       {!docs.length && <p className="text-xs text-muted-foreground">{t("Nenhum documento nesta seção.")}</p>}
       {docs.map((doc) => <article key={doc.origem + doc.id} className="space-y-2 rounded border border-border p-3">
         <p className="text-sm font-medium">{doc.nome}</p>
@@ -107,15 +107,15 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
     {carregando && <p role="status" className="text-xs">{t("Carregando documentos…")}</p>}
     {dados?.pendencias.length ? <section><h3 className="text-sm font-semibold">{t("Documentos pendentes")}</h3>
       <ul className="list-disc pl-4 text-xs">{dados.pendencias.map((p) => <li key={p}>{p}</li>)}</ul></section> : null}
-    {lista("Documentos recebidos", recebidos)}
+    {lista(t("Documentos recebidos"), recebidos)}
     {dados?.ha_mais && <Button size="sm" variant="outline" disabled={carregando} onClick={() => void carregar(pagina + 1)}>{t("Carregar mais documentos")}</Button>}
-    {lista("Resultados das etapas", resultados)}
+    {lista(t("Resultados das etapas"), resultados)}
     {(dados?.relatorios ?? []).map((r) => <article key={r.id} className="space-y-2 rounded border p-3">
       <p className="text-sm font-medium">{r.nome}</p><div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => setVisualizacao({nome: r.nome, texto: r.texto})}>{t("Visualizar")}</Button>
         <Button size="sm" variant="ghost" onClick={() => baixarRelatorio(r)}>{t("Baixar .md")}</Button>
       </div></article>)}
-    {lista("Contrato", contratos)}
+    {lista(t("Contrato"), contratos)}
     {visualizacao && <section className="space-y-2 rounded border p-3">
       <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">{visualizacao.nome}</h3>
         <Button size="sm" variant="ghost" onClick={() => setVisualizacao(null)}>{t("Fechar visualização")}</Button></div>

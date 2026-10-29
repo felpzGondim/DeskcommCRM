@@ -1,29 +1,117 @@
 {
-  "id": "esteira-locacao-modal",
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Esteira de locação no modal",
+    "subtitle": "Dados compartilhados e arquivos privados",
+    "output": "esteira-locacao.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    {
+      "id": "interface",
+      "label": "Modal"
+    },
+    {
+      "id": "api",
+      "label": "Servidor"
+    },
+    {
+      "id": "dados",
+      "label": "Dados"
+    }
+  ],
+  "mainPath": [
+    "modal",
+    "ficha",
+    "processo"
+  ],
   "nodes": [
-    "components/inbox/AnaliseInquilinoDialog.tsx",
-    "components/locacao/DocumentosLocacaoPainel.tsx",
-    "lib/locacao/ficha-repositorio.ts",
-    "lib/locacao/ficha-compartilhada.ts",
-    "lib/locacao/repositorio.ts",
-    "app/api/v1/conversations/[id]/locacao/documentos/route.ts"
+    {
+      "id": "modal",
+      "lane": "interface",
+      "col": 1,
+      "type": "frontend",
+      "label": "Cadastro e locação: seis etapas"
+    },
+    {
+      "id": "docs",
+      "lane": "interface",
+      "col": 1,
+      "type": "frontend",
+      "label": "Documentos e relatórios"
+    },
+    {
+      "id": "ficha",
+      "lane": "api",
+      "col": 2,
+      "type": "process",
+      "label": "Ficha compartilhada e RENDA por pessoa"
+    },
+    {
+      "id": "rota",
+      "lane": "api",
+      "col": 2,
+      "type": "route",
+      "label": "Documentos: sessão, organização e conversa"
+    },
+    {
+      "id": "processo",
+      "lane": "dados",
+      "col": 3,
+      "type": "database",
+      "label": "Fichas e resultados versionados"
+    },
+    {
+      "id": "storage",
+      "lane": "dados",
+      "col": 3,
+      "type": "database",
+      "label": "Arquivos existentes no Storage privado"
+    }
   ],
   "edges": [
-    [
-      "components/inbox/AnaliseInquilinoDialog.tsx",
-      "components/locacao/DocumentosLocacaoPainel.tsx"
-    ],
-    [
-      "components/locacao/DocumentosLocacaoPainel.tsx",
-      "app/api/v1/conversations/[id]/locacao/documentos/route.ts"
-    ],
-    [
-      "lib/locacao/ficha-repositorio.ts",
-      "lib/locacao/ficha-compartilhada.ts"
-    ],
-    [
-      "lib/locacao/ficha-compartilhada.ts",
-      "lib/locacao/repositorio.ts"
-    ]
+    {
+      "id": "e1",
+      "from": "modal",
+      "to": "ficha",
+      "label": "salvar dados"
+    },
+    {
+      "id": "e2",
+      "from": "ficha",
+      "to": "processo",
+      "label": "versão e histórico"
+    },
+    {
+      "id": "e3",
+      "from": "processo",
+      "to": "modal",
+      "label": "resultados e revisão"
+    },
+    {
+      "id": "e4",
+      "from": "modal",
+      "to": "docs",
+      "label": "consultar arquivos"
+    },
+    {
+      "id": "e5",
+      "from": "docs",
+      "to": "rota",
+      "label": "listar e classificar"
+    },
+    {
+      "id": "e6",
+      "from": "rota",
+      "to": "storage",
+      "label": "URL temporária"
+    },
+    {
+      "id": "e7",
+      "from": "storage",
+      "to": "docs",
+      "label": "visualização e download"
+    }
   ]
 }

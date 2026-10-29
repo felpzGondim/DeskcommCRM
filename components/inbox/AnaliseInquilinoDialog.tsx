@@ -94,16 +94,16 @@ export function AnaliseInquilinoDialog({
             {t("A ficha, o vínculo Superlógica, a renda, a FC, a cotação e o contrato ficam nesta tela. Nada é enviado ao cliente.")}
           </DialogDescription>
         </DialogHeader>
-        <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
+        <Tabs value={aba} onValueChange={(v) => { if (!ocupado) setAba(v as Aba); }}>
           <TabsList className="h-auto flex-wrap justify-start" aria-label={t("Cadastro e locação")}>
-            <TabsTrigger value="dados" onClick={() => setAba("dados")}>{t("1. Dados")}</TabsTrigger>
-            <TabsTrigger value="renda" onClick={() => setAba("renda")}>{t("2. Renda")}</TabsTrigger>
-            <TabsTrigger value="fc" onClick={() => setAba("fc")}>{t("3. FCAnálise")}</TabsTrigger>
-            <TabsTrigger value="migra" onClick={() => setAba("migra")}>{t("4. Migra")}</TabsTrigger>
-            <TabsTrigger value="relatorio">{t("5. Relatório")}</TabsTrigger>
-            <TabsTrigger value="contrato">{t("6. Contrato")}</TabsTrigger>
-            <TabsTrigger value="documentos">{t("Documentos e relatórios")}</TabsTrigger>
-            <TabsTrigger value="sincronizacao">{t("Superlógica")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="dados" onClick={() => setAba("dados")}>{t("1. Dados")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="renda" onClick={() => setAba("renda")}>{t("2. Renda")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="fc" onClick={() => setAba("fc")}>{t("3. FCAnálise")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="migra" onClick={() => setAba("migra")}>{t("4. Migra")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="relatorio">{t("5. Relatório")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="contrato">{t("6. Contrato")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="documentos">{t("Documentos e relatórios")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="sincronizacao">{t("Superlógica")}</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className={aba === "dados" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "dados"}>

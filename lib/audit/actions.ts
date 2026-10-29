@@ -1355,6 +1355,7 @@ export const AUDIT_ACTIONS = [
   "locacao.relatorio_aprovado",
   "locacao.valores_imovel_editados",
   "locacao.documento_anexado",
+  "locacao.documento_classificado",
   "locacao.documento_removido",
   "locacao.config_alterada",
   "painel_agente.config_alterada",

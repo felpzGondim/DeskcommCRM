@@ -107,6 +107,7 @@ describe("ações do relatório financeiro", () => {
     mocks.processo.mockResolvedValue({
       id: PROC,
       relatorio_rascunho: "## 1. Identificação\nPendente",
+      relatorio_rascunho_em: "2026-10-29T12:00:00Z",
     });
     const ok = await aprovarRelatorioDoPainel(ctx(), { processo_id: PROC });
     expect(ok.ok).toBe(true);
