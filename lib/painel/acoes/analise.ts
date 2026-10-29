@@ -183,10 +183,11 @@ export async function analisarRendaDoPainel(
         seguroIncendioCentavos: reaisParaCentavos(base.ficha.imovel.seguro_incendio.valor) ?? incendio,
       },
     });
+    const declaradaCentavos = rendaDeclaradaNasFontes(fontes);
     const ficha = aplicarRendaNaFicha(base.ficha, {
       analises: preparado.analises,
       holeriteCentavos: preparado.holeriteCentavos,
-      declarada: rendaDeclaradaNasFontes(fontes),
+      declarada: declaradaCentavos == null ? null : declaradaCentavos / 100,
       pacote,
       pendencias: [...preparado.pendencias, ...avisos],
     });

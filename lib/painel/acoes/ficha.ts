@@ -21,7 +21,7 @@ import {
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
-import { preservarEdicoesHumanas } from "@/lib/locacao/renda-utilizada";
+import { preencherRendaDeclaradaInicial, preservarEdicoesHumanas } from "@/lib/locacao/renda-utilizada";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
@@ -160,7 +160,8 @@ export async function gerarRelatorioPreliminarDoPainel(
       { registry: deps.registry, log: deps.log },
     );
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
-    const fichaExtraida = fichaPrevia ? preservarEdicoesHumanas(saida.ficha, fichaPrevia) : saida.ficha;
+    const inicial = preencherRendaDeclaradaInicial(saida.ficha, rendaDeclaradaNasFontes(fontes));
+    const fichaExtraida = fichaPrevia ? preservarEdicoesHumanas(inicial, fichaPrevia) : inicial;
     const ficha = {
       ...fichaExtraida,
       pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),

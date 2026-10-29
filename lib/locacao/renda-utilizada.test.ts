@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {fichaVazia, pessoaVazia} from "@/lib/locacao/ficha-schema";
-import {normalizarRendaUtilizada, preservarEdicoesHumanas, rendaDaPessoa} from "@/lib/locacao/renda-utilizada";
+import {normalizarRendaUtilizada, preencherRendaDeclaradaInicial, preservarEdicoesHumanas, rendaDaPessoa} from "@/lib/locacao/renda-utilizada";
 
 describe("RENDA compartilhada na esteira", () => {
   it("migra a renda declarada legada quando existe uma única pessoa", () => {
@@ -32,5 +32,13 @@ describe("RENDA compartilhada na esteira", () => {
     expect(atual.pessoas[0]!.renda_individual.valor).toBe(5000);
     expect(atual.imovel.aluguel.valor).toBe(1500);
     expect(atual.renda.proposta_fc.valor).toBe(5000);
+  });
+  it("inicia pela renda declarada e permite limpá-la manualmente", () => {
+    const inicial = preencherRendaDeclaradaInicial(fichaVazia(), 500000);
+    expect(inicial.pessoas[0]!.renda_individual.valor).toBe(5000);
+    inicial.pessoas[0]!.renda_individual = {...inicial.pessoas[0]!.renda_individual, valor: null, fonte: "atendente"};
+    const limpa = normalizarRendaUtilizada(inicial);
+    expect(limpa.pessoas[0]!.renda_individual.valor).toBeNull();
+    expect(limpa.renda.mensal.valor).toBeNull();
   });
 });

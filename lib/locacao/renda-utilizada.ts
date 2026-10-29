@@ -2,7 +2,7 @@ import type { FichaPreliminar, NumeroFicha, PessoaDaFicha } from "@/lib/locacao/
 
 /** Um valor operacional por pessoa; proveniência permanece no campo/histórico. */
 export function rendaDaPessoa(ficha: FichaPreliminar, pessoa: PessoaDaFicha): number | null {
-  if (pessoa.renda_individual.valor != null) return pessoa.renda_individual.valor;
+  if (pessoa.renda_individual.valor != null || pessoa.renda_individual.fonte === "atendente") return pessoa.renda_individual.valor;
   const candidatos = ficha.pessoas.filter((p) => p.papel !== "contato");
   // Legado: a renda agregada nunca é atribuída a várias pessoas.
   return candidatos.length === 1 && candidatos[0] === pessoa
@@ -14,7 +14,7 @@ export function normalizarRendaUtilizada(ficha: FichaPreliminar): FichaPrelimina
   const candidatos = ficha.pessoas.filter((p) => p.papel !== "contato");
   const legado = ficha.renda.mensal.valor != null ? ficha.renda.mensal : ficha.renda.proposta_fc;
   const pessoas = ficha.pessoas.map((p) => candidatos.length === 1 && p === candidatos[0]
-    && p.renda_individual.valor == null ? { ...p, renda_individual: { ...legado } } : p);
+    && p.renda_individual.valor == null && p.renda_individual.fonte !== "atendente" ? { ...p, renda_individual: { ...legado } } : p);
   const locatarios = pessoas.filter((p) => p.papel === "inquilino" || p.papel === "solidario");
   const completos = locatarios.length > 0 && locatarios.every((p) => p.renda_individual.valor != null);
   const renda: NumeroFicha = {
@@ -23,6 +23,17 @@ export function normalizarRendaUtilizada(ficha: FichaPreliminar): FichaPrelimina
     fonte: locatarios.some((p) => p.renda_individual.fonte === "atendente") ? "atendente" : ficha.renda.mensal.fonte,
   };
   return { ...ficha, pessoas, renda: { ...ficha.renda, mensal: renda, proposta_fc: { ...renda } } };
+}
+
+/** Inicializa a única RENDA com o valor declarado; não atribui um total a várias pessoas. */
+export function preencherRendaDeclaradaInicial(ficha: FichaPreliminar, centavos: number | null): FichaPreliminar {
+  const candidatos = ficha.pessoas.filter((p) => p.papel !== "contato");
+  if (candidatos.length !== 1 || centavos == null || centavos <= 0) return normalizarRendaUtilizada(ficha);
+  const pessoa = candidatos[0]!;
+  if (pessoa.renda_individual.valor != null || pessoa.renda_individual.fonte === "atendente") return normalizarRendaUtilizada(ficha);
+  return normalizarRendaUtilizada({...ficha, pessoas: ficha.pessoas.map((p) => p !== pessoa ? p : {
+    ...p, renda_individual: {...p.renda_individual, valor: Math.round(centavos) / 100, fonte: "conversa", trecho: "Renda declarada na conversa; não equivale à comprovação"},
+  })});
 }
 
 /** Reextração preserva campos corrigidos pelo atendente, inclusive renda. */
