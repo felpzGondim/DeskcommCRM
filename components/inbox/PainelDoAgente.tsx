@@ -49,16 +49,29 @@ interface Props {
 
 /** Quantos turnos do painel vão de volta ao servidor como contexto. */
 const TURNOS_NO_CONTEXTO = 8;
+const POLL_CONSULTA_MS = 1_000;
+const AVISO_AINDA_PROCESSANDO_MS = 180_000;
+const TIMEOUT_PERGUNTA_POST_MS = 15_000;
+const TIMEOUT_RESUMO_SUGERIR_MS = 120_000;
 
-export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitado = false }: Props) {
+export function PainelDoAgente({
+  conversationId,
+  onUsarComoResposta,
+  desabilitado = false,
+}: Props) {
   const t = useT();
   const [aberto, setAberto] = useState(true);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [pergunta, setPergunta] = useState("");
   const [carregando, setCarregando] = useState<Acao | AcaoHub | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [pedidoAnalise, setPedidoAnalise] = useState<{ pedidoId: string; previaToken: string } | null>(null);
-  const [avisosAnexos, setAvisosAnexos] = useState<Array<{ tipo: string; nome: string; tentativas?: number }>>([]);
+  const [pedidoAnalise, setPedidoAnalise] = useState<{
+    pedidoId: string;
+    previaToken: string;
+  } | null>(null);
+  const [avisosAnexos, setAvisosAnexos] = useState<
+    Array<{ tipo: string; nome: string; tentativas?: number }>
+  >([]);
   const [senhasPdf, setSenhasPdf] = useState<Record<string, string>>({});
   const [limitesAnexos, setLimitesAnexos] = useState<string | null>(null);
   const [consultaId, setConsultaId] = useState<string | null>(null);
@@ -68,6 +81,8 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
   const [ultimaPergunta, setUltimaPergunta] = useState("");
   const [ultimoModo, setUltimoModo] = useState<"normal" | "analise" | null>(null);
   const conversaAtual = useRef(conversationId);
+  const esperandoConsulta = useRef(false);
+  const inicioDaConsulta = useRef(0);
 
   // Troca de conversa = painel limpo: quem usa o painel passa
   // `key={conversationId}`, e o React remonta tudo do zero. A ref abaixo só
@@ -81,28 +96,75 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     let cancelado = false;
     const tick = async () => {
       try {
-        const r = await apiClient.get<{ data: { etapa: string | null; status: string } }>(
-          `/api/v1/conversations/${conversationId}/painel-agente?consulta_id=${consultaId}`,
-        );
-        if (!cancelado && r.data?.etapa) setEtapa(r.data.etapa);
+        const r = await apiClient.get<{
+          data: {
+            etapa: string | null;
+            status: string;
+            resposta?: string | null;
+            propostas?: Array<{ ferramenta: string; motivo: string }>;
+            parou_por?: string | null;
+            modo?: "normal" | "analise" | null;
+          };
+        }>(`/api/v1/conversations/${conversationId}/painel-agente?consulta_id=${consultaId}`);
+        if (cancelado) return;
+        const status = r.data?.status;
+        if (status === "pronto" || status === "erro" || status === "interrompida") {
+          esperandoConsulta.current = false;
+          if (status === "interrompida") {
+            setErro(t("A consulta foi interrompida. Tente de novo."));
+          } else {
+            const resposta = (r.data?.resposta ?? "").trim();
+            if (status === "erro" && !resposta) {
+              setErro(t("Não deu para responder agora."));
+            } else {
+              setTurnos((ts) => [
+                ...ts,
+                {
+                  autor: "ia",
+                  texto: resposta || t("A IA não devolveu texto."),
+                  sugestao: !!resposta,
+                },
+              ]);
+              setPropostas(r.data?.propostas ?? []);
+              setPodeContinuar(!!r.data?.parou_por && r.data.parou_por !== "fim");
+              if (r.data?.modo) setUltimoModo(r.data.modo);
+            }
+          }
+          setCarregando(null);
+          setEtapa(null);
+          setConsultaId(null);
+          return;
+        }
+        if (Date.now() - inicioDaConsulta.current > AVISO_AINDA_PROCESSANDO_MS) {
+          setEtapa(t("Ainda processando…"));
+        } else if (r.data?.etapa) {
+          setEtapa(r.data.etapa);
+        }
       } catch {
         /* kill switch desligado ou consulta ainda não gravada */
+        if (!cancelado && Date.now() - inicioDaConsulta.current > AVISO_AINDA_PROCESSANDO_MS) {
+          setEtapa(t("Ainda processando…"));
+        }
       }
     };
     void tick();
-    const id = window.setInterval(() => void tick(), 400);
+    const id = window.setInterval(() => void tick(), POLL_CONSULTA_MS);
     return () => {
       cancelado = true;
       window.clearInterval(id);
     };
-  }, [carregando, consultaId, conversationId]);
+  }, [carregando, consultaId, conversationId, t]);
 
   async function pedir(acao: Acao, textoLivre?: string) {
     if (carregando || desabilitado) return;
     const texto = (textoLivre ?? pergunta).trim();
     if (acao === "pergunta" && texto.length < 3) return;
     const rotulo =
-      acao === "resumir" ? t("Resumir conversa") : acao === "sugerir" ? t("Sugerir resposta") : texto;
+      acao === "resumir"
+        ? t("Resumir conversa")
+        : acao === "sugerir"
+          ? t("Sugerir resposta")
+          : texto;
     const historico = turnos
       .slice(-TURNOS_NO_CONTEXTO)
       .map(({ autor, texto: tx }) => ({ autor, texto: tx.slice(0, 4000) }));
@@ -113,30 +175,50 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
     setPodeContinuar(false);
     const novaConsulta = acao === "pergunta" ? randomId() : null;
     if (acao === "pergunta") {
+      esperandoConsulta.current = true;
+      inicioDaConsulta.current = Date.now();
       setConsultaId(novaConsulta);
       setEtapa(t("gerando resumo…"));
       setUltimaPergunta(texto);
+    } else {
+      esperandoConsulta.current = false;
     }
     setTurnos((ts) => [...ts, { autor: "atendente", texto: rotulo }]);
     if (acao === "pergunta") setPergunta("");
     try {
-      const r = await apiClient.post<{ data: {
-        resposta: string;
-        propostas?: Array<{ ferramenta: string; motivo: string }>;
-        parou_por?: string;
-        modo?: "normal" | "analise";
-        sugestao?: boolean;
-      } }>(
+      const r = await apiClient.post<{
+        data: {
+          resposta?: string;
+          status?: string;
+          consulta_id?: string;
+          propostas?: Array<{ ferramenta: string; motivo: string }>;
+          parou_por?: string;
+          modo?: "normal" | "analise";
+          sugestao?: boolean;
+        };
+      }>(
         `/api/v1/conversations/${daConversa}/painel-agente`,
         {
           acao,
           ...(acao === "pergunta"
-            ? { pergunta: texto, consulta_id: novaConsulta, ...(textoLivre && ultimoModo ? { modo: ultimoModo } : {}) }
+            ? {
+                pergunta: texto,
+                consulta_id: novaConsulta,
+                ...(textoLivre && ultimoModo ? { modo: ultimoModo } : {}),
+              }
             : {}),
           historico,
         },
+        { timeoutMs: acao === "pergunta" ? TIMEOUT_PERGUNTA_POST_MS : TIMEOUT_RESUMO_SUGERIR_MS },
       );
       if (conversaAtual.current !== daConversa) return;
+      if (
+        acao === "pergunta" &&
+        (r.data?.status === "rodando" || (!r.data?.resposta && r.data?.consulta_id))
+      ) {
+        return;
+      }
+      esperandoConsulta.current = false;
       const resposta = (r.data?.resposta ?? "").trim();
       const viraSugestao = (acao === "sugerir" || acao === "pergunta") && !!resposta;
       setTurnos((ts) => [
@@ -148,10 +230,11 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
       if (r.data?.modo) setUltimoModo(r.data.modo);
     } catch (e) {
       if (conversaAtual.current !== daConversa) return;
+      esperandoConsulta.current = false;
       const msg = e instanceof Error && e.message ? e.message : t("Não deu para responder agora.");
       setErro(msg);
     } finally {
-      if (conversaAtual.current === daConversa) {
+      if (conversaAtual.current === daConversa && !esperandoConsulta.current) {
         setCarregando(null);
         setEtapa(null);
         setConsultaId(null);
@@ -168,22 +251,38 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
       const senhas = Object.entries(senhasPdf)
         .filter(([, senha]) => senha.trim().length > 0)
         .map(([nome, senha]) => ({ nome, senha }));
-      const r = await apiClient.post<{ data: { resumo: string; sugestao?: string; links?: Array<{ rotulo: string; url: string }> } }>(
+      const r = await apiClient.post<{
+        data: { resumo: string; sugestao?: string; links?: Array<{ rotulo: string; url: string }> };
+      }>(
         `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
-        acao === "analise" ? { acao, etapa: "confirmar", confirmar: true,
-          pedidoId: pedidoAnalise?.pedidoId, previaToken: pedidoAnalise?.previaToken,
-          ...(senhas.length ? { senhasPdf: senhas } : {}) } : { acao },
+        acao === "analise"
+          ? {
+              acao,
+              etapa: "confirmar",
+              confirmar: true,
+              pedidoId: pedidoAnalise?.pedidoId,
+              previaToken: pedidoAnalise?.previaToken,
+              ...(senhas.length ? { senhasPdf: senhas } : {}),
+            }
+          : { acao },
       );
       if (conversaAtual.current !== daConversa) return;
-      setTurnos((ts) => [...ts,
+      setTurnos((ts) => [
+        ...ts,
         { autor: "atendente", texto: t(ACOES_HUB[acao].rotulo) },
         { autor: "ia", texto: r.data.resumo, links: r.data.links },
-        ...(r.data.sugestao ? [{ autor: "ia" as const, texto: r.data.sugestao, sugestao: true }] : []),
+        ...(r.data.sugestao
+          ? [{ autor: "ia" as const, texto: r.data.sugestao, sugestao: true }]
+          : []),
       ]);
       if (acao === "analise") setPedidoAnalise(null);
     } catch (e) {
       if (conversaAtual.current !== daConversa) return;
-      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível consultar o Brisa Hub agora."));
+      setErro(
+        e instanceof Error && e.message
+          ? e.message
+          : t("Não foi possível consultar o Brisa Hub agora."),
+      );
     } finally {
       if (conversaAtual.current === daConversa) setCarregando(null);
     }
@@ -199,16 +298,22 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
       const senhas = Object.entries(senhasPdf)
         .filter(([, senha]) => senha.trim().length > 0)
         .map(([nome, senha]) => ({ nome, senha }));
-      const r = await apiClient.post<{ data: {
-        resumo: string; previaToken: string | null; pronto: boolean;
-        avisos?: Array<{ tipo: string; nome: string; tentativas?: number }>;
-        limites?: string;
-      } }>(
-        `/api/v1/conversations/${daConversa}/painel-agente/acoes`,
-        { acao: "analise", etapa: "preparar", ...(senhas.length ? { senhasPdf: senhas } : {}) },
-      );
+      const r = await apiClient.post<{
+        data: {
+          resumo: string;
+          previaToken: string | null;
+          pronto: boolean;
+          avisos?: Array<{ tipo: string; nome: string; tentativas?: number }>;
+          limites?: string;
+        };
+      }>(`/api/v1/conversations/${daConversa}/painel-agente/acoes`, {
+        acao: "analise",
+        etapa: "preparar",
+        ...(senhas.length ? { senhasPdf: senhas } : {}),
+      });
       if (conversaAtual.current !== daConversa) return;
-      setTurnos((ts) => [...ts,
+      setTurnos((ts) => [
+        ...ts,
         { autor: "atendente", texto: t("Preparar análise de inquilino") },
         { autor: "ia", texto: r.data.resumo },
       ]);
@@ -218,7 +323,10 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
         setPedidoAnalise({ pedidoId: randomId(), previaToken: r.data.previaToken });
       }
     } catch (e) {
-      if (conversaAtual.current === daConversa) setErro(e instanceof Error && e.message ? e.message : t("Não foi possível preparar a análise."));
+      if (conversaAtual.current === daConversa)
+        setErro(
+          e instanceof Error && e.message ? e.message : t("Não foi possível preparar a análise."),
+        );
     } finally {
       if (conversaAtual.current === daConversa) setCarregando(null);
     }
@@ -255,7 +363,9 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
             {t("Só você vê este painel. Nada aqui é enviado ao cliente.")}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {t("A análise lê o conteúdo dos anexos (foto, PDF e PDF escaneado). PDF com senha pede a senha aqui.")}
+            {t(
+              "A análise lê o conteúdo dos anexos (foto, PDF e PDF escaneado). PDF com senha pede a senha aqui.",
+            )}
             {limitesAnexos ? ` ${limitesAnexos}` : ""}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -279,25 +389,39 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
             </Button>
           </div>
           <div className="flex flex-wrap gap-2" aria-label={t("Ações do Brisa Hub")}>
-            <GerarContratoDialog key={conversationId} conversationId={conversationId}
-              desabilitado={desabilitado || carregando !== null} />
+            <GerarContratoDialog
+              key={conversationId}
+              conversationId={conversationId}
+              desabilitado={desabilitado || carregando !== null}
+            />
             {(["boletos", "contrato", "ficha"] as const).map((acao) => (
-              <Button key={acao} size="sm" variant="outline" className="h-7 px-2 text-xs"
+              <Button
+                key={acao}
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs"
                 disabled={desabilitado || carregando !== null}
-                onClick={() => void chamarHub(acao)}>
+                onClick={() => void chamarHub(acao)}
+              >
                 {t(ACOES_HUB[acao].rotulo)}
               </Button>
             ))}
-            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
               disabled={desabilitado || carregando !== null}
-              onClick={() => void prepararAnalise()}>
+              onClick={() => void prepararAnalise()}
+            >
               {t(ACOES_HUB.analise.rotulo)}
             </Button>
           </div>
           <FichaPreliminarPainel
             conversationId={conversationId}
             desabilitado={desabilitado || carregando !== null}
-            senhasPdf={Object.entries(senhasPdf).filter(([, senha]) => senha).map(([nome, senha]) => ({ nome, senha }))}
+            senhasPdf={Object.entries(senhasPdf)
+              .filter(([, senha]) => senha)
+              .map(([nome, senha]) => ({ nome, senha }))}
           />
           <ProcessoDeLocacaoPainel
             conversationId={conversationId}
@@ -309,18 +433,26 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 <li
                   key={i}
                   className={cn(
-                    "whitespace-pre-wrap rounded-md px-2 py-1.5 text-xs",
+                    "rounded-md px-2 py-1.5 text-xs whitespace-pre-wrap",
                     turno.autor === "atendente" ? "bg-muted text-text" : "border border-border",
                   )}
                 >
-                  <span className="sr-only">{turno.autor === "atendente" ? t("Você") : t("IA")}: </span>
+                  <span className="sr-only">
+                    {turno.autor === "atendente" ? t("Você") : t("IA")}:{" "}
+                  </span>
                   {turno.texto}
-                  {turno.autor === "ia" && turno.links?.map((link) => (
-                    <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
-                      className="mt-1 block text-primary underline">
-                      {t(link.rotulo)}
-                    </a>
-                  ))}
+                  {turno.autor === "ia" &&
+                    turno.links?.map((link) => (
+                      <a
+                        key={link.url}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 block text-primary underline"
+                      >
+                        {t(link.rotulo)}
+                      </a>
+                    ))}
                   {turno.autor === "ia" && turno.sugestao && (
                     <div className="mt-1.5">
                       <Button
@@ -340,39 +472,75 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
           )}
 
           {avisosAnexos.some((a) => a.tipo === "pdf_protegido") && (
-            <div className="space-y-2 rounded-md border border-border p-2" role="group"
-              aria-label={t("Informe a senha do PDF protegido")}>
+            <div
+              className="space-y-2 rounded-md border border-border p-2"
+              role="group"
+              aria-label={t("Informe a senha do PDF protegido")}
+            >
               <p className="text-[11px] text-muted-foreground">
-                {t("Este PDF está protegido por senha. Digite a senha para a análise ler o arquivo. A senha não é gravada.")}
+                {t(
+                  "Este PDF está protegido por senha. Digite a senha para a análise ler o arquivo. A senha não é gravada.",
+                )}
               </p>
-              {avisosAnexos.filter((a) => a.tipo === "pdf_protegido").map((aviso) => (
-                <label key={aviso.nome} className="block space-y-1">
-                  <span className="text-[11px] font-medium">{t("Senha do PDF")}: {aviso.nome}</span>
-                  {(aviso.tentativas ?? 0) >= 3 ? (
-                    <p className="text-[11px] text-destructive">{t("Três tentativas falharam. Este arquivo fica pendente.")}</p>
-                  ) : (
-                    <Input type="password" autoComplete="off" className="h-8 text-xs"
-                      value={senhasPdf[aviso.nome] ?? ""}
-                      onChange={(e) => setSenhasPdf((atual) => ({ ...atual, [aviso.nome]: e.target.value }))}
-                      aria-label={`${t("Senha do PDF")} ${aviso.nome}`} />
-                  )}
-                </label>
-              ))}
-              <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+              {avisosAnexos
+                .filter((a) => a.tipo === "pdf_protegido")
+                .map((aviso) => (
+                  <label key={aviso.nome} className="block space-y-1">
+                    <span className="text-[11px] font-medium">
+                      {t("Senha do PDF")}: {aviso.nome}
+                    </span>
+                    {(aviso.tentativas ?? 0) >= 3 ? (
+                      <p className="text-[11px] text-destructive">
+                        {t("Três tentativas falharam. Este arquivo fica pendente.")}
+                      </p>
+                    ) : (
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        className="h-8 text-xs"
+                        value={senhasPdf[aviso.nome] ?? ""}
+                        onChange={(e) =>
+                          setSenhasPdf((atual) => ({ ...atual, [aviso.nome]: e.target.value }))
+                        }
+                        aria-label={`${t("Senha do PDF")} ${aviso.nome}`}
+                      />
+                    )}
+                  </label>
+                ))}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs"
                 disabled={desabilitado || carregando !== null}
-                onClick={() => void prepararAnalise()}>
+                onClick={() => void prepararAnalise()}
+              >
                 {t("Ler de novo com a senha")}
               </Button>
             </div>
           )}
 
           {pedidoAnalise && (
-            <div className="rounded-md border border-border p-2 text-xs" role="group" aria-label={t("Confirmar análise")}>
-              <p>{t("Confira a prévia acima e os documentos originais. Confirmar cria o pedido de análise no Brisa Hub; a cobrança FC Score+ ainda exige confirmação posterior.")}</p>
+            <div
+              className="rounded-md border border-border p-2 text-xs"
+              role="group"
+              aria-label={t("Confirmar análise")}
+            >
+              <p>
+                {t(
+                  "Confira a prévia acima e os documentos originais. Confirmar cria o pedido de análise no Brisa Hub; a cobrança FC Score+ ainda exige confirmação posterior.",
+                )}
+              </p>
               <div className="mt-2 flex gap-2">
-                <Button size="sm" disabled={desabilitado || carregando !== null}
-                  onClick={() => void chamarHub("analise")}>{t("Confirmar análise")}</Button>
-                <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>{t("Cancelar")}</Button>
+                <Button
+                  size="sm"
+                  disabled={desabilitado || carregando !== null}
+                  onClick={() => void chamarHub("analise")}
+                >
+                  {t("Confirmar análise")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPedidoAnalise(null)}>
+                  {t("Cancelar")}
+                </Button>
               </div>
             </div>
           )}
@@ -389,15 +557,20 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
                 <div key={p.ferramenta} className="rounded-md border border-border p-2 text-xs">
                   <p>{p.motivo}</p>
                   {p.ferramenta === "iniciar_analise" && (
-                    <Button size="sm" className="mt-1.5 h-7 px-2 text-xs"
+                    <Button
+                      size="sm"
+                      className="mt-1.5 h-7 px-2 text-xs"
                       disabled={desabilitado || carregando !== null}
-                      onClick={() => void prepararAnalise()}>
+                      onClick={() => void prepararAnalise()}
+                    >
                       {t("Preparar análise")}
                     </Button>
                   )}
                   {p.ferramenta === "confirmar_contrato" && (
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      {t("Use Gerar contrato para conferir a prévia e confirmar. A IA não confirma sozinha.")}
+                      {t(
+                        "Use Gerar contrato para conferir a prévia e confirmar. A IA não confirma sozinha.",
+                      )}
                     </p>
                   )}
                   {p.ferramenta === "confirmar_renda" && (
@@ -411,9 +584,13 @@ export function PainelDoAgente({ conversationId, onUsarComoResposta, desabilitad
           )}
 
           {podeContinuar && (
-            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
               disabled={desabilitado || carregando !== null}
-              onClick={() => void pedir("pergunta", ultimaPergunta || "continue")}>
+              onClick={() => void pedir("pergunta", ultimaPergunta || "continue")}
+            >
               {t("Continuar")}
             </Button>
           )}

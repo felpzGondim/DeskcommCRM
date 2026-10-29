@@ -11,7 +11,8 @@
  * · Contato anonimizado ⇒ 422 sem chamar o modelo.
  * · Teto: 10/min por pessoa, 40/min por organização + o orçamento da org.
  *
- * GET ?consulta_id= — andamento da pergunta em curso (polling da etapa_atual).
+ * GET ?consulta_id= — andamento da pergunta em curso (polling). `interrompida`
+ * é calculada na leitura (CHECK do banco só aceita rodando/pronto/erro).
  */
 import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -37,7 +38,14 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
 import { ferramentasDoPainelLigadas } from "@/lib/painel/chave";
 import { montarContexto } from "@/lib/painel/contexto";
-import { abrirConsulta, atualizarEtapa, fecharConsulta, lerAndamento } from "@/lib/painel/consulta";
+import {
+  abrirConsulta,
+  atualizarEtapa,
+  fecharConsulta,
+  lerAndamento,
+  type AndamentoDaConsulta,
+} from "@/lib/painel/consulta";
+import { depoisDaResposta } from "@/lib/painel/depois-da-resposta";
 import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
 import { modoDaPergunta, responderComFerramentas } from "@/lib/painel/ferramentas/loop";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -59,9 +67,7 @@ const corpoDoPost = z
     consulta_id: z.string().uuid().optional(),
     modo: z.enum(["normal", "analise"]).optional(),
     historico: z
-      .array(
-        z.object({ autor: z.enum(["atendente", "ia"]), texto: z.string().max(4000) }).strict(),
-      )
+      .array(z.object({ autor: z.enum(["atendente", "ia"]), texto: z.string().max(4000) }).strict())
       .max(12)
       .default([]),
   })
@@ -84,7 +90,18 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const db = await createClient();
   const andamento = await lerAndamento(db, auth.org.orgId, consultaId, id);
   if (!andamento) return fail("not_found", t("Consulta não encontrada."), 404, { requestId });
-  return ok({ etapa: andamento.etapa, status: andamento.status }, { requestId });
+  return ok(payloadDoAndamento(andamento), { requestId });
+}
+
+function payloadDoAndamento(andamento: AndamentoDaConsulta) {
+  return {
+    etapa: andamento.etapa,
+    status: andamento.status,
+    resposta: andamento.resposta,
+    propostas: andamento.propostas,
+    parou_por: andamento.parou_por,
+    modo: andamento.modo,
+  };
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
@@ -104,10 +121,24 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       details: parsed.error.flatten(),
     });
   }
-  const { acao, pergunta, historico, consulta_id: consultaDoCliente, modo: modoForcado } = parsed.data;
+  const {
+    acao,
+    pergunta,
+    historico,
+    consulta_id: consultaDoCliente,
+    modo: modoForcado,
+  } = parsed.data;
 
-  const porUsuario = await checkRateLimit(`painel-agente:${auth.user.id}`, TETO_POR_USUARIO, JANELA_SEGUNDOS);
-  const porOrganizacao = await checkRateLimit(`painel-agente-org:${orgId}`, TETO_POR_ORGANIZACAO, JANELA_SEGUNDOS);
+  const porUsuario = await checkRateLimit(
+    `painel-agente:${auth.user.id}`,
+    TETO_POR_USUARIO,
+    JANELA_SEGUNDOS,
+  );
+  const porOrganizacao = await checkRateLimit(
+    `painel-agente-org:${orgId}`,
+    TETO_POR_ORGANIZACAO,
+    JANELA_SEGUNDOS,
+  );
   if (!porUsuario.allowed || !porOrganizacao.allowed) {
     return fail("rate_limited", t("Muitos pedidos seguidos. Tente em um minuto."), 429, {
       requestId,
@@ -142,8 +173,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  const { data: orgLinha } = await db.from("organizations").select("settings")
-    .eq("id", orgId).maybeSingle();
+  const { data: orgLinha } = await db
+    .from("organizations")
+    .select("settings")
+    .eq("id", orgId)
+    .maybeSingle();
   const admin = createAdminClient();
   const contexto = montarContexto({
     orgId,
@@ -163,15 +197,25 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const nome = acao === "resumir" ? "resumir_conversa" : "sugerir_resposta";
     let r;
     try {
-      r = await executarFerramenta(nome, contexto, acao === "sugerir" ? { orientacao: pergunta } : {});
+      r = await executarFerramenta(
+        nome,
+        contexto,
+        acao === "sugerir" ? { orientacao: pergunta } : {},
+      );
     } catch (erro) {
       const motivo = motivoDaConversaDoCaso(erro);
       logger.error("[painel-agente] o modelo não respondeu", {
-        requestId, organizationId: orgId, motivo: motivo.codigo,
+        requestId,
+        organizationId: orgId,
+        motivo: motivo.codigo,
       });
       void audit({
-        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
-        resourceType: "conversation", resourceId: conversa.id, requestId,
+        action: "ai.painel_atendente",
+        actorUserId: auth.user.id,
+        organizationId: orgId,
+        resourceType: "conversation",
+        resourceId: conversa.id,
+        requestId,
         metadata: { acao, llm_call_id: null, respondeu: false, error_code: motivo.codigo },
       });
       return fail(motivo.codigo, t(motivo.texto), 422, { requestId });
@@ -180,8 +224,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return fail("empty", t(r.texto), 422, { requestId });
     }
     void audit({
-      action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
-      resourceType: "conversation", resourceId: conversa.id, requestId,
+      action: "ai.painel_atendente",
+      actorUserId: auth.user.id,
+      organizationId: orgId,
+      resourceType: "conversation",
+      resourceId: conversa.id,
+      requestId,
       metadata: { acao, llm_call_id: r.extra?.callId ?? null, respondeu: true, error_code: null },
     });
     return ok({ acao, resposta: r.texto }, { requestId });
@@ -190,56 +238,133 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const comFerramentas = ferramentasDoPainelLigadas(orgLinha?.settings);
   if (comFerramentas) {
     const consultaId = consultaDoCliente ?? randomUUID();
-    const modo = modoForcado ?? modoDaPergunta(pergunta ?? "", historico);
-    const t0 = Date.now();
-    await abrirConsulta(admin, {
-      id: consultaId, orgId, conversationId: conversa.id, contactId,
-      userId: auth.user.id, pergunta: pergunta ?? "", modo,
-    });
-    contexto.onAndamento = (etapa) => atualizarEtapa(admin, orgId, consultaId, etapa);
-    contexto.origem = "agente";
-    try {
-      const r = await responderComFerramentas(contexto, {
-        pergunta: pergunta ?? "",
-        historico,
-        modo,
-      });
-      await fecharConsulta(admin, {
-        id: consultaId, orgId, resposta: r.texto, passos: r.passos, propostas: r.propostas,
-        tokensEntrada: r.tokensEntrada, tokensSaida: r.tokensSaida, custoUsd: r.custoUsd,
-        duracaoMs: Date.now() - t0, parouPor: r.parouPor, llmCallIds: r.callId ? [r.callId] : [],
-        modo: r.modo,
-      });
-      void audit({
-        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
-        resourceType: "conversation", resourceId: conversa.id, requestId,
-        metadata: {
-          acao, llm_call_id: r.callId, respondeu: true, error_code: null,
-          parou_por: r.parouPor, consulta_id: consultaId,
-        },
-      });
-      return ok({
-        acao, resposta: r.texto, consulta_id: consultaId,
-        propostas: r.propostas, parou_por: r.parouPor, modo: r.modo,
+    const existente = await lerAndamento(admin, orgId, consultaId, conversa.id);
+    if (existente) {
+      const payload = {
+        acao,
+        consulta_id: consultaId,
         sugestao: true,
-      }, { requestId });
-    } catch (erro) {
-      const motivo = motivoDaConversaDoCaso(erro);
-      await fecharConsulta(admin, {
-        id: consultaId, orgId, resposta: "", passos: [], propostas: [],
-        tokensEntrada: 0, tokensSaida: 0, custoUsd: 0, duracaoMs: Date.now() - t0,
-        parouPor: "fim", llmCallIds: [], modo, status: "erro",
-      });
-      logger.error("[painel-agente] o modelo não respondeu", {
-        requestId, organizationId: orgId, motivo: motivo.codigo,
-      });
-      void audit({
-        action: "ai.painel_atendente", actorUserId: auth.user.id, organizationId: orgId,
-        resourceType: "conversation", resourceId: conversa.id, requestId,
-        metadata: { acao, llm_call_id: null, respondeu: false, error_code: motivo.codigo },
-      });
-      return fail(motivo.codigo, t(motivo.texto), 422, { requestId });
+        ...payloadDoAndamento(existente),
+      };
+      if (existente.status === "rodando") {
+        return ok(payload, { status: 202, requestId });
+      }
+      return ok(payload, { requestId });
     }
+    const modo = modoForcado ?? modoDaPergunta(pergunta ?? "", historico);
+    const estado = await abrirConsulta(admin, {
+      id: consultaId,
+      orgId,
+      conversationId: conversa.id,
+      contactId,
+      userId: auth.user.id,
+      pergunta: pergunta ?? "",
+      modo,
+    });
+    if (estado === "existente") {
+      const deNovo = await lerAndamento(admin, orgId, consultaId, conversa.id);
+      if (deNovo) {
+        const payload = {
+          acao,
+          consulta_id: consultaId,
+          sugestao: true,
+          ...payloadDoAndamento(deNovo),
+        };
+        return ok(payload, { status: deNovo.status === "rodando" ? 202 : 200, requestId });
+      }
+    }
+    // after() não tem cookies: o client de sessão já foi criado acima; o
+    // trabalho usa service role filtrado por organization_id da sessão.
+    const ctxDepois = { ...contexto, dbSessao: admin, origem: "agente" as const };
+    ctxDepois.onAndamento = (etapa) => atualizarEtapa(admin, orgId, consultaId, etapa);
+    const perguntaTexto = pergunta ?? "";
+    depoisDaResposta(async () => {
+      const t0 = Date.now();
+      try {
+        const r = await responderComFerramentas(ctxDepois, {
+          pergunta: perguntaTexto,
+          historico,
+          modo,
+        });
+        await fecharConsulta(admin, {
+          id: consultaId,
+          orgId,
+          resposta: r.texto,
+          passos: r.passos,
+          propostas: r.propostas,
+          tokensEntrada: r.tokensEntrada,
+          tokensSaida: r.tokensSaida,
+          custoUsd: r.custoUsd,
+          duracaoMs: Date.now() - t0,
+          parouPor: r.parouPor,
+          llmCallIds: r.callId ? [r.callId] : [],
+          modo: r.modo,
+        });
+        void audit({
+          action: "ai.painel_atendente",
+          actorUserId: auth.user.id,
+          organizationId: orgId,
+          resourceType: "conversation",
+          resourceId: conversa.id,
+          requestId,
+          metadata: {
+            acao,
+            llm_call_id: r.callId,
+            respondeu: true,
+            error_code: null,
+            parou_por: r.parouPor,
+            consulta_id: consultaId,
+          },
+        });
+      } catch (erro) {
+        const motivo = motivoDaConversaDoCaso(erro);
+        await fecharConsulta(admin, {
+          id: consultaId,
+          orgId,
+          resposta: "",
+          passos: [],
+          propostas: [],
+          tokensEntrada: 0,
+          tokensSaida: 0,
+          custoUsd: 0,
+          duracaoMs: Date.now() - t0,
+          parouPor: "fim",
+          llmCallIds: [],
+          modo,
+          status: "erro",
+        });
+        logger.error("[painel-agente] o modelo não respondeu", {
+          requestId,
+          organizationId: orgId,
+          motivo: motivo.codigo,
+        });
+        void audit({
+          action: "ai.painel_atendente",
+          actorUserId: auth.user.id,
+          organizationId: orgId,
+          resourceType: "conversation",
+          resourceId: conversa.id,
+          requestId,
+          metadata: {
+            acao,
+            llm_call_id: null,
+            respondeu: false,
+            error_code: motivo.codigo,
+            consulta_id: consultaId,
+          },
+        });
+      }
+    });
+    return ok(
+      {
+        acao,
+        consulta_id: consultaId,
+        status: "rodando" as const,
+        etapa: "gerando resumo…",
+        sugestao: true,
+      },
+      { status: 202, requestId },
+    );
   }
 
   const { data: linhas, error: erroMsgs } = await db
@@ -265,7 +390,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return fail("empty", t("Ainda não há mensagens de texto nesta conversa."), 422, { requestId });
   }
 
-  const primeiroNome = (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
+  const primeiroNome =
+    (nomeDoContato(contato ?? null) ?? "cliente").trim().split(/\s+/)[0] ?? "cliente";
   const mensagens = montarMensagensDoPainel({
     blocoDaConversa: montarBlocoDaConversa(falas, primeiroNome),
     historico,
@@ -300,7 +426,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     resourceType: "conversation",
     resourceId: conversa.id,
     requestId,
-    metadata: { acao, llm_call_id: resposta?.callId ?? null, respondeu: erroCodigo === null, error_code: erroCodigo },
+    metadata: {
+      acao,
+      llm_call_id: resposta?.callId ?? null,
+      respondeu: erroCodigo === null,
+      error_code: erroCodigo,
+    },
   });
 
   if (motivo !== null || resposta === null) {

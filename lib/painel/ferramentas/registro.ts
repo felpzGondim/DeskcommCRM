@@ -207,7 +207,7 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
   },
   {
     nome: "analisar_renda",
-    descricao: "Analisa a renda do candidato a inquilino a partir da conversa e dos PDFs originais. Exclui autotransferência, poupança e Rende Fácil; PIX de terceiros fica à parte. Não confirma sozinha.",
+    descricao: "Analisa a renda do candidato a inquilino a partir da conversa e dos PDFs originais, com o mesmo motor do relatório preliminar. PIX/TED de terceiros, salário e vendas no cartão entram; próprias, familiares da ficha, resgates, estornos e empréstimos saem com volume à parte. Não confirma sozinha.",
     nivel: "L",
     entrada: z.object({
       processo_id: z.string().uuid().optional(),

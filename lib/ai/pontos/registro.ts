@@ -281,7 +281,7 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
       "Lê conversa e extratos para o atendente conferir a renda comprovada. Nunca fala com o cliente.",
     papel: "entender",
     exige: {},
-    emissor: "lib/locacao/analise/renda.ts",
+    emissor: "lib/locacao/extrato/extrair-ia.ts",
     sintomaDeFalha:
       "O botão Analisar renda mostra erro, e o atendente precisa conferir o extrato à mão.",
     registraEm: "llm_calls",

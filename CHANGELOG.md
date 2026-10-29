@@ -8,13 +8,31 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.12] — 2026-10-28
+
+### Adicionado
+
+- **Analisar renda no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.renda` (desligada). Ligada, o processo da conversa ganha Analisar renda e Confirmar renda: lê a conversa, reabre os PDFs originais e usa o mesmo motor do relatório preliminar (`lib/locacao/extrato`). PIX/TED de terceiros (inclusive avulsos, com recorrência por pagador), salário/pró-labore/holerite e vendas no cartão/maquininha entram na comprovada; saem, com volume à parte, as próprias, os familiares diretos da ficha, poupança/resgates/aplicações/Rende Fácil, estornos e empréstimos. Familiar só por sobrenome ou nome parcial vai para "familiar provável — conferir", com a renda com e sem. 3× = aluguel+condomínio+IPTU+seguro-incêndio (sem seguro-fiança). A IA só propõe confirmar; qualquer atendente clica. Sem renda confirmada, seguro e FC ficam recusados. Nada vai ao cliente. Rollback: desligar a chave.
+
+### Corrigido
+
+- **A renda do relatório preliminar sai do extrato, não do valor declarado** No Painel, Gerar relatório preliminar lê os créditos do extrato mês a mês. PIX/TED de terceiros (empregador, clientes, inclusive avulsos) e vendas no cartão/maquininha entram na renda comprovada; a tabela mostra a recorrência de cada pagador. Saem, com o volume à parte: transferências da própria pessoa; familiares diretos (pai, mãe, cônjuge, filhos, tios) identificados pela ficha ou por parentesco; poupança/resgates/aplicações/Rende Fácil; estornos e empréstimos. Só sobrenome em comum ou nome parcial vai para a lista "familiar provável — conferir", com a renda com e sem esses valores. Compara com o declarado e com 3× o pacote (aluguel+condomínio+IPTU+seguro-incêndio). O valor declarado nunca conta como comprovado. Extrato de qualquer banco: parser primeiro; se o layout não for reconhecido ou o saldo não fechar, a IA extrai os lançamentos. Extrato escaneado ou ilegível aparece com recado claro, sem chute. Se faltar o pacote: "3x não calculado: falta o valor do pacote". Sem prova de renda, o risco não sai como baixo. O relatório usa as 6 seções da análise de inquilino. Extrato longo deixa de ser cortado em silêncio: a IA recebe a tabela calculada. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.11] — 2026-10-28
 
 ### Adicionado
 
 - **Base da análise de inquilino no processo (desligada)** O processo de locação passa a ter um registro de cotação de seguro-fiança (pedido, job, estado, resultado), tipos de evento renda e relatório, e chaves `locacao.analise.{renda,seguro,fc,relatorio,manual}` — todas desligadas. Sem preço da FC no banco. A confirmação da cobrança continua avisando que vai gastar créditos, sem valor na tela. Rollback: desligar as chaves; as tabelas ficam.
 
-- **Analisar renda no Painel (desligada)** Em Configurações › Locação, a chave `locacao.analise.renda` (desligada). Ligada, o processo da conversa ganha Analisar renda e Confirmar renda: lê a conversa e reabre os PDFs originais (o texto derivado corta em 8 mil caracteres), exclui autotransferência, poupança e Rende Fácil, e deixa PIX de terceiros à parte. A IA só propõe confirmar; qualquer atendente clica. Sem renda confirmada, seguro e FC (ainda por vir) ficam recusados. Nada vai ao cliente. Rollback: desligar a chave.
+### Corrigido
+
+- **O relatório preliminar deixa de falhar quando a IA corta a resposta no teto de 4096 tokens** Sem limite da organização, a chamada do relatório pode pedir até 16384 tokens de saída. Se a IA ainda cortar, o painel diz que a resposta ficou incompleta — não culpa os documentos. JSON inválido tem recado próprio. Quem já instalou não precisa fazer nada.
+
+- **A pergunta do Painel não cai mais no erro de 30 segundos** O servidor aceita a pergunta (202) e continua no fundo; a tela consulta o andamento a cada segundo. Depois de 3 minutos, mostra “Ainda processando…” em vez de erro. Resumir e sugerir seguem iguais, com espera maior. Quem já instalou não precisa fazer nada.
+
+- **O painel deixa de tratar extrato cortado em 8000 caracteres como ausência de crédito** A derivação do WhatsApp continua no teto de 8000. No relatório, na análise e nas ferramentas do painel, texto exatamente nesse teto vem marcado para a IA não concluir que não há depósitos. PDF da análise/relatório já reabre o original. Quem já instalou não precisa fazer nada.
+
+- **A pergunta do Painel reabre o PDF original quando o texto derivado corta em 8000** Anexo e conversa usam os mesmos limites da análise (30 páginas, teto de caracteres, senha vira pendência). Se a reabertura falhar, vale o recorte com o aviso. Foto no teto só leva o aviso. O WhatsApp não muda. Quem já instalou não precisa fazer nada.
 
 ## [1.88.0-felpz.10] — 2026-10-28
 

@@ -10,17 +10,22 @@ import {
 } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 import {
   blocoDasFontesDaFicha,
+  familiaresDaFicha,
   fontesDaFicha,
+  prepararFontesDoRelatorio,
+  rendaDeclaradaNasFontes,
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
+import { aplicarRendaNaFicha, textoDoResumo } from "@/lib/locacao/analise/renda";
+import { analiseLigada, pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import {
-  AnaliseRendaTruncada,
-  analisarRendaNoModelo,
-  aplicarRendaNaFicha,
-} from "@/lib/locacao/analise/renda";
-import { analiseLigada } from "@/lib/locacao/chaves";
+  criarExtratorComModelo,
+  leitorSuperlogicaDesligado,
+  lerSeguroIncendioNoTexto,
+  montarPacote,
+} from "@/lib/locacao/extrato";
 import {
   FichaConflitoDeVersao,
   gravarVersaoDaFicha,
@@ -41,8 +46,6 @@ import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/f
 
 export const TEXTO_ANALISE_DESLIGADA = "Esta análise não está ligada nesta organização.";
 export const TEXTO_SEM_PROCESSO = "Abra um processo de locação antes de analisar a renda.";
-export const TEXTO_ANALISE_TRUNCADA =
-  "A análise de renda ficou longa demais. Tente de novo ou peça para a administração aumentar o teto de saída.";
 export const TEXTO_SEM_RENDA_PARA_CONFIRMAR = "Analise a renda antes de confirmar.";
 export const TEXTO_RENDA_CONFIRMADA = "Renda confirmada.";
 
@@ -99,7 +102,9 @@ function extraDaRenda(ficha: FichaPreliminar, versao: number, origem: string) {
     alertas: ficha.renda.alertas,
     excluida: ficha.renda.excluida,
     pix_terceiros: ficha.renda.pix_terceiros,
+    vendas_cartao: ficha.renda.vendas_cartao,
     evidencias: ficha.renda.evidencias,
+    bloco_calculado: ficha.renda.bloco_calculado,
   };
 }
 
@@ -135,8 +140,27 @@ export async function analisarRendaDoPainel(
       senhas: args.senhas ?? {},
       lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
     });
-    const fontes = fontesDaFicha(enriquecido.linhas);
-    const bloco = blocoDasFontesDaFicha(fontes);
+    const fontes = fontesDaFicha(enriquecido.linhas, {
+      charsPorAnexo: limites.chars_ficha_por_anexo,
+    });
+    const base = await fichaBase(ctx, alvo.id);
+    const familiares = familiaresDaFicha(base.ficha);
+    const pool = getRequestPool();
+    const preparado = await prepararFontesDoRelatorio(fontes, {
+      familiares,
+      extrator: criarExtratorComModelo(
+        pool,
+        deps.llmCfg,
+        { tenantId: ctx.orgId, contactId: ctx.contactId },
+        { registry: deps.registry, log: deps.log },
+        {
+          paginasPorLote: limites.paginas_por_lote_ocr,
+          charsPorLote: limites.chars_ficha_por_anexo,
+          purpose: "painel_analise",
+        },
+      ),
+    });
+    const bloco = blocoDasFontesDaFicha(preparado.fontes);
     if (bloco.length > limites.chars_conjunto) {
       return {
         ok: false,
@@ -144,16 +168,29 @@ export async function analisarRendaDoPainel(
         codigo: "validation_error",
       };
     }
-    const saida = await analisarRendaNoModelo(
-      getRequestPool(),
-      deps.llmCfg,
-      { tenantId: ctx.orgId, contactId: ctx.contactId, fontes: bloco },
-      { registry: deps.registry, log: deps.log },
-    );
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
-    const base = await fichaBase(ctx, alvo.id);
-    const ficha = aplicarRendaNaFicha(base.ficha, saida.regras, saida.evidencias);
-    ficha.pendencias = [...new Set([...ficha.pendencias, ...avisos])].slice(0, 20);
+    const incendio =
+      fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
+    const sl = pacoteSuperlogicaLigado(ctx.settings)
+      ? await leitorSuperlogicaDesligado().ler({ orgId: ctx.orgId, contactId: ctx.contactId })
+      : null;
+    const reaisParaCentavos = (v: number | null) => (v == null ? null : Math.round(v * 100));
+    const pacote = montarPacote({
+      superlogica: sl,
+      conversa: {
+        aluguelCentavos: reaisParaCentavos(base.ficha.imovel.aluguel.valor),
+        condominioCentavos: reaisParaCentavos(base.ficha.imovel.condominio.valor),
+        iptuCentavos: reaisParaCentavos(base.ficha.imovel.iptu.valor),
+        seguroIncendioCentavos: incendio,
+      },
+    });
+    const ficha = aplicarRendaNaFicha(base.ficha, {
+      analises: preparado.analises,
+      holeriteCentavos: preparado.holeriteCentavos,
+      declarada: rendaDeclaradaNasFontes(fontes),
+      pacote,
+      pendencias: [...preparado.pendencias, ...avisos],
+    });
     const versao = await gravarFichaDoProcesso(ctx.admin, {
       orgId: ctx.orgId,
       processoId: alvo.id,
@@ -173,15 +210,16 @@ export async function analisarRendaDoPainel(
         ficha_versao: versao,
         confirmada: false,
         participante_id: args.participante_id ?? null,
-        call_id: saida.callId,
+        call_id: null,
       },
     });
+    const resumo = textoDoResumo(ficha);
     try {
       await gravarVersaoDaFicha(ctx.admin, {
         organizationId: ctx.orgId,
         conversationId: ctx.conversationId,
         ficha,
-        relatorio: saida.resumo,
+        relatorio: resumo,
         origem: "preliminar_ia",
         baseVersao: base.conversaVersao,
         alteradoPor: ctx.userId,
@@ -192,14 +230,11 @@ export async function analisarRendaDoPainel(
     }
     return {
       ok: true,
-      texto: mascararPessoaNoTexto(saida.resumo),
+      texto: mascararPessoaNoTexto(resumo),
       avisos: enriquecido.avisos,
       extra: extraDaRenda(ficha, versao, "preliminar_ia"),
     };
   } catch (err) {
-    if (err instanceof AnaliseRendaTruncada) {
-      return { ok: false, texto: TEXTO_ANALISE_TRUNCADA, codigo: "hub_contract_error" };
-    }
     if (err instanceof LocacaoErro && err.codigo === "ficha_conflito_de_versao") {
       return {
         ok: false,

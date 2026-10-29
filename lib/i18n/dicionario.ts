@@ -35,6 +35,7 @@ import type { Idioma } from "./idiomas";
 import { TEXTOS_AGENDA_CONFIGURACAO } from "./agenda-configuracao";
 import { TEXTOS_CONTRATO_LOCACAO } from "./contrato-locacao";
 import { TEXTOS_PAINEL_ANEXOS } from "./painel-anexos";
+import { TEXTOS_PAINEL_CONSULTA } from "./painel-consulta";
 import { TEXTOS_PAINEL_FICHA } from "./painel-ficha";
 import { TEXTOS_PAINEL_RENDA } from "./painel-renda";
 import { TEXTOS_AGENDA_SERVICOS } from "./agenda-servicos";
@@ -45,6 +46,7 @@ type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>
 export const DICIONARIO: Traducoes = {
   ...TEXTOS_CONTRATO_LOCACAO,
   ...TEXTOS_PAINEL_ANEXOS,
+  ...TEXTOS_PAINEL_CONSULTA,
   ...TEXTOS_PAINEL_FICHA,
   ...TEXTOS_PAINEL_RENDA,
   "Não foi possível consultar o Brisa Hub agora.": { es: "No fue posible consultar Brisa Hub ahora." },
