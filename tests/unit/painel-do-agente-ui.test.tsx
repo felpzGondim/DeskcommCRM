@@ -182,6 +182,7 @@ describe("Painel do agente (UI)", () => {
       },
     });
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
     await screen.findByTestId("ficha-gerando");
     expect(screen.getByRole("button", { name: "gerando…" })).toBeDisabled();
   });
@@ -201,6 +202,7 @@ describe("Painel do agente (UI)", () => {
       },
     });
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("formato inválido");
   });
 
