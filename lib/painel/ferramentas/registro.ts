@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 
+import { analisarRendaDoPainel, confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
 import { consultarLeituraHub, executarConsultaHub, NOMES_HUB_IMOVEL, NOMES_HUB_PESSOAS, confirmarAnaliseHub, prepararAnaliseHub } from "@/lib/painel/acoes/hub";
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
@@ -204,6 +205,41 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     padraoLigada: true,
     executar: (ctx, args) => confirmarContratoDoPainel(ctx, (args as { token: string }).token),
   },
+  {
+    nome: "analisar_renda",
+    descricao: "Analisa a renda do candidato a inquilino a partir da conversa e dos PDFs originais, com o mesmo motor do relatório preliminar. PIX/TED de terceiros, salário e vendas no cartão entram; próprias, familiares da ficha, resgates, estornos e empréstimos saem com volume à parte. Não confirma sozinha.",
+    nivel: "L",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      participante_id: z.string().uuid().optional(),
+      senhas: z.record(z.string(), z.string()).optional(),
+    }).strict(),
+    rotuloAndamento: "analisando renda…",
+    acaoDoBotao: "analisar_renda",
+    padraoLigada: true,
+    exigeChaveAnalise: "renda",
+    executar: (ctx, args) =>
+      analisarRendaDoPainel(ctx, (args ?? {}) as {
+        processo_id?: string;
+        participante_id?: string;
+        senhas?: Record<string, string>;
+      }),
+  },
+  {
+    nome: "confirmar_renda",
+    descricao: "Confirma a renda analisada. Nível S: o modelo só PROPÕE; qualquer atendente clica no painel. Sem renda confirmada, seguro e FC ficam recusados.",
+    nivel: "S",
+    entrada: z.object({
+      processo_id: z.string().uuid().optional(),
+      renda_proposta_fc: z.number().finite().nonnegative().optional(),
+    }).strict(),
+    rotuloAndamento: "confirmando renda…",
+    acaoDoBotao: "confirmar_renda",
+    padraoLigada: true,
+    exigeChaveAnalise: "renda",
+    executar: (ctx, args) =>
+      confirmarRendaDoPainel(ctx, (args ?? {}) as { processo_id?: string; renda_proposta_fc?: number }),
+  },
 ];
 
 const POR_NOME = new Map(FERRAMENTAS_DO_PAINEL.map((f) => [f.nome, f]));
@@ -229,4 +265,5 @@ export const FERRAMENTAS_DE_ANALISE = new Set([
   "gerar_relatorio_preliminar",
   "preparar_analise",
   "iniciar_analise",
+  "analisar_renda",
 ]);

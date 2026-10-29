@@ -75,7 +75,12 @@ export function criarExtratorComModelo(
   llmCfg: LlmEdgeConfig,
   rastro: { tenantId: string; contactId: string },
   deps: RunModelCallDeps = {},
-  tetos: { paginasPorLote?: number; charsPorLote?: number; maxLotes?: number } = {},
+  tetos: {
+    paginasPorLote?: number;
+    charsPorLote?: number;
+    maxLotes?: number;
+    purpose?: "painel_atendente" | "painel_analise";
+  } = {},
 ): ExtratorDeLancamentos {
   const paginasPorLote = tetos.paginasPorLote ?? 5;
   const charsPorLote = tetos.charsPorLote ?? 20_000;
@@ -99,7 +104,7 @@ export function criarExtratorComModelo(
           leadId: rastro.contactId,
           jobId: null,
           agentId: null,
-          purpose: "painel_atendente",
+          purpose: tetos.purpose === "painel_analise" ? "painel_analise" : "painel_atendente",
           system: SYSTEM_EXTRACAO_LANCAMENTOS,
           messages: mensagens,
           maxOutputTokens: 8_192,

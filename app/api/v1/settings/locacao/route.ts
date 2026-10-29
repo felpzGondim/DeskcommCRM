@@ -14,6 +14,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
 import {
   lerLocacaoSettings,
   lerSuperlogicaVinculoSettings,
+  locacaoAnalisePatchSchema,
   locacaoSettingsSchema,
   superlogicaVinculoSettingsSchema,
 } from "@/lib/locacao/chaves";
@@ -22,7 +23,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 const patch = z.object({
-  locacao: locacaoSettingsSchema.partial().optional(),
+  locacao: locacaoSettingsSchema.omit({ analise: true }).partial().extend({
+    analise: locacaoAnalisePatchSchema.optional(),
+  }).optional(),
   superlogica_vinculo: superlogicaVinculoSettingsSchema.partial().optional(),
 }).strict();
 
@@ -55,7 +58,13 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     .select("settings").eq("id", authz.org.orgId).maybeSingle();
   if (erroLeitura) return fail("internal_error", erroLeitura.message, 500, { requestId });
   const settings = ((atual as { settings?: Record<string, unknown> } | null)?.settings ?? {}) as Record<string, unknown>;
-  const locacao = { ...lerLocacaoSettings(settings), ...(parsed.data.locacao ?? {}) };
+  const locAtual = lerLocacaoSettings(settings);
+  const locPatch = parsed.data.locacao ?? {};
+  const locacao = {
+    ...locAtual,
+    ...locPatch,
+    analise: { ...locAtual.analise, ...(locPatch.analise ?? {}) },
+  };
   const vinculo = { ...lerSuperlogicaVinculoSettings(settings), ...(parsed.data.superlogica_vinculo ?? {}) };
   const { error } = await admin.from("organizations").update({
     settings: { ...settings, locacao, superlogica_vinculo: vinculo },

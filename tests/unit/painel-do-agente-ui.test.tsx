@@ -249,6 +249,19 @@ describe("Painel do agente (UI)", () => {
             },
             documentos: [],
             alertas: [],
+            excluida: {
+              autotransferencias: [],
+              poupanca: [],
+              rende_facil: [],
+              familiares: [],
+              familiares_provaveis: [],
+              estornos: [],
+              emprestimos: [],
+            },
+            pix_terceiros: [],
+            vendas_cartao: [],
+            evidencias: [],
+            bloco_calculado: null,
           },
           imovel: {
             codigo_fc: {

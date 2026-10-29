@@ -447,7 +447,8 @@ function uuidOuNulo(v: string | null | undefined): string | null {
     : null;
 }
 
-function comprovadaDasAnalises(
+/** Média dos extratos + holerite. Sem prova, null — o declarado não preenche. */
+export function comprovadaDasAnalises(
   analises: readonly AnaliseDeExtrato[],
   holeriteCentavos: number | null,
 ): number | null {

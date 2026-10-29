@@ -22,6 +22,42 @@ export type OrigemDaFicha = (typeof ORIGENS_DA_FICHA)[number];
 const texto = z.string().trim().max(180);
 const trecho = z.string().max(240);
 
+export const lancamentoDaRendaSchema = z.object({
+  descricao: z.string().trim().max(180),
+  valor: z.number().finite(),
+  data: z.string().max(40).nullable(),
+  fonte: z.string().max(16).nullable(),
+  trecho: trecho.nullable(),
+});
+
+export const evidenciaDaRendaSchema = z.object({
+  trecho: trecho,
+  fonte: z.string().max(16),
+});
+
+/** Bloco que o relatório 4.5 consome. Valores em reais. Ausente = seção pendente. */
+export const blocoDeRendaCalculadoSchema = z.object({
+  comprovada: z.number().finite().nullable(),
+  declarada: z.number().finite().nullable(),
+  tabela: z.string().max(16000).nullable(),
+  motivo_nao_comprovacao: z.string().max(400).nullable(),
+  pacote: z.number().finite().nullable(),
+  tres_vezes_pacote: z.number().finite().nullable(),
+  abaixo_de_3x: z.boolean().nullable(),
+});
+
+export type BlocoDeRendaCalculado = z.infer<typeof blocoDeRendaCalculadoSchema>;
+
+const EXCLUIDA_VAZIA = {
+  autotransferencias: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  poupanca: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  rende_facil: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  familiares: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  familiares_provaveis: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  estornos: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+  emprestimos: [] as z.infer<typeof lancamentoDaRendaSchema>[],
+};
+
 export const campoSchema = z.object({
   valor: texto.nullable(),
   fonte: z.string().max(16).nullable(),
@@ -91,6 +127,24 @@ export const fichaPreliminarSchema = z.object({
       message_id: z.string().uuid().nullable(),
     })).max(20),
     alertas: z.array(z.string().max(180)).max(20),
+    /**
+     * Exclusões do motor `lib/locacao/extrato` (classes do #31).
+     * Ausente nas fichas antigas → lista vazia. PIX de terceiros NÃO entra aqui.
+     */
+    excluida: z.object({
+      autotransferencias: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      poupanca: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      rende_facil: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      familiares: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      familiares_provaveis: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      estornos: z.array(lancamentoDaRendaSchema).max(50).default([]),
+      emprestimos: z.array(lancamentoDaRendaSchema).max(50).default([]),
+    }).default(EXCLUIDA_VAZIA),
+    /** Créditos de terceiros (PIX/TED) — entram na comprovada, listados à parte. */
+    pix_terceiros: z.array(lancamentoDaRendaSchema).max(50).default([]),
+    vendas_cartao: z.array(lancamentoDaRendaSchema).max(50).default([]),
+    evidencias: z.array(evidenciaDaRendaSchema).max(20).default([]),
+    bloco_calculado: blocoDeRendaCalculadoSchema.nullable().default(null),
   }),
   imovel: z.object({
     codigo_fc: campoSchema,
@@ -178,7 +232,11 @@ export function fichaVazia(): FichaPreliminar {
   return {
     versao: FICHA_VERSAO,
     pessoas: [pessoaVazia("inquilino")],
-    renda: { mensal: { ...NUMERO_VAZIO }, proposta_fc: { ...NUMERO_VAZIO }, documentos: [], alertas: [] },
+    renda: {
+      mensal: { ...NUMERO_VAZIO }, proposta_fc: { ...NUMERO_VAZIO }, documentos: [], alertas: [],
+      excluida: { ...EXCLUIDA_VAZIA },
+      pix_terceiros: [], vendas_cartao: [], evidencias: [], bloco_calculado: null,
+    },
     imovel: {
       codigo_fc: { ...CAMPO_VAZIO }, tipo: null,
       logradouro: { ...CAMPO_VAZIO }, numero: { ...CAMPO_VAZIO }, complemento: { ...CAMPO_VAZIO },
@@ -213,6 +271,39 @@ function completarCampo(v: unknown): CampoFicha {
     message_id: typeof o.message_id === "string" || o.message_id === null ? o.message_id : null,
   });
   return parsed.success ? parsed.data : { ...CAMPO_VAZIO };
+}
+
+function completarLancamentos(v: unknown): z.infer<typeof lancamentoDaRendaSchema>[] {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 50).flatMap((item) => {
+    const o = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const parsed = lancamentoDaRendaSchema.safeParse({
+      descricao: typeof o.descricao === "string" ? o.descricao : "",
+      valor: typeof o.valor === "number" ? o.valor : 0,
+      data: typeof o.data === "string" ? o.data : null,
+      fonte: typeof o.fonte === "string" ? o.fonte : null,
+      trecho: typeof o.trecho === "string" ? o.trecho : null,
+    });
+    return parsed.success && parsed.data.descricao ? [parsed.data] : [];
+  });
+}
+
+function completarBlocoCalculado(v: unknown): BlocoDeRendaCalculado | null {
+  if (v == null || typeof v !== "object") return null;
+  const parsed = blocoDeRendaCalculadoSchema.safeParse(v);
+  return parsed.success ? parsed.data : null;
+}
+
+function completarEvidencias(v: unknown): z.infer<typeof evidenciaDaRendaSchema>[] {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 20).flatMap((item) => {
+    const o = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const parsed = evidenciaDaRendaSchema.safeParse({
+      trecho: typeof o.trecho === "string" ? o.trecho : "",
+      fonte: typeof o.fonte === "string" ? o.fonte : "",
+    });
+    return parsed.success && parsed.data.trecho && parsed.data.fonte ? [parsed.data] : [];
+  });
 }
 
 function completarNumero(v: unknown): NumeroFicha {
@@ -311,6 +402,23 @@ export function completarFicha(bruto: unknown): FichaPreliminar {
       alertas: Array.isArray(renda.alertas)
         ? renda.alertas.filter((v): v is string => typeof v === "string").map((v) => v.slice(0, 180)).slice(0, 20)
         : [],
+      excluida: (() => {
+        const ex = renda.excluida && typeof renda.excluida === "object"
+          ? (renda.excluida as Record<string, unknown>) : {};
+        return {
+          autotransferencias: completarLancamentos(ex.autotransferencias),
+          poupanca: completarLancamentos(ex.poupanca),
+          rende_facil: completarLancamentos(ex.rende_facil),
+          familiares: completarLancamentos(ex.familiares),
+          familiares_provaveis: completarLancamentos(ex.familiares_provaveis),
+          estornos: completarLancamentos(ex.estornos),
+          emprestimos: completarLancamentos(ex.emprestimos),
+        };
+      })(),
+      pix_terceiros: completarLancamentos(renda.pix_terceiros),
+      vendas_cartao: completarLancamentos(renda.vendas_cartao),
+      evidencias: completarEvidencias(renda.evidencias),
+      bloco_calculado: completarBlocoCalculado(renda.bloco_calculado),
     },
     imovel: {
       codigo_fc: completarCampo(imovel.codigo_fc),
