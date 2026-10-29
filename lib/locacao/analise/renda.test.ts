@@ -1,46 +1,47 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-vi.mock("@/lib/agent-engine/edge/llm/run-model-call", () => ({
-  runModelCall: vi.fn(),
-}));
-
-import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 import {
   blocoDasFontesDaFicha,
   fontesDaFicha,
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
+import { aplicarRendaNaFicha } from "@/lib/locacao/analise/renda";
+import { analisarExtrato, montarPacote } from "@/lib/locacao/extrato";
 import { fichaVazia } from "@/lib/locacao/ficha-schema";
-import {
-  AnaliseRendaTruncada,
-  analisarRendaNoModelo,
-  aplicarRendaNaFicha,
-  consolidarLancamentos,
-  PURPOSE_PAINEL_ANALISE,
-  SYSTEM_DA_ANALISE_DE_RENDA,
-  TETO_SAIDA_ANALISE_RENDA,
-} from "@/lib/locacao/analise/renda";
-import { aplicarRegrasDaRenda, type LancamentoDaRenda } from "@/lib/locacao/analise/regras";
 
-describe("análise de renda no modelo", () => {
-  it("o prompt proíbe envio ao cliente, FC, contrato e alugue/não alugue", () => {
-    expect(SYSTEM_DA_ANALISE_DE_RENDA).toMatch(/Nunca envie mensagem/);
-    expect(SYSTEM_DA_ANALISE_DE_RENDA).toMatch(/FC Score\+/);
-    expect(SYSTEM_DA_ANALISE_DE_RENDA).toMatch(/alugue/);
-    expect(SYSTEM_DA_ANALISE_DE_RENDA).toMatch(/Autotransferência/);
-    expect(SYSTEM_DA_ANALISE_DE_RENDA).toMatch(/Rende Fácil/);
-  });
+const EXTRATO_DOIS_MESES = `
+Extrato
+Titular: TITULAR TESTE ALFA
+05/08/2026 CREDITO SALARIO ACME C 5.000,00 5.000,00
+10/08/2026 PIX RECEBIDO PAGADOR PF BETA C 800,00 5.800,00
+12/08/2026 TED PROPRIA TITULAR TESTE ALFA C 200,00 6.000,00
+15/08/2026 RESGATE POUPANCA C 400,00 6.400,00
+28/08/2026 PAGAMENTO FATURA D 200,00 6.200,00
+05/09/2026 CREDITO SALARIO ACME C 5.000,00 11.200,00
+10/09/2026 PIX RECEBIDO PAGADOR PF BETA C 800,00 12.000,00
+20/09/2026 ANTECIPACAO STONE C 2.200,00 14.200,00
+28/09/2026 PAGAMENTO FATURA D 200,00 14.000,00
+`.trim();
 
-  it("a análise reabre os PDFs originais em vez de depender só do derivado cortado", () => {
+describe("análise de renda no motor do extrato", () => {
+  it("a análise reabre os PDFs originais e prepara as fontes pelo motor do #31", () => {
     const analise = readFileSync("lib/painel/acoes/analise.ts", "utf8");
     expect(analise).toContain("enriquecerAnexosDaAnalise");
     expect(analise).toContain("limitesDaAnalise");
+    expect(analise).toContain("prepararFontesDoRelatorio");
+    expect(analise).toContain("criarExtratorComModelo");
+    expect(analise).toContain("familiaresDaFicha");
+    expect(analise).not.toMatch(/analisarRendaNoModelo/);
+    expect(analise).not.toMatch(/from ["']@\/lib\/locacao\/analise\/regras["']/);
+    const renda = readFileSync("lib/locacao/analise/renda.ts", "utf8");
+    expect(renda).not.toMatch(/from ["']@\/lib\/locacao\/analise\/regras["']/);
+    expect(renda).toContain("lib/locacao/extrato");
     const leitura = readFileSync("lib/agent-engine/agent/painel-leitura-anexos.ts", "utf8");
     expect(leitura).toContain("lerPdfsOriginais");
     expect(leitura).toContain("export async function enriquecerAnexosDaAnalise");
   });
 
-  it("extrato longo cortado em 8 mil reabre o trecho que ficou de fora", () => {
+  it("extrato longo vira tabela calculada — o chars_conjunto não vê o texto bruto", () => {
     const marcador = "PIX recebido de terceiro Extra R$ 321,00";
     const derivadoCortado = `${"x".repeat(8000)}`;
     expect(derivadoCortado).not.toContain(marcador);
@@ -62,72 +63,84 @@ describe("análise de renda no modelo", () => {
     expect(bloco).not.toContain(derivadoCortado.slice(0, 40));
   });
 
-  it("finishReason length vira erro claro", async () => {
-    vi.mocked(runModelCall).mockResolvedValue({
-      result: { text: "{", finishReason: "length" },
-      callId: "c1",
-    } as never);
-    await expect(
-      analisarRendaNoModelo({} as never, {} as never, {
-        tenantId: "org",
-        contactId: "c",
-        fontes: "M1 salario 1000",
-      }),
-    ).rejects.toBeInstanceOf(AnaliseRendaTruncada);
-    expect(runModelCall).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({
-        purpose: PURPOSE_PAINEL_ANALISE,
-        maxOutputTokens: TETO_SAIDA_ANALISE_RENDA,
-      }),
-      expect.anything(),
+  it("PIX/TED de terceiro e cartão entram; próprias e resgate saem; bloco_calculado grava 3×", () => {
+    const analise = analisarExtrato(EXTRATO_DOIS_MESES);
+    expect(analise.rendaComprovadaCentavos).not.toBeNull();
+    const pacote = montarPacote({
+      conversa: {
+        aluguelCentavos: 200_000,
+        condominioCentavos: 50_000,
+        iptuCentavos: 20_000,
+        seguroIncendioCentavos: 10_000,
+      },
+    });
+    const ficha = aplicarRendaNaFicha(fichaVazia(), {
+      analises: [analise],
+      declarada: 9000,
+      pacote,
+    });
+    expect(ficha.renda.mensal.valor).toBe((analise.rendaComprovadaCentavos ?? 0) / 100);
+    expect(ficha.renda.proposta_fc.valor).toBe(ficha.renda.mensal.valor);
+    expect(ficha.renda.pix_terceiros.length).toBeGreaterThan(0);
+    expect(ficha.renda.vendas_cartao.length).toBeGreaterThan(0);
+    expect(ficha.renda.excluida.autotransferencias.length).toBeGreaterThan(0);
+    expect(ficha.renda.excluida.poupanca.length + ficha.renda.excluida.rende_facil.length).toBeGreaterThan(
+      0,
     );
+    expect(ficha.renda.bloco_calculado?.comprovada).toBe(ficha.renda.mensal.valor);
+    expect(ficha.renda.bloco_calculado?.declarada).toBe(9000);
+    expect(ficha.renda.bloco_calculado?.pacote).toBe(2800);
+    expect(ficha.renda.bloco_calculado?.tres_vezes_pacote).toBe(8400);
+    expect(ficha.renda.bloco_calculado?.tabela).toMatch(/Renda comprovada/);
+    expect(ficha.renda.bloco_calculado?.motivo_nao_comprovacao).toBeNull();
   });
 
-  it("grava na ficha comprovada, proposta, exclusões e evidências", () => {
-    const lancamentos: LancamentoDaRenda[] = [
-      {
-        descricao: "Salário",
-        valor: 4000,
-        data: null,
-        fonte: "M1",
-        trecho: "Salário 4000",
-        classe: "renda_recorrente",
-      },
-      {
-        descricao: "PIX recebido de terceiro Ana",
-        valor: 100,
-        data: null,
-        fonte: "M2",
-        trecho: "PIX terceiro",
-        classe: "pix_terceiros",
-      },
-    ];
-    const regras = aplicarRegrasDaRenda(lancamentos);
-    const ficha = aplicarRendaNaFicha(fichaVazia(), regras, [
-      { trecho: "Salário 4000", fonte: "M1" },
-    ]);
-    expect(ficha.renda.mensal.valor).toBe(4000);
-    expect(ficha.renda.proposta_fc.valor).toBe(4000);
-    expect(ficha.renda.pix_terceiros).toHaveLength(1);
-    expect(ficha.renda.evidencias[0]?.fonte).toBe("M1");
+  it("sem comprovação a mensal fica null e o declarado não preenche o buraco", () => {
+    const analise = analisarExtrato(
+      `
+Extrato
+05/08/2026 RESGATE RENDA FIXA 2.000,00 C 2.000,00
+20/08/2026 ESTORNO PIX 300,00 C 2.300,00
+28/08/2026 PAGAMENTO FATURA 100,00 D 2.200,00
+`.trim(),
+    );
+    const ficha = aplicarRendaNaFicha(fichaVazia(), {
+      analises: [analise],
+      declarada: 4500,
+    });
+    expect(ficha.renda.mensal.valor).toBeNull();
+    expect(ficha.renda.proposta_fc.valor).toBeNull();
+    expect(ficha.renda.bloco_calculado?.comprovada).toBeNull();
+    expect(ficha.renda.bloco_calculado?.declarada).toBe(4500);
+    expect(ficha.renda.bloco_calculado?.motivo_nao_comprovacao).toMatch(/não há renda|Não estime/i);
+    expect(ficha.renda.alertas.join(" ")).toMatch(/declarada não é comprovada/i);
   });
 
-  it("consolidarLancamentos acrescenta exclusão que o modelo pulou", () => {
-    const doModelo: LancamentoDaRenda[] = [
+  it("familiar da ficha sai; familiar provável fica sinalizado com renda com e sem", () => {
+    const analise = analisarExtrato(
+      `
+Extrato
+Titular: TITULAR TESTE ALFA
+05/08/2026 CREDITO SALARIO ACME C 4.000,00 4.000,00
+12/08/2026 PIX RECEBIDO CONJUGE TESTE BETA C 2.000,00 6.000,00
+18/08/2026 PIX RECEBIDO JOAO SOBRENOMECOMUM C 1.000,00 7.000,00
+28/08/2026 PAGAMENTO FATURA D 100,00 6.900,00
+05/09/2026 CREDITO SALARIO ACME C 4.000,00 10.900,00
+12/09/2026 PIX RECEBIDO CONJUGE TESTE BETA C 2.000,00 12.900,00
+18/09/2026 PIX RECEBIDO JOAO SOBRENOMECOMUM C 1.000,00 13.900,00
+28/09/2026 PAGAMENTO FATURA D 100,00 13.800,00
+`.trim(),
       {
-        descricao: "Salário",
-        valor: 2000,
-        data: null,
-        fonte: "M1",
-        trecho: "Salário",
-        classe: "renda_recorrente",
+        familiares: [
+          { nome: "CONJUGE TESTE BETA", cpfDigits: null, papel: "conjuge" },
+        ],
       },
-    ];
-    const texto = "Salário R$ 2.000,00\nRende Fácil aplicação R$ 50,00";
-    const juntos = consolidarLancamentos(doModelo, texto);
-    expect(juntos.some((l) => l.classe === "rende_facil")).toBe(true);
-    expect(juntos.filter((l) => l.classe === "renda_recorrente")).toHaveLength(1);
+    );
+    const ficha = aplicarRendaNaFicha(fichaVazia(), { analises: [analise] });
+    expect(ficha.renda.excluida.familiares.length).toBeGreaterThan(0);
+    expect(ficha.renda.mensal.valor).not.toBeNull();
+    if (ficha.renda.excluida.familiares_provaveis.length > 0) {
+      expect(ficha.renda.alertas.join(" ")).toMatch(/Familiar provável/i);
+    }
   });
 });

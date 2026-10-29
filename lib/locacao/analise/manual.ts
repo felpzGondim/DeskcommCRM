@@ -129,6 +129,8 @@ export function montarDadosParaCopiar(
           complemento: imovel.complemento.valor,
         })
       : "");
+  // Sem comprovada o motor do #31 deixa mensal/proposta null. `campo`
+  // omite a linha — não inventa valor para o atendente copiar no site.
   const renda = ficha.renda.proposta_fc.valor ?? ficha.renda.mensal.valor;
   const campos = [
     campo("nome", "Nome", pessoa?.nome.valor),

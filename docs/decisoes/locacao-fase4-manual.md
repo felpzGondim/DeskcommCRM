@@ -25,6 +25,9 @@ Sem dado pessoal em log ou `audit()`.
   `registrar_manual_fc` / `registrar_manual_seguro` (S). A IA não revela CPF
   nem registra. Não chama o Hub.
 - Sem renda confirmada, o registro recusa (mesma trava dos botões 2 e 3).
+- Sem renda comprovada o motor do #31 deixa `renda.mensal` e `proposta_fc`
+  em `null`. A cópia omite o campo — não assume valor. Conservador: o
+  atendente não leva número inventado para o site da FC/Migra.
 - Arquivos do processo desligados: resultado salvo, anexo não persistido.
 - Chave `locacao.analise.manual` desligada por padrão. Sem ela, o Painel da
   conversa fica como hoje.

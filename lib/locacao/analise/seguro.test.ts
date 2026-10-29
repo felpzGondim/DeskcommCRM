@@ -53,6 +53,24 @@ describe("mapeamento da cotação de seguro-fiança", () => {
     expect(r.argumentos).not.toHaveProperty("solidarios");
   });
 
+  it("sem renda comprovada recusa e não inventa valor", () => {
+    const ficha = fichaPronta();
+    ficha.renda.mensal.valor = null;
+    ficha.renda.proposta_fc.valor = null;
+    const motivo = pendenciaDoPayloadSeguro(ficha, "11987654321");
+    expect(motivo).toMatch(/renda/i);
+    const r = montarArgumentosSeguro({
+      ficha,
+      pedidoId: "00000000-0000-4000-8000-000000000099",
+      conversaId: "conv-1",
+      orgId: "org-1",
+      telefone: "11987654321",
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.motivo).toMatch(/renda/i);
+  });
+
   it("estado desconhecido do Hub permanece cotando", () => {
     expect(mapearEstadoHub("migra_cotando")).toBe("cotando");
     expect(mapearEstadoHub("concluido")).toBe("concluida");
