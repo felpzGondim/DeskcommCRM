@@ -8,6 +8,20 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.14] — 2026-10-29
+
+### Alterado
+
+- **Cadastro e locação em uma única esteira no modal.** Dados, análise de renda, FCAnálise, cotação Migra, relatório consolidado e contrato usam a mesma ficha. Os dados podem ser preenchidos pela conversa ou manualmente, editados e reaproveitados nas próximas etapas. Há um único campo RENDA por participante: começa com o valor declarado e pode ser atualizado pela análise ou pelo atendente, preservando correções humanas. Aluguel aparece uma vez na aba Dados; seguro-fiança não é requisito do cadastro inicial. Consultas e relatórios feitos com uma versão anterior são sinalizados para revisão.
+- **Dados de análise separados dos vínculos Superlógica.** Os identificadores de sincronização ficam em uma aba própria. Os acessos duplicados à análise são reunidos no modal Cadastro e locação.
+
+### Adicionado
+
+- **Documentos e relatórios consultáveis pelo modal.** Os arquivos já armazenados no Supabase podem ser classificados por categoria e participante, visualizados e baixados sem duplicar os originais. A aba reúne documentos recebidos, resultados das etapas e pendências.
+- **Relatórios detalhados em Markdown.** A análise de renda apresenta tabelas por conta e período, exclusões, memória documental e limitações da leitura. O relatório consolidado reúne os resultados e considera a RENDA vigente na ficha.
+
+Quem já instalou não precisa editar arquivos nem executar comandos adicionais. A revisão preserva as configurações de ativação existentes das etapas de locação; publicar a versão não dispara consultas de FCAnálise ou Migra.
+
 ## [1.88.0-felpz.13] — 2026-10-29
 
 ### Adicionado

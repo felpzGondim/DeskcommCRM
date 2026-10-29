@@ -156,7 +156,7 @@ export function montarRelatorioFinanceiro(bloco: BlocoDoRelatorio): RelatorioFin
 
   const rendaPendente = renda.comprovada === null;
   const rendaSecao = rendaPendente
-    ? secao("renda", [renda.motivo_nao_comprovacao ?? TEXTO_BLOCO_RENDA_AUSENTE], true)
+    ? secao("renda", [renda.motivo_nao_comprovacao ?? TEXTO_BLOCO_RENDA_AUSENTE, renda.tabela ?? ""], true)
     : secao("renda", [
       `Renda comprovada (extrato): ${dinheiro(renda.comprovada)}`,
       `Renda declarada: ${dinheiro(renda.declarada)}`,
@@ -176,7 +176,12 @@ export function montarRelatorioFinanceiro(bloco: BlocoDoRelatorio): RelatorioFin
   const financeira = !ficha
     ? secao("financeira", [TEXTO_SECAO_PENDENTE], true)
     : secao("financeira", [
+      "RENDA atual utilizada na esteira: " + dinheiro(ficha.renda.mensal.valor),
+      ficha.renda.mensal.valor != null && ficha.renda.mensal.valor > 0 && ficha.imovel.aluguel.valor != null
+        ? "Aluguel / RENDA utilizada: " + (ficha.imovel.aluguel.valor / ficha.renda.mensal.valor * 100).toFixed(2) + "%."
+        : "Comprometimento sobre RENDA utilizada: pendente.",
       `Aluguel: ${dinheiro(ficha.imovel.aluguel.valor)}`,
+
       `Condomínio: ${dinheiro(ficha.imovel.condominio.valor)}`,
       `IPTU: ${dinheiro(ficha.imovel.iptu.valor)}`,
       seguroPronto
@@ -206,7 +211,7 @@ export function montarRelatorioFinanceiro(bloco: BlocoDoRelatorio): RelatorioFin
 
   const secoes: SecaoMontada[] = [identificacao, resumo, credito, rendaSecao, financeira, riscoSecao];
   const texto = recusarFraseDeAluguel(
-    mascararRelatorio(secoes.map((s) => `## ${s.titulo}\n${s.texto}`).join("\n\n")),
+    mascararRelatorio(secoes.map((s) => `## ${s.titulo}\n${s.texto}`).join("\n\n") + (bloco.relatorioPreliminar ? "\n\n## Memória da análise documental\n" + bloco.relatorioPreliminar : "")),
   );
   return { secoes, risco: risco.risco, renda, texto };
 }

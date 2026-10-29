@@ -3,6 +3,7 @@
  * Sem I/O. Sem passo pago. O CRM monta o payload; o Hub só SALVA (grátis)
  * neste módulo. A cobrança mora em `confirmar_cobranca_fc` (S, clique humano).
  */
+import { rendaDaPessoa } from "@/lib/locacao/renda-utilizada";
 import { codigoFc } from "@/lib/locacao/endereco";
 import { inquilinoPrincipalDaFicha } from "@/lib/locacao/ficha-telefone";
 import type { FichaPreliminar, PapelDaFicha, PessoaDaFicha } from "@/lib/locacao/ficha-schema";
@@ -153,8 +154,8 @@ export function pendenciaDoPayloadFc(
   }
   const faltaValor = exigirObrigatorios(valores, "fc");
   if (faltaValor) return faltaValor;
-  const renda = ficha.renda.proposta_fc.valor ?? ficha.renda.mensal.valor;
-  if (typeof renda !== "number") {
+  const renda = pessoa ? rendaDaPessoa(ficha, pessoa) : null;
+  if (typeof renda !== "number" || renda <= 0) {
     return "Confirme a renda antes de analisar o seguro-fiança ou a FC.";
   }
   return null;
@@ -183,8 +184,8 @@ export function montarArgumentosFc(input: {
   const apartamento = imovel.complemento.valor?.trim() || imovel.numero.valor?.trim() || "";
   // Sem comprovada o motor do #31 deixa mensal/proposta null. Não assumir
   // valor: a pendência já recusou; se chegar aqui sem número, recusa de novo.
-  const renda = input.ficha.renda.proposta_fc.valor ?? input.ficha.renda.mensal.valor;
-  if (typeof renda !== "number") {
+  const renda = rendaDaPessoa(input.ficha, input.pessoa);
+  if (typeof renda !== "number" || renda <= 0) {
     return { ok: false, motivo: "Confirme a renda antes de analisar o seguro-fiança ou a FC." };
   }
   return {

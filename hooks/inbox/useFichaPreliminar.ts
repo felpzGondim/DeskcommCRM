@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import type { FichaPreliminar } from "@/lib/locacao/ficha-schema";
 import { MS_CONSULTA_DA_GERACAO } from "@/lib/painel/relatorio-preliminar";
 
@@ -22,7 +23,7 @@ type Geracao = {
 };
 
 type CorpoDaFicha = {
-  atual: { versao: number; ficha: FichaPreliminar; relatorio: string } | null;
+  atual: { versao: number; processo_versao?: number; ficha: FichaPreliminar; relatorio: string } | null;
   historico: ResumoVersao[];
   geracao?: Geracao | null;
 };
@@ -38,13 +39,15 @@ export function useFichaPreliminar(conversationId: string, atualizacao = 0) {
   const [erro, setErro] = useState<string | null>(null);
   const vivo = useRef(true);
   const versaoAtual = useRef(0);
+  const processoVersao = useRef(0);
 
   const aplicar = useCallback((corpo: CorpoDaFicha) => {
     if (corpo.atual) {
-      setFicha(corpo.atual.ficha);
+      setFicha(normalizarRendaUtilizada(corpo.atual.ficha));
       setRelatorio(corpo.atual.relatorio);
       setVersao(corpo.atual.versao);
       versaoAtual.current = corpo.atual.versao;
+      processoVersao.current = corpo.atual.processo_versao ?? 0;
     }
     setHistorico(corpo.historico ?? []);
     if (corpo.geracao?.status === "gerando") {
@@ -91,7 +94,7 @@ export function useFichaPreliminar(conversationId: string, atualizacao = 0) {
       `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
     ).then((r) => {
       if (cancelado) return;
-      if (r.data.geracao || (r.data.atual?.versao ?? 0) > versaoAtual.current) aplicar(r.data);
+      if (r.data.geracao || (r.data.atual?.versao ?? 0) > versaoAtual.current || (r.data.atual?.processo_versao ?? 0) > processoVersao.current) aplicar(r.data);
     }).catch(() => { /* o GET inicial ou a próxima resposta permite retomar */ });
     return () => { cancelado = true; };
   }, [aplicar, atualizacao, conversationId]);
@@ -140,15 +143,17 @@ export function useFichaPreliminar(conversationId: string, atualizacao = 0) {
     setErro(null);
     setCarregando("salvar");
     try {
-      const r = await apiClient.post<{ data: CorpoDaFicha & { versao: number; ficha: FichaPreliminar; relatorio: string } }>(
+      const r = await apiClient.post<{ data: CorpoDaFicha & { versao: number; processo_versao?: number; ficha: FichaPreliminar; relatorio: string } }>(
         `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
-        { etapa: "salvar", ficha: fichaAtual, relatorio: relatorioAtual, base_versao: baseVersao },
+        { etapa: "salvar", ficha: fichaAtual, relatorio: relatorioAtual, base_versao: baseVersao, processo_base_versao: processoVersao.current },
       );
-      setFicha(r.data.ficha);
+      setFicha(normalizarRendaUtilizada(r.data.ficha));
       setRelatorio(r.data.relatorio);
       setVersao(r.data.versao);
       versaoAtual.current = r.data.versao;
+      processoVersao.current = r.data.processo_versao ?? 0;
       setHistorico(r.data.historico ?? []);
+      window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
       return true;
     } catch (e) {
       setErro(e instanceof Error && e.message ? e.message : null);

@@ -313,6 +313,7 @@ describe("analisar FC no painel", () => {
     fiador.cpf.valor = "11144477735";
     fiador.email.valor = "fiador@exemplo.com";
     fiador.celular.valor = "11988887777";
+    fiador.renda_individual.valor = 6000;
     ficha.pessoas.push(fiador);
     mocks.ficha.mockResolvedValue({ ficha, versao: 2 });
     mocks.participante.mockResolvedValue({

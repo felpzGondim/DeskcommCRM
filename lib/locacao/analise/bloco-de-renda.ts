@@ -60,7 +60,7 @@ export function pacoteDaFicha(ficha: unknown, incendioCentavos: number | null = 
       aluguelCentavos: reaisParaCentavos(valorDoCampo(imovel.aluguel)),
       condominioCentavos: reaisParaCentavos(valorDoCampo(imovel.condominio)),
       iptuCentavos: reaisParaCentavos(valorDoCampo(imovel.iptu)),
-      seguroIncendioCentavos: incendioCentavos,
+      seguroIncendioCentavos: reaisParaCentavos(valorDoCampo(imovel.seguro_incendio)) ?? incendioCentavos,
     },
   });
 }
@@ -96,7 +96,7 @@ export function aceitarBlocoDeRenda(bruto: unknown): BlocoDeRendaCalculado {
     return {
       comprovada: null,
       declarada,
-      tabela: null,
+      tabela,
       motivo_nao_comprovacao: motivo ?? TEXTO_BLOCO_RENDA_AUSENTE,
       pacote,
       tres_vezes_pacote: tres,

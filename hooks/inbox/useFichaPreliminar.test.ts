@@ -10,6 +10,7 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
+import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { readFileSync } from "node:fs";
 
@@ -39,7 +40,7 @@ describe("useFichaPreliminar", () => {
       }
       return {
         data: {
-          atual: { versao: 1, ficha: { versao: "preliminar-v1" }, relatorio: "ok fictício" },
+          atual: { versao: 1, ficha: fichaVazia(), relatorio: "ok fictício" },
           historico: [],
           geracao: null,
         },
@@ -83,7 +84,7 @@ describe("useFichaPreliminar", () => {
     });
     expect(result.current.gerando).toBe(true);
     getMock.mockResolvedValue({ data: {
-      atual: { versao: 1, ficha: { versao: "preliminar-v1" }, relatorio: "relatório pronto" },
+      atual: { versao: 1, ficha: fichaVazia(), relatorio: "relatório pronto" },
       historico: [], geracao: null,
     } });
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
@@ -105,7 +106,7 @@ describe("useFichaPreliminar", () => {
     await waitFor(() => expect(result.current.gerando).toBe(true));
     expect(postMock).not.toHaveBeenCalled();
     getMock.mockResolvedValue({ data: {
-      atual: { versao: 1, ficha: { versao: "preliminar-v1" }, relatorio: "relatório pelo agente" },
+      atual: { versao: 1, ficha: fichaVazia(), relatorio: "relatório pelo agente" },
       historico: [], geracao: null,
     } });
     await waitFor(() => expect(result.current.relatorio).toBe("relatório pelo agente"), { timeout: 3500 });
@@ -113,7 +114,7 @@ describe("useFichaPreliminar", () => {
 
   it("resposta sem geração nova preserva a edição local", async () => {
     getMock.mockResolvedValue({ data: {
-      atual: { versao: 1, ficha: { versao: "preliminar-v1" }, relatorio: "salvo" },
+      atual: { versao: 1, ficha: fichaVazia(), relatorio: "salvo" },
       historico: [], geracao: null,
     } });
     const { result, rerender } = renderHook(

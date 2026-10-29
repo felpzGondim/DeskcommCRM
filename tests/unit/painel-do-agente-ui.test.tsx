@@ -10,6 +10,7 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
+import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import { PainelDoAgente } from "@/components/inbox/PainelDoAgente";
 
 describe("Painel do agente (UI)", () => {
@@ -61,49 +62,35 @@ describe("Painel do agente (UI)", () => {
     render(<PainelDoAgente conversationId="c1" desabilitado />);
     expect(screen.getByRole("button", { name: "Resumir conversa" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Buscar boletos" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Abrir análise" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cadastro e locação" })).toBeDisabled();
   });
 
-  it("oferece Abrir análise no painel e a aba Gerar contrato sem gravar", async () => {
-    getMock.mockImplementation((url: unknown) => {
+  it("reúne as etapas, com um aluguel e uma RENDA por participante, sem gravar ao abrir", async () => {
+    const ficha = fichaVazia();
+    ficha.imovel.aluguel.valor = 2000;
+    ficha.pessoas[0]!.renda_individual.valor = 5000;
+    getMock.mockImplementation(async (url: unknown) => {
       const u = String(url);
-      if (u.includes("valores-imovel")) {
-        return Promise.resolve({
-          data: {
-            valores: {
-              aluguel: { valor: 2000, origem: "superlogica", editado_em: null },
-              condominio: { valor: 400, origem: "conversa", editado_em: null },
-            },
-          },
-        });
-      }
-      if (u.includes("/conversations/") && u.includes("/locacao")) {
-        return Promise.resolve({
-          data: {
-            processos: [{ id: "proc-1", status: "lead", imovel: "Rua 1" }],
-            contato: { id: "c1", superlogica_id_pessoa: null, superlogica_tipo: null },
-          },
-        });
-      }
-      if (u.includes("/vinculos")) return Promise.resolve({ data: { vinculo: null } });
-      return Promise.resolve({ data: { atual: null, historico: [] } });
+      if (u.includes("/locacao/documentos")) return {data: {recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false}};
+      if (u.endsWith("/locacao")) return {data: {habilitado: true, analise: {fc: true, seguro: true}, processos: [{id: "proc-1", status: "lead", imovel: "Rua 1"}], contato: {id: "c1"}}};
+      if (u.includes("/ficha")) return {data: {atual: {versao: 1, ficha, relatorio: "Cadastro de teste"}, historico: []}};
+      return {data: {}};
     });
     render(<PainelDoAgente conversationId="c1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
-    expect(screen.getByRole("dialog", { name: "Análise de inquilino" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", {name: "Cadastro e locação"}));
+    expect(screen.getByRole("dialog", {name: "Cadastro e locação"})).toBeVisible();
     expect(await screen.findByDisplayValue("2000")).toBeVisible();
-    expect(screen.getByTestId("campos-imovel-processo")).toBeVisible();
-    expect(screen.getByText(/Origem:\s*Superlógica/)).toBeTruthy();
-    expect(screen.getByText(/Origem:\s*conversa\/ficha/)).toBeTruthy();
-    expect(screen.getByLabelText("Aluguel (R$/mês)")).toBeEnabled();
-    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
-    const preparar = await screen.findByRole("button", { name: "Preparar locação" });
+    expect(screen.getAllByLabelText("Aluguel (R$)")).toHaveLength(1);
+    expect(screen.getAllByLabelText("RENDA (R$)")).toHaveLength(1);
+    expect(screen.queryByLabelText("Renda proposta para a FC (R$)")).toBeNull();
+    expect(screen.queryByRole("button", {name: "Abrir processo"})).toBeNull();
+    fireEvent.click(screen.getByRole("tab", {name: "6. Contrato"}));
+    const preparar = await screen.findByRole("button", {name: "Preparar locação"});
     expect(preparar).toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: "Dados" }));
-    expect(preparar).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", {name: "1. Dados"}));
     expect(preparar).not.toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
-    expect(preparar).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", {name: "Documentos e relatórios"}));
+    expect(await screen.findByTestId("documentos-locacao")).toBeVisible();
     expect(postMock).not.toHaveBeenCalled();
   });
 
@@ -182,7 +169,7 @@ describe("Painel do agente (UI)", () => {
       },
     });
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cadastro e locação" }));
     await screen.findByTestId("ficha-gerando");
     expect(screen.getByRole("button", { name: "gerando…" })).toBeDisabled();
   });
@@ -202,7 +189,7 @@ describe("Painel do agente (UI)", () => {
       },
     });
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cadastro e locação" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("formato inválido");
   });
 
@@ -485,11 +472,11 @@ describe("Painel do agente (UI)", () => {
     });
     const usar = vi.fn();
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cadastro e locação" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Gerar relatório preliminar" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Preencher pela conversa" })).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Gerar relatório preliminar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preencher pela conversa" }));
     await screen.findByDisplayValue("Maria quer o apto 10.");
     expect(postMock).toHaveBeenCalledWith(
       "/api/v1/conversations/c1/painel-agente/ficha",

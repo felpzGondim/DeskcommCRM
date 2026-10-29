@@ -8,6 +8,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { processosLigados } from "@/lib/locacao/chaves";
 import { fichaPreliminarSchema } from "@/lib/locacao/ficha-schema";
 import {
   FichaConflitoDeVersao,
@@ -35,8 +36,9 @@ const corpo = z.discriminatedUnion("etapa", [
   z.object({
     etapa: z.literal("salvar"),
     ficha: fichaPreliminarSchema,
-    relatorio: z.string().trim().min(1).max(4000),
+    relatorio: z.string().trim().min(1).max(60000),
     base_versao: z.number().int().nonnegative(),
+    processo_base_versao: z.number().int().nonnegative().optional(),
   }).strict(),
 ]);
 
@@ -83,6 +85,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         relatorio: atual.relatorio,
         campos_alterados: atual.campos_alterados,
         alterado_em: atual.alterado_em,
+        processo_versao: atual.processo_versao ?? 0,
       } : null,
       historico,
       geracao: geracao
@@ -131,6 +134,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const admin = createAdminClient();
   if (pedido.etapa === "salvar") {
     try {
+      const { data: orgSettings } = await gate.db!.from("organizations").select("settings").eq("id", orgId!).maybeSingle();
+      const atual = await lerFichaAtual(admin, orgId!, id);
+      if (pedido.processo_base_versao !== undefined && pedido.processo_base_versao !== (atual?.processo_versao ?? 0)) throw new FichaConflitoDeVersao();
       const linha = await gravarVersaoDaFicha(admin, {
         organizationId: orgId!,
         conversationId: id,
@@ -139,10 +145,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         origem: "atendente",
         baseVersao: pedido.base_versao,
         alteradoPor: auth!.user.id,
+        criarProcesso: processosLigados(orgSettings?.settings),
       });
       registrar(true, { versao: linha.versao, campos: linha.campos_alterados });
       const historico = await listarHistoricoDaFicha(admin, orgId!, id);
       return ok({
+        processo_versao: (await lerFichaAtual(admin, orgId!, id))?.processo_versao ?? 0,
         versao: linha.versao,
         origem: linha.origem,
         ficha: linha.ficha,

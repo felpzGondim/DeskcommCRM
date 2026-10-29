@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
+import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
+import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
   PAPEIS_DA_FICHA,
   pessoaVazia,
@@ -18,6 +20,7 @@ import {
 
 interface Props {
   atualizacao?: number;
+  onSalvo?: () => void;
   conversationId: string;
   desabilitado?: boolean;
   senhasPdf: Array<{ nome: string; senha: string }>;
@@ -31,14 +34,14 @@ const ROTULO_PAPEL: Record<PapelDaFicha, string> = {
 };
 
 function campo(valor: string): CampoFicha {
-  return { valor: valor.trim() || null, fonte: null, trecho: null, confianca: null, message_id: null };
+  return { valor: valor.trim() || null, fonte: "atendente", trecho: null, confianca: 1, message_id: null };
 }
 
 function numero(valor: string): NumeroFicha {
   const n = Number(valor.replace(",", "."));
   return {
     valor: Number.isFinite(n) && valor.trim() !== "" ? n : null,
-    fonte: null, trecho: null, confianca: null, message_id: null,
+    fonte: "atendente", trecho: null, confianca: 1, message_id: null,
   };
 }
 
@@ -47,7 +50,7 @@ function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   return String(c.valor);
 }
 
-export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0 }: Props) {
+export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0, onSalvo }: Props) {
   const t = useT();
   const {
     ficha, setFicha, relatorio, setRelatorio, versao, historico,
@@ -70,12 +73,13 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
           disabled={bloqueado} onClick={() => void gerar(senhasPdf)}>
-          {gerando || carregando === "gerar" ? t("gerando…") : t("Gerar relatório preliminar")}
+          {gerando || carregando === "gerar" ? t("gerando…") : t("Preencher pela conversa")}
         </Button>
+        {!ficha && <Button size="sm" variant="outline" disabled={bloqueado} onClick={() => setFicha(fichaVazia())}>{t("Preencher manualmente")}</Button>}
         {ficha && !somenteLeitura && (
           <Button size="sm" variant="secondary" className="h-7 px-2 text-xs"
-            disabled={bloqueado} onClick={() => void salvar(ficha, relatorio, versao).then((ok) => {
-              if (ok) toast.success(t("Ficha salva."));
+            disabled={bloqueado} onClick={() => void salvar(normalizarRendaUtilizada(ficha), relatorio || "Cadastro preenchido pelo atendente.", versao).then((ok) => {
+              if (ok) { toast.success(t("Ficha salva.")); onSalvo?.(); }
             })}>
             {carregando === "salvar" ? t("Salvando ficha…") : t("Salvar ficha")}
           </Button>
@@ -99,7 +103,7 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           <div>
             <h4 className="text-[11px] font-semibold">{t("Relatório preliminar")} · {t("Versão")} {versao}</h4>
             <Textarea className="mt-1 min-h-20 text-xs" value={relatorio} disabled={somenteLeitura || desabilitado}
-              onChange={(e) => setRelatorio(e.target.value)} maxLength={4000} rows={6} />
+              onChange={(e) => setRelatorio(e.target.value)} maxLength={60000} rows={6} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -146,6 +150,16 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                   <Input className="h-8 text-xs" value={textoDe(p.email)} disabled={somenteLeitura || desabilitado}
                     onChange={(e) => patchPessoa(i, { email: campo(e.target.value) })} />
                 </label>
+                {(["nascimento", "rg", "profissao", "empregador"] as const).map((chave) => (
+                  <label key={chave} className="block text-[11px]">{t({ nascimento: "Nascimento", rg: "RG", profissao: "Profissão", empregador: "Empregador"}[chave])}
+                    <Input className="h-8 text-xs" value={textoDe(p[chave])} disabled={somenteLeitura || desabilitado}
+                      onChange={(e) => patchPessoa(i, { [chave]: campo(e.target.value) })} />
+                  </label>
+                ))}
+                {p.papel !== "contato" && <label className="block text-[11px]">{t("RENDA (R$)")}
+                  <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(p.renda_individual)} disabled={somenteLeitura || desabilitado}
+                    onChange={(e) => patchPessoa(i, { renda_individual: numero(e.target.value) })} />
+                </label>}
               </fieldset>
             ))}
           </div>
@@ -159,24 +173,34 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
             </label>
-            <label className="block text-[11px]">{t("Aluguel (R$)")}
-              <Input className="h-8 text-xs" value={textoDe(ficha.imovel.aluguel)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, aluguel: numero(e.target.value) } } : a)} />
+            {(["aluguel", "condominio", "iptu", "seguro_incendio"] as const).map((chave) => (
+              <label key={chave} className="block text-[11px]">{t(chave === "aluguel" ? "Aluguel (R$)" : chave === "condominio" ? "Condomínio / rateio (R$)" : chave === "iptu" ? "IPTU mensal (R$)" : "Seguro-incêndio mensal (R$)")}
+                <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
+                  onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
+              </label>
+            ))}
+            {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
+              <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
+                <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
+                  onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
+              </label>
+            ))}
+            <label className="block text-[11px]">{t("Tipo de imóvel")}
+              <select className="h-8 w-full rounded-md border border-input bg-background text-xs" value={ficha.imovel.tipo ?? ""} disabled={somenteLeitura || desabilitado}
+                onChange={(e) => { const tipo = e.target.value as FichaPreliminar["imovel"]["tipo"]; setFicha((a) => a ? {...a, imovel: {...a.imovel, tipo: tipo || null}} : a); }}>
+                <option value="">{t("Selecionar")}</option><option value="residencial">{t("Residencial")}</option><option value="comercial">{t("Comercial")}</option>
+              </select>
             </label>
             <label className="block text-[11px]">{t("Código FC")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.codigo_fc)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, codigo_fc: campo(e.target.value) } } : a)} />
             </label>
           </div>
-          <div className="space-y-1">
-            <label className="block text-[11px]">{t("Renda mensal (R$)")}
-              <Input className="h-8 text-xs" value={textoDe(ficha.renda.mensal)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, renda: { ...a.renda, mensal: numero(e.target.value) } } : a)} />
-            </label>
-            <label className="block text-[11px]">{t("Renda proposta para a FC (R$)")}
-              <Input className="h-8 text-xs" value={textoDe(ficha.renda.proposta_fc)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, renda: { ...a.renda, proposta_fc: numero(e.target.value) } } : a)} />
-            </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(["inicio", "fim"] as const).map((chave) => <label key={chave} className="text-[11px]">{t(chave === "inicio" ? "Início da locação" : "Término da locação")}
+              <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
+                onChange={(e) => setFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
+            </label>)}
           </div>
           {ficha.documentos.faltantes.length > 0 && (
             <p className="text-[11px]"><span className="font-semibold">{t("Documentos faltantes")}:</span> {ficha.documentos.faltantes.join(", ")}</p>

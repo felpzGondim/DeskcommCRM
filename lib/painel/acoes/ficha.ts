@@ -21,6 +21,7 @@ import {
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
+import { preencherRendaDeclaradaInicial, preservarEdicoesHumanas } from "@/lib/locacao/renda-utilizada";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
@@ -109,7 +110,7 @@ export async function gerarRelatorioPreliminarDoPainel(
       lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
     });
     const fontes = fontesDaFicha(enriquecido.linhas, {
-      charsPorAnexo: limites.chars_ficha_por_anexo,
+      charsPorAnexo: limites.chars_por_arquivo,
     });
     const atualPrevia = await lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId);
     const fichaPrevia = atualPrevia ? completarFicha(atualPrevia.ficha) : null;
@@ -159,8 +160,10 @@ export async function gerarRelatorioPreliminarDoPainel(
       { registry: deps.registry, log: deps.log },
     );
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
+    const inicial = preencherRendaDeclaradaInicial(saida.ficha, rendaDeclaradaNasFontes(fontes));
+    const fichaExtraida = fichaPrevia ? preservarEdicoesHumanas(inicial, fichaPrevia) : inicial;
     const ficha = {
-      ...saida.ficha,
+      ...fichaExtraida,
       pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),
     };
     etapa = "gravacao";

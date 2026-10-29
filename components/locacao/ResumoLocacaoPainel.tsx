@@ -54,7 +54,7 @@ export function ResumoLocacaoPainel({
         disabled={desabilitado}
         onClick={onAbrirAnalise}
       >
-        {t("Abrir análise")}
+        {t("Cadastro e locação")}
       </Button>
     </div>
   );
