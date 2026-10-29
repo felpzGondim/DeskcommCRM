@@ -1,4 +1,9 @@
-export { analisarExtrato, analisarExtratoComIa, blocoDoExtratoParaIa } from "./analisar";
+export {
+  analisarExtrato,
+  analisarExtratoComIa,
+  blocoDoExtratoParaIa,
+  FRASE_SALDO_NAO_FECHOU_CONFERIR,
+} from "./analisar";
 export { detectarAluguelAtual } from "./aluguel-atual";
 export {
   classificarLancamento,
@@ -7,9 +12,13 @@ export {
 } from "./classificar";
 export {
   criarExtratorComModelo,
+  normalizarResultadoExtrator,
   precisaExtracaoPorIa,
+  PARALELO_EXTRACAO,
   SYSTEM_EXTRACAO_LANCAMENTOS,
+  TETO_SAIDA_EXTRACAO,
   type ExtratorDeLancamentos,
+  type ResultadoDaExtracaoIa,
 } from "./extrair-ia";
 export {
   decidirFamiliar,
@@ -19,7 +28,15 @@ export {
   type FamiliarDaFicha,
 } from "./familiar";
 export { combinarHoleriteEExtrato, rendaLiquidaDeHolerite } from "./holerite";
-export { lerLancamentos, lotesDePaginas, pareceExtrato } from "./lancamentos";
+export {
+  CHARS_POR_LOTE_EXTRACAO,
+  dividirLoteAoMeio,
+  lerLancamentos,
+  lotesDePaginas,
+  PAGINAS_POR_LOTE_EXTRACAO,
+  paginasDoTexto,
+  pareceExtrato,
+} from "./lancamentos";
 export {
   FRASE_PACOTE_AUSENTE,
   leitorSuperlogicaDesligado,
