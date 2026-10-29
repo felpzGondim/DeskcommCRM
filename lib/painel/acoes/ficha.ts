@@ -9,9 +9,20 @@ import {
 } from "@/lib/agent-engine/agent/painel-leitura-anexos";
 import {
   blocoDasFontesDaFicha,
+  familiaresDaFicha,
   fontesDaFicha,
   gerarRelatorioPreliminarNoPainel,
+  prepararFontesDoRelatorio,
+  rendaDeclaradaNasFontes,
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
+import {
+  criarExtratorComModelo,
+  leitorSuperlogicaDesligado,
+  lerSeguroIncendioNoTexto,
+  montarPacote,
+} from "@/lib/locacao/extrato";
+import { completarFicha } from "@/lib/locacao/ficha-schema";
+import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
@@ -73,8 +84,27 @@ export async function gerarRelatorioPreliminarDoPainel(
       senhas: senhasPdf,
       lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
     });
-    const fontes = fontesDaFicha(enriquecido.linhas);
-    const bloco = blocoDasFontesDaFicha(fontes);
+    const fontes = fontesDaFicha(enriquecido.linhas, {
+      charsPorAnexo: limites.chars_ficha_por_anexo,
+    });
+    const atualPrevia = await lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId);
+    const fichaPrevia = atualPrevia ? completarFicha(atualPrevia.ficha) : null;
+    const familiares = fichaPrevia ? familiaresDaFicha(fichaPrevia) : [];
+    const pool = getRequestPool();
+    const preparado = await prepararFontesDoRelatorio(fontes, {
+      familiares,
+      extrator: criarExtratorComModelo(
+        pool,
+        deps.llmCfg,
+        { tenantId: ctx.orgId, contactId: ctx.contactId },
+        { registry: deps.registry, log: deps.log },
+        {
+          paginasPorLote: limites.paginas_por_lote_ocr,
+          charsPorLote: limites.chars_ficha_por_anexo,
+        },
+      ),
+    });
+    const bloco = blocoDasFontesDaFicha(preparado.fontes);
     if (bloco.length > limites.chars_conjunto) {
       return {
         ok: false,
@@ -82,10 +112,28 @@ export async function gerarRelatorioPreliminarDoPainel(
         codigo: "validation_error",
       };
     }
+    const incendio =
+      fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
+    const sl = pacoteSuperlogicaLigado(ctx.settings)
+      ? await leitorSuperlogicaDesligado().ler({ orgId: ctx.orgId, contactId: ctx.contactId })
+      : null;
+    const pacote = montarPacote({
+      superlogica: sl,
+      conversa: { seguroIncendioCentavos: incendio },
+    });
     const { saida } = await gerarRelatorioPreliminarNoPainel(
-      getRequestPool(),
+      pool,
       deps.llmCfg,
-      { tenantId: ctx.orgId, contactId: ctx.contactId, fontes: bloco },
+      {
+        tenantId: ctx.orgId,
+        contactId: ctx.contactId,
+        fontes: bloco,
+        analisesExtrato: preparado.analises,
+        pendenciasDeFonte: preparado.pendencias,
+        rendaDeclaradaCentavos: rendaDeclaradaNasFontes(fontes),
+        holeriteCentavos: preparado.holeriteCentavos,
+        pacote,
+      },
       { registry: deps.registry, log: deps.log },
     );
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
@@ -93,14 +141,13 @@ export async function gerarRelatorioPreliminarDoPainel(
       ...saida.ficha,
       pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),
     };
-    const atual = await lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId);
     const linha = await gravarVersaoDaFicha(ctx.admin, {
       organizationId: ctx.orgId,
       conversationId: ctx.conversationId,
       ficha,
       relatorio: saida.relatorio,
       origem: "preliminar_ia",
-      baseVersao: atual?.versao ?? 0,
+      baseVersao: atualPrevia?.versao ?? 0,
       alteradoPor: ctx.userId,
     });
     const historico = await listarHistoricoDaFicha(ctx.admin, ctx.orgId, ctx.conversationId);

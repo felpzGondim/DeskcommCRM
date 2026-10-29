@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.88.0-felpz.12] — 2026-10-28
+
+### Corrigido
+
+- **A renda do relatório preliminar sai do extrato, não do valor declarado** No Painel, Gerar relatório preliminar lê os créditos do extrato mês a mês. PIX/TED de terceiros (empregador, clientes, inclusive avulsos) e vendas no cartão/maquininha entram na renda comprovada; a tabela mostra a recorrência de cada pagador. Saem, com o volume à parte: transferências da própria pessoa; familiares diretos (pai, mãe, cônjuge, filhos, tios) identificados pela ficha ou por parentesco; poupança/resgates/aplicações/Rende Fácil; estornos e empréstimos. Só sobrenome em comum ou nome parcial vai para a lista "familiar provável — conferir", com a renda com e sem esses valores. Compara com o declarado e com 3× o pacote (aluguel+condomínio+IPTU+seguro-incêndio). O valor declarado nunca conta como comprovado. Extrato de qualquer banco: parser primeiro; se o layout não for reconhecido ou o saldo não fechar, a IA extrai os lançamentos. Extrato escaneado ou ilegível aparece com recado claro, sem chute. Se faltar o pacote: "3x não calculado: falta o valor do pacote". Sem prova de renda, o risco não sai como baixo. O relatório usa as 6 seções da análise de inquilino. Extrato longo deixa de ser cortado em silêncio: a IA recebe a tabela calculada. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.11] — 2026-10-28
 
 ### Adicionado

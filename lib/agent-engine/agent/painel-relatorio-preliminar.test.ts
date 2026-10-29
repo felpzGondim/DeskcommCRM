@@ -6,11 +6,18 @@ vi.mock("../edge/llm/run-model-call", () => ({
 
 import { runModelCall } from "../edge/llm/run-model-call";
 import {
+  AVISO_FICHA_CORTADA,
+  FRASE_DECLARADO_ANULADO,
+  FRASE_PACOTE_AUSENTE,
+  aplicarRegrasDoRelatorioPreliminar,
   blocoDasFontesDaFicha,
   fontesDaFicha,
   gerarRelatorioPreliminarNoPainel,
+  prepararFontesDoRelatorio,
   SYSTEM_DO_RELATORIO_PRELIMINAR,
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
+import { fichaVazia } from "@/lib/locacao/ficha-schema";
+import { EXTRATO_STONE_SINTETICO } from "@/lib/locacao/extrato/texto-sintetico";
 
 describe("fontes da ficha preliminar", () => {
   it("numera a janela e leva o id da mensagem sem path de storage", () => {
@@ -124,5 +131,153 @@ describe("fontes da ficha preliminar", () => {
     ]);
     expect(fontes[0]?.truncado).toBe(false);
     expect(blocoDasFontesDaFicha(fontes)).not.toMatch(/TEXTO CORTADO NO TETO DE DERIVAÇÃO/);
+  });
+
+  it("fonte acima do limite da ficha gera aviso e pendência", async () => {
+    const fontes = fontesDaFicha(
+      [
+        {
+          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          type: "document",
+          body: "",
+          direction: "inbound",
+          media_derived_status: "ready",
+          media_derived_text: "contrato " + "x".repeat(25_000),
+          original_completo: true,
+          metadata: { media_filename: "contrato.pdf" },
+        },
+      ],
+      { charsPorAnexo: 20_000 },
+    );
+    expect(fontes[0]?.cortadoNaFicha).toBe(true);
+    expect(blocoDasFontesDaFicha(fontes)).toContain(AVISO_FICHA_CORTADA);
+    const preparado = await prepararFontesDoRelatorio(fontes);
+    expect(preparado.pendencias.join(" ")).toMatch(/cortado no teto da ficha/);
+  });
+
+  it("extrato longo vira tabela calculada, não o texto bruto", async () => {
+    const fontes = fontesDaFicha([
+      {
+        id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        type: "document",
+        body: "",
+        direction: "inbound",
+        media_derived_status: "ready",
+        media_derived_text: EXTRATO_STONE_SINTETICO,
+        original_completo: true,
+        pdf_paginas: 2,
+        metadata: { media_filename: "extrato.pdf" },
+      },
+    ]);
+    const preparado = await prepararFontesDoRelatorio(fontes);
+    expect(preparado.fontes[0]?.texto).toMatch(/TABELA MENSAL CALCULADA/);
+    expect(preparado.fontes[0]?.texto).not.toContain("529.982.247-25");
+    expect(preparado.analises[0]?.rendaComprovadaCentavos).toBe(640_000);
+    expect(blocoDasFontesDaFicha(preparado.fontes)).toMatch(/paginas=2/);
+  });
+
+  it("o prompt contém as regras de renda e as 6 seções da skill, sem limite de 8 linhas", () => {
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/PIX\/TED/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/créditos de TERCEIROS/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/familiar provável/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/vendas no cartão\/maquininha/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/NUNCA é comprovado/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 1\. Identificação/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 2\. Resumo da Análise/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 3\. Análise de Crédito/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 4\. Análise de Renda/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 5\. Análise Financeira e Despesas/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/## 6\. Análise de Risco para Locação/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toContain(FRASE_PACOTE_AUSENTE);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).not.toMatch(/até 8 linhas/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(
+      /sem renda comprovada o risco não pode ser baixo/i,
+    );
+  });
+
+  it("declarado como comprovado é anulado", async () => {
+    vi.mocked(runModelCall).mockResolvedValue({
+      result: {
+        text: JSON.stringify({
+          relatorio: "## Identificação\nAna\n## Risco\nmoderado",
+          ficha: { renda: { mensal: { valor: 5000, fonte: "M1", trecho: "renda 5000" } } },
+        }),
+      },
+      callId: "call-3",
+    } as never);
+    const { saida } = await gerarRelatorioPreliminarNoPainel({} as never, {} as never, {
+      tenantId: "org",
+      contactId: "contato",
+      fontes: "[M1] cliente text renda 5000",
+      rendaDeclaradaCentavos: 500_000,
+    });
+    expect(saida.ficha.renda.mensal.valor).toBeNull();
+    expect(saida.ficha.renda.alertas.join(" ")).toContain(FRASE_DECLARADO_ANULADO);
+    expect(saida.relatorio).toMatch(/Análise de Renda/);
+  });
+
+  it("não sai risco baixo sem prova de renda", async () => {
+    vi.mocked(runModelCall).mockResolvedValue({
+      result: {
+        text: JSON.stringify({
+          relatorio: "## Identificação\nAna\n## Risco\nbaixo",
+          ficha: { renda: { mensal: { valor: null } } },
+        }),
+      },
+      callId: "call-4",
+    } as never);
+    const { saida } = await gerarRelatorioPreliminarNoPainel({} as never, {} as never, {
+      tenantId: "org",
+      contactId: "contato",
+      fontes: "[M1] cliente text Ana",
+    });
+    expect(saida.relatorio).not.toMatch(/Conclusão do Risco: baixo/i);
+    expect(saida.relatorio).toMatch(/Conclusão do Risco: moderado/i);
+    expect(saida.ficha.renda.alertas.join(" ")).toMatch(/não pode ser baixo/);
+  });
+
+  it("a seção de renda e o tipo extrato vêm do código, não do modelo", async () => {
+    const fontes = fontesDaFicha([
+      {
+        id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        type: "document",
+        media_derived_status: "ready",
+        media_derived_text: EXTRATO_STONE_SINTETICO,
+        original_completo: true,
+        metadata: { media_filename: "extrato.pdf" },
+      },
+    ]);
+    const preparado = await prepararFontesDoRelatorio(fontes);
+    const ficha = fichaVazia();
+    ficha.renda.documentos = [
+      {
+        fonte: "M1",
+        tipo: "outro",
+        periodo: null,
+        resumo: "parece documento",
+        valor_comprovado: null,
+        message_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      },
+    ];
+    ficha.imovel.aluguel.valor = 1000;
+    const saida = aplicarRegrasDoRelatorioPreliminar(
+      { relatorio: "## Identificação\nAna\n## Risco\nbaixo", ficha },
+      { analises: preparado.analises, pendencias: [], rendaDeclaradaCentavos: 500_000 },
+    );
+    expect(saida.relatorio).toMatch(/TABELA MENSAL CALCULADA|renda considerada/i);
+    expect(saida.relatorio).toMatch(/## 4\. Análise de Renda/);
+    expect(saida.ficha.renda.documentos[0]?.tipo).toBe("extrato");
+    expect(saida.ficha.renda.documentos[0]?.valor_comprovado).toBe(6400);
+    expect(saida.ficha.renda.mensal.valor).toBe(6400);
+    expect(saida.relatorio).toMatch(/3x o pacote/);
+    expect(saida.relatorio).toMatch(/Conclusão do Risco: baixo/);
+  });
+
+  it("sem pacote a comparação usa a frase fixa", () => {
+    const saida = aplicarRegrasDoRelatorioPreliminar(
+      { relatorio: "Ana", ficha: fichaVazia() },
+      { analises: [], pendencias: [], rendaDeclaradaCentavos: null },
+    );
+    expect(saida.relatorio).toContain(FRASE_PACOTE_AUSENTE);
   });
 });

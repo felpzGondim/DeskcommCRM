@@ -52,6 +52,22 @@ describe("extractPdfText", () => {
     );
   });
 
+  it("devolve o número de páginas junto do texto", async () => {
+    const { extractPdfDocument } = await import("@/lib/ai/rag/extractors/pdf");
+    const r = await extractPdfDocument(fixture("sample-multipagina.pdf"));
+    expect(r.paginas).toBe(2);
+    expect(r.texto).toBe(
+      "Pagina um linha um\nPagina um linha dois\n\nPagina dois linha um\nPagina dois linha dois",
+    );
+  });
+
+  it("PDF sem texto selecionável ainda informa quantas páginas tem", async () => {
+    const { extractPdfText, PdfExtractError } = await import("@/lib/ai/rag/extractors/pdf");
+    const erro = await extractPdfText(fixture("sample-sem-texto.pdf")).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(PdfExtractError);
+    expect((erro as InstanceType<typeof PdfExtractError>).paginas).toBe(1);
+  });
+
   it("lança PdfExtractError quando o PDF é válido mas não tem texto algum", async () => {
     // O caso "PDF digitalizado / só imagem": a fixture abre sem erro nenhum, tem uma
     // página e zero itens de texto. É o único caminho em que a engine trabalha até o
@@ -172,7 +188,9 @@ describe("extractPdfText — estratégia `processo-a-parte`", () => {
     expect((erro as Error).message).toMatch(/sem responder/);
     expect((erro as Error).message).toMatch(/teto de heap 4 MB/);
     // O pai continua vivo e extraindo.
-    expect(await extractPdfText(fixture("sample-text.pdf"), A_PARTE)).toBe("DeskcommCRM RAG fixture");
+    expect(await extractPdfText(fixture("sample-text.pdf"), A_PARTE)).toBe(
+      "DeskcommCRM RAG fixture",
+    );
   });
 
   it("o filho que não responde a tempo é morto e vira PdfExtractError", async () => {
