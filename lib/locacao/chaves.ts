@@ -43,6 +43,11 @@ export const locacaoSettingsSchema = z.object({
     relatorio: false,
     manual: false,
   }),
+  /**
+   * GET Superlógica para aluguel/condomínio/IPTU/seguro-incêndio do 3×.
+   * Desligada: não há cliente HTTP neste repo (o Hub é quem lê a API).
+   */
+  pacote_superlogica_habilitado: z.boolean().optional().default(false),
 }).passthrough();
 
 export const superlogicaVinculoSettingsSchema = z.object({
@@ -109,4 +114,8 @@ export function ehAprovador(
 export function analiseLigada(settings: unknown, chave: ChaveDaAnalise): boolean {
   const loc = lerLocacaoSettings(settings);
   return loc.processos_habilitado === true && loc.analise[chave] === true;
+}
+
+export function pacoteSuperlogicaLigado(settings: unknown): boolean {
+  return lerLocacaoSettings(settings).pacote_superlogica_habilitado === true;
 }

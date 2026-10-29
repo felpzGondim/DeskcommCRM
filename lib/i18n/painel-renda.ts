@@ -11,6 +11,12 @@ export const TEXTOS_PAINEL_RENDA = {
   "Poupança excluída": { es: "Ahorro excluido" },
   "Rende Fácil excluído": { es: "Rende Fácil excluido" },
   "PIX de terceiros (à parte)": { es: "PIX de terceros (aparte)" },
+  "PIX/TED de terceiros": { es: "PIX/TED de terceros" },
+  "Vendas no cartão/maquininha": { es: "Ventas en tarjeta/maquinita" },
+  "Familiares excluídos": { es: "Familiares excluidos" },
+  "Familiar provável — conferir": { es: "Familiar probable — revisar" },
+  "Estornos excluídos": { es: "Reembolsos excluidos" },
+  "Empréstimos excluídos": { es: "Préstamos excluidos" },
   "Confirme a renda antes de analisar o seguro-fiança ou a FC.": {
     es: "Confirme la renta antes de analizar el seguro de fianza o FC.",
   },

@@ -37,6 +37,8 @@ export interface FalaDaConversaDoPainel {
   texto: string;
   /** ISO; só para ordenar e dar noção de tempo ao modelo. */
   em: string | null;
+  /** PDF reaberto além do teto de 8000. O bloco da conversa continua cortado. */
+  originalCompleto?: boolean;
 }
 
 export interface TurnoDoPainel {

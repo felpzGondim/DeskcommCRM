@@ -71,6 +71,15 @@ describe("manual assistido — mapeamento puro", () => {
     expect(dados.vigencia).toEqual({ inicio: "2026-11-02", fim: "2029-05-02" });
   });
 
+  it("sem renda comprovada omite o campo e não inventa valor", () => {
+    const ficha = fichaPronta();
+    ficha.renda.mensal.valor = null;
+    ficha.renda.proposta_fc.valor = null;
+    const dados = montarDadosParaCopiar(ficha);
+    expect(dados.campos.find((c) => c.chave === "renda")).toBeUndefined();
+    expect(dados.campos.some((c) => c.valor === "0" && c.chave === "renda")).toBe(false);
+  });
+
   it("hash da tentativa que não casa com a ficha não escolhe outra pessoa", () => {
     const ficha = fichaPronta();
     expect(pessoaDaFichaParaManual(ficha, { cpfHash: "hash-de-outra-pessoa" })).toBeNull();

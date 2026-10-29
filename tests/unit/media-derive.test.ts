@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { deriveMediaText, type DeriveDeps } from "@/lib/messaging/media/derive";
+import {
+  deriveMediaText,
+  MAX_DERIVED_CHARS,
+  textoDerivadoTruncado,
+  type DeriveDeps,
+} from "@/lib/messaging/media/derive";
 
 function deps(over: Partial<DeriveDeps> = {}): DeriveDeps {
   return {
@@ -18,9 +23,9 @@ describe("deriveMediaText", () => {
     );
   });
   it("document pdf → texto extraído", async () => {
-    expect(
-      await deriveMediaText("document", Buffer.from([1]), "application/pdf", deps()),
-    ).toBe("conteúdo do pdf");
+    expect(await deriveMediaText("document", Buffer.from([1]), "application/pdf", deps())).toBe(
+      "conteúdo do pdf",
+    );
   });
   it("image → descrição por visão", async () => {
     expect(await deriveMediaText("image", Buffer.from([1]), "image/jpeg", deps())).toBe(
@@ -36,9 +41,22 @@ describe("deriveMediaText", () => {
   });
   it("trunca derivado gigante a 8000 chars", async () => {
     const huge = "a".repeat(20000);
-    const out = await deriveMediaText("document", Buffer.from([1]), "application/pdf", deps({
-      extractPdf: vi.fn(async () => huge),
-    }));
-    expect(out.length).toBe(8000);
+    const out = await deriveMediaText(
+      "document",
+      Buffer.from([1]),
+      "application/pdf",
+      deps({
+        extractPdf: vi.fn(async () => huge),
+      }),
+    );
+    expect(out.length).toBe(MAX_DERIVED_CHARS);
+    expect(textoDerivadoTruncado(out)).toBe(true);
+  });
+
+  it("texto exatamente no teto é truncado; um abaixo não", () => {
+    expect(textoDerivadoTruncado("a".repeat(MAX_DERIVED_CHARS))).toBe(true);
+    expect(textoDerivadoTruncado("a".repeat(MAX_DERIVED_CHARS - 1))).toBe(false);
+    expect(textoDerivadoTruncado("")).toBe(false);
+    expect(textoDerivadoTruncado(null)).toBe(false);
   });
 });

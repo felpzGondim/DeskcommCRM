@@ -110,6 +110,8 @@ describe("rota do manual assistido no painel", () => {
     expect(painel).toContain("analiseManual");
     expect(painel).toContain('data-testid="analise-manual"');
     expect(painel).toContain("Revelar CPF");
+    expect(painel).toContain("copyToClipboard");
+    expect(painel).not.toMatch(/navigator\.clipboard/);
     expect(painel).not.toMatch(/confirmar-cobranca-fc|valor_exibido/);
     const bloco = painel.slice(painel.indexOf('data-testid="analise-manual"'));
     expect(bloco).not.toMatch(/R\$|25[,.]30|fc_preco/);
