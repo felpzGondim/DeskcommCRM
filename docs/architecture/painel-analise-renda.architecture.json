@@ -69,14 +69,14 @@
       "lane": "modelo",
       "col": 3,
       "type": "external",
-      "label": "ponto painel_analise; teto 8192; finishReason length = erro"
+      "label": "prepararFontesDoRelatorio + extrato; ponto painel_analise só se o parser falhar"
     },
     {
       "id": "regras",
       "lane": "servidor",
       "col": 2,
       "type": "process",
-      "label": "Regras: autotransferência, poupança, Rende Fácil, PIX à parte"
+      "label": "Motor extrato: PIX/TED terceiros entram; próprias e familiares saem"
     },
     {
       "id": "ficha",

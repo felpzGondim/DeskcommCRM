@@ -81,10 +81,16 @@ export class PdfExtractError extends Error {
     message: string,
     public readonly cause?: unknown,
     public readonly motivo: MotivoDaFalhaDePdf = "falha",
+    public readonly paginas?: number,
   ) {
     super(message);
     this.name = "PdfExtractError";
   }
+}
+
+export interface PdfExtraido {
+  texto: string;
+  paginas: number;
 }
 
 export type EstrategiaDeExtracao = "em-processo" | "processo-a-parte";
@@ -141,14 +147,26 @@ export async function extractPdfText(
   buffer: Buffer,
   opcoes: OpcoesDeExtracao = {},
 ): Promise<string> {
+  return (await extractPdfDocument(buffer, opcoes)).texto;
+}
+
+/** Texto + número de páginas. O texto continua o mesmo de `extractPdfText`. */
+export async function extractPdfDocument(
+  buffer: Buffer,
+  opcoes: OpcoesDeExtracao = {},
+): Promise<PdfExtraido> {
   const estrategia = opcoes.estrategia ?? estrategiaPadrao();
   if (estrategia === "processo-a-parte") return extrairEmProcessoAParte(buffer, opcoes);
   return extrairEmProcesso(buffer, opcoes);
 }
 
-async function extrairEmProcesso(buffer: Buffer, opcoes: OpcoesDeExtracao = {}): Promise<string> {
+async function extrairEmProcesso(
+  buffer: Buffer,
+  opcoes: OpcoesDeExtracao = {},
+): Promise<PdfExtraido> {
   try {
-    const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof PdfjsDist;
+    const pdfjsLib =
+      (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof PdfjsDist;
 
     // NÃO mexa em GlobalWorkerOptions.workerSrc aqui (issue #102).
     //
@@ -187,9 +205,14 @@ async function extrairEmProcesso(buffer: Buffer, opcoes: OpcoesDeExtracao = {}):
 
     const combined = pageTexts.join("\n\n").trim();
     if (combined.length === 0) {
-      throw new PdfExtractError("pdfjs-dist extracted no text (possibly image-only PDF)", undefined, "sem_texto");
+      throw new PdfExtractError(
+        "pdfjs-dist extracted no text (possibly image-only PDF)",
+        undefined,
+        "sem_texto",
+        pdfDocument.numPages,
+      );
     }
-    return combined;
+    return { texto: combined, paginas: pdfDocument.numPages };
   } catch (err) {
     throw traduzirErro(err);
   }
@@ -270,7 +293,7 @@ try {
       .trim();
     if (texto.length > 0) paginas.push(texto);
   }
-  responder({ ok: true, texto: paginas.join("\\n\\n").trim() });
+  responder({ ok: true, texto: paginas.join("\\n\\n").trim(), paginas: doc.numPages });
 } catch (e) {
   responder({ ok: false, erro: String((e && e.message) || e) });
 }
@@ -285,6 +308,7 @@ function urlDoPdfjs(): string {
 interface RespostaDoFilho {
   ok: boolean;
   texto?: string;
+  paginas?: number;
   erro?: string;
 }
 
@@ -298,7 +322,7 @@ interface SaidaDoFilho {
 async function extrairEmProcessoAParte(
   buffer: Buffer,
   opcoes: OpcoesDeExtracao,
-): Promise<string> {
+): Promise<PdfExtraido> {
   const heapMb = opcoes.heapMb ?? HEAP_DO_FILHO_MB;
   const timeoutMs = opcoes.timeoutMs ?? TEMPO_MAXIMO_MS;
 
@@ -377,8 +401,15 @@ async function extrairEmProcessoAParte(
   if (!resposta.ok) throw traduzirErro(new Error(resposta.erro ?? "erro desconhecido"));
 
   const texto = resposta.texto ?? "";
+  const paginas =
+    typeof resposta.paginas === "number" && resposta.paginas > 0 ? resposta.paginas : undefined;
   if (texto.length === 0) {
-    throw new PdfExtractError("pdfjs-dist extracted no text (possibly image-only PDF)", undefined, "sem_texto");
+    throw new PdfExtractError(
+      "pdfjs-dist extracted no text (possibly image-only PDF)",
+      undefined,
+      "sem_texto",
+      paginas,
+    );
   }
-  return texto;
+  return { texto, paginas: paginas ?? 1 };
 }

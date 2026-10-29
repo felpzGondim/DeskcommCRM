@@ -28,8 +28,12 @@ describe("ficha preliminar — schema", () => {
     };
     const parsed = fichaPreliminarSchema.parse(bruto);
     expect(parsed.renda.excluida.autotransferencias).toEqual([]);
+    expect(parsed.renda.excluida.familiares).toEqual([]);
+    expect(parsed.renda.excluida.familiares_provaveis).toEqual([]);
     expect(parsed.renda.pix_terceiros).toEqual([]);
+    expect(parsed.renda.vendas_cartao).toEqual([]);
     expect(parsed.renda.evidencias).toEqual([]);
+    expect(parsed.renda.bloco_calculado).toBeNull();
   });
 
   it("completa o que o modelo omitiu sem inventar valor", () => {

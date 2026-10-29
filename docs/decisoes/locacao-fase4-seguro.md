@@ -14,6 +14,7 @@ Nunca `fc_salvar` nem laudo da FC.
 - Ferramentas `analisar_seguro` e `status_seguro` (ambas L, cotação gratuita: o agente executa).
 - Botão e `/pergunta` usam `executarFerramenta`. Não entram em `propor_acao`.
 - Trava `exigirRendaConfirmada` antes de qualquer efeito.
+- Sem renda comprovada o motor do #31 deixa `renda.mensal` e `proposta_fc` em `null`. O payload **não assume valor**: `pendenciaDoPayloadSeguro` e `montarArgumentosSeguro` recusam com a mesma frase da trava. Conservador: sem número, não cotar.
 - Lista fechada em `lib/painel/acoes/hub.ts`: `iniciar_analise_inquilino` (só se o schema anunciar `acao`), `status_analise_inquilino`, `baixar_resultado_analise`. Com a chave do Hub desligada, as ferramentas novas respondem como inexistentes — mensagem clara, sem disparar o caminho antigo (Migra+FC juntas).
 - Cada ação usa `pedido_id` distinto. O Hub deduplica pelo trio (organização, conversa, pedido_id). Reaproveitar o mesmo id só para repetir a **mesma** cotação. FC (4.3) nascerá com outro id.
 - Print em base64 na resposta (até 2 MB). Sem arquivos do processo ligados, os cards são salvos e o print não.
