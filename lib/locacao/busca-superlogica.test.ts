@@ -8,8 +8,8 @@ import {
   interpretarBuscaSuperlogica,
   mascararNomeParcial,
   pesquisaDoPedido,
-  tipoParaVinculo,
 } from "@/lib/locacao/busca-superlogica";
+import { tipoParaVinculo } from "@/lib/locacao/tipo-vinculo";
 
 afterEach(() => {
   definirClienteBuscaSuperlogicaParaTeste(null);

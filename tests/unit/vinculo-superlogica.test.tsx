@@ -8,9 +8,24 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: { post: (...a: unknown[]) => post(...a), get: (...a: unknown[]) => get(...a), delete: (...a: unknown[]) => del(...a) },
 }));
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { VinculoSuperlogica } from "@/components/locacao/VinculoSuperlogica";
 
 describe("VinculoSuperlogica", () => {
+  it("não puxa o cliente MCP do Hub para o bundle do inbox", () => {
+    const arquivos = [
+      "components/locacao/VinculoSuperlogica.tsx",
+      "components/inbox/AnaliseInquilinoDialog.tsx",
+      "components/locacao/ResumoLocacaoPainel.tsx",
+    ];
+    for (const rel of arquivos) {
+      const src = readFileSync(join(process.cwd(), rel), "utf8");
+      expect(src, rel).not.toMatch(/busca-superlogica|servidor-externo/);
+    }
+  });
+
   beforeEach(() => {
     post.mockReset();
     get.mockReset();

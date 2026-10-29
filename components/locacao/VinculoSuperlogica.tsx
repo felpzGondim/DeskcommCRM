@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
-import { tipoParaVinculo } from "@/lib/locacao/busca-superlogica";
+import { tipoParaVinculo } from "@/lib/locacao/tipo-vinculo";
 import { MOTIVOS_DE_DESFAZER_VINCULO } from "@/lib/locacao/vocabulario";
 
 type Candidato = {

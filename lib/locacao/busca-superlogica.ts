@@ -17,6 +17,7 @@ import { idPessoaSuperlogica } from "@/lib/locacao/superlogica-id";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export { vinculoEmCustomFields } from "@/lib/locacao/superlogica-id";
+export { tipoParaVinculo } from "@/lib/locacao/tipo-vinculo";
 
 export const NOME_BUSCA_SUPERLOGICA = "buscar_pessoas_superlogica";
 
@@ -85,16 +86,6 @@ export function mascararNomeParcial(nome: string): string {
       return visivel + "*".repeat(Math.min(letras.length - 2, 8));
     })
     .join(" ");
-}
-
-export function tipoParaVinculo(
-  tipo: string,
-): "locatario" | "fiador" | "proprietario" | undefined {
-  const n = tipo.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (n === "inquilino" || n === "locatario") return "locatario";
-  if (n === "fiador") return "fiador";
-  if (n === "proprietario") return "proprietario";
-  return undefined;
 }
 
 function textoCurto(v: unknown, teto = 120): string | null {
