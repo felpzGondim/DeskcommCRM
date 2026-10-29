@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   runModel: vi.fn(),
   enfileirar: vi.fn(),
   lerGeracao: vi.fn(),
+  listarGeracoes: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -76,8 +77,11 @@ vi.mock("@/lib/painel/relatorio-preliminar-fila", async () => {
     ...real,
     enfileirarRelatorioPreliminar: mocks.enfileirar,
     lerGeracaoDaFicha: mocks.lerGeracao,
+    listarGeracoesEmCurso: mocks.listarGeracoes,
   };
 });
+
+import { gerarRelatorioPreliminarDoPainel } from "@/lib/painel/acoes/ficha";
 
 import { GET, POST } from "@/app/api/v1/conversations/[id]/painel-agente/ficha/route";
 
@@ -137,6 +141,7 @@ describe("rota da ficha preliminar", () => {
     mocks.lerAtual.mockResolvedValue(null);
     mocks.historico.mockResolvedValue([]);
     mocks.lerGeracao.mockResolvedValue(null);
+    mocks.listarGeracoes.mockResolvedValue([]);
     mocks.enfileirar.mockResolvedValue({
       eventoId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
       existente: false,
@@ -174,6 +179,36 @@ describe("rota da ficha preliminar", () => {
     };
     mocks.client.mockResolvedValue({ from });
     mocks.admin.mockReturnValue({});
+  });
+
+  it("o evento eleito continua mesmo com duplicado mais novo em curso", async () => {
+    mocks.listarGeracoes.mockResolvedValue([{ id: "antigo" }, { id: "novo" }]);
+    const select = vi.fn();
+    const q = {
+      select: () => { select(); return q; },
+      eq: () => q, order: () => q,
+      limit: async () => ({ data: null, error: { message: "fontes indisponíveis" } }),
+    };
+    const r = await gerarRelatorioPreliminarDoPainel({
+      admin: {}, orgId: "org-1", conversationId: "conversa-1",
+      dbSessao: { from: () => q }, settings: {},
+    } as never, {}, { eventoId: "antigo" });
+    expect(select).toHaveBeenCalled();
+    expect(r.codigo).toBe("internal_error");
+    expect(r.texto).toMatch(/ler a conversa/);
+    expect(mocks.gerar).not.toHaveBeenCalled();
+  });
+
+  it("o evento mais novo não lê documentos nem gera outra ficha", async () => {
+    mocks.listarGeracoes.mockResolvedValue([{ id: "antigo" }, { id: "novo" }]);
+    const from = vi.fn();
+    const r = await gerarRelatorioPreliminarDoPainel({
+      admin: {}, orgId: "org-1", conversationId: "conversa-1",
+      dbSessao: { from }, settings: {},
+    } as never, {}, { eventoId: "novo" });
+    expect(r.codigo).toBe("idempotency_in_progress");
+    expect(from).not.toHaveBeenCalled();
+    expect(mocks.gerar).not.toHaveBeenCalled();
   });
 
   it("enfileira o relatório e responde na hora", async () => {

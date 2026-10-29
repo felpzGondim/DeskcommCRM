@@ -86,3 +86,9 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 8. Continuidade: a IA rascunha; o atendente corrige e salva. A IA não confirma FC.
 9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga. Falha de JSON/zod/corte fecha o evento com motivo visível na tela — retry automático gastaria o mesmo teto.
 10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_fila`, `ficha_worker`, `ficha_tabela`, `extrato`).
+
+## Correções de concorrência e continuidade (2026-10-29)
+
+CONFIRMADO no código: o hook inicia a consulta periódica somente depois do POST de geração aceito. A resposta do agente incrementa `atualizacaoFicha` em `PainelDoAgente`; o sinal passa por `AnaliseInquilinoDialog` e `FichaPreliminarPainel` até `useFichaPreliminar`. A consulta de atualização preserva a edição local quando não há geração nem versão nova. Se a ficha estiver desmontada, a leitura inicial retoma o andamento ao abrir a análise.
+
+A eleição em `event_log` ordena por `created_at` e `id`. Worker e ação usam `eventoVencedor`: o mais antigo continua, mesmo havendo duplicados mais novos. Os demais encerram sem ler documentos ou chamar IA. Sem schema novo, sem mudança nos limites, nas confirmações de cobrança ou no envio ao cliente.

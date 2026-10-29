@@ -81,6 +81,7 @@ export function PainelDoAgente({
   const [ultimoModo, setUltimoModo] = useState<"normal" | "analise" | null>(null);
   const [esconderAnaliseAntiga, setEsconderAnaliseAntiga] = useState(false);
   const [analiseAberta, setAnaliseAberta] = useState(false);
+  const [atualizacaoFicha, setAtualizacaoFicha] = useState(0);
   const conversaAtual = useRef(conversationId);
   const esperandoConsulta = useRef(false);
   const inicioDaConsulta = useRef(0);
@@ -127,6 +128,7 @@ export function PainelDoAgente({
         const status = r.data?.status;
         if (status === "pronto" || status === "erro" || status === "interrompida") {
           esperandoConsulta.current = false;
+          setAtualizacaoFicha((n) => n + 1);
           if (status === "interrompida") {
             setErro(t("A consulta foi interrompida. Tente de novo."));
           } else {
@@ -236,6 +238,7 @@ export function PainelDoAgente({
         return;
       }
       esperandoConsulta.current = false;
+      if (acao === "pergunta") setAtualizacaoFicha((n) => n + 1);
       const resposta = (r.data?.resposta ?? "").trim();
       const viraSugestao = (acao === "sugerir" || acao === "pergunta") && !!resposta;
       setTurnos((ts) => [
@@ -437,6 +440,7 @@ export function PainelDoAgente({
           />
           <AnaliseInquilinoDialog
             aberto={analiseAberta}
+            atualizacaoFicha={atualizacaoFicha}
             onAbertoChange={setAnaliseAberta}
             conversationId={conversationId}
             desabilitado={desabilitado || carregando !== null}

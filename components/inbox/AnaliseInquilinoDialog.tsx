@@ -34,7 +34,9 @@ export function AnaliseInquilinoDialog({
   conversationId,
   desabilitado = false,
   senhasPdf,
+  atualizacaoFicha = 0,
 }: {
+  atualizacaoFicha?: number;
   aberto: boolean;
   onAbertoChange: (v: boolean) => void;
   conversationId: string;
@@ -104,6 +106,7 @@ export function AnaliseInquilinoDialog({
             onAtualizado={recarregarContato}
           />
           <FichaPreliminarPainel
+            atualizacao={atualizacaoFicha}
             conversationId={conversationId}
             desabilitado={desabilitado}
             senhasPdf={senhasPdf}

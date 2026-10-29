@@ -128,6 +128,7 @@ export async function listarGeracoesEmCurso(
     .eq("entity_id", conversationId)
     .in("status", ["pending", "processing"])
     .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(8);
   if (error) throw new Error("geracao_leitura");
   return (data ?? []).map((row) => {

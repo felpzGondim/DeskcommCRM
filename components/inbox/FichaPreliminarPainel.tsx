@@ -17,6 +17,7 @@ import {
 } from "@/lib/locacao/ficha-schema";
 
 interface Props {
+  atualizacao?: number;
   conversationId: string;
   desabilitado?: boolean;
   senhasPdf: Array<{ nome: string; senha: string }>;
@@ -46,13 +47,13 @@ function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   return String(c.valor);
 }
 
-export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf }: Props) {
+export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0 }: Props) {
   const t = useT();
   const {
     ficha, setFicha, relatorio, setRelatorio, versao, historico,
     somenteLeitura, setSomenteLeitura, carregando, gerando, erro,
     gerar, salvar, verVersao,
-  } = useFichaPreliminar(conversationId);
+  } = useFichaPreliminar(conversationId, atualizacao);
 
   function patchPessoa(i: number, patch: Partial<FichaPreliminar["pessoas"][number]>) {
     setFicha((atual) => {

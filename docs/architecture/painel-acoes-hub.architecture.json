@@ -8,12 +8,29 @@
     "quality_profile": "standard"
   },
   "lanes": [
-    { "id": "inbox", "label": "Inbox" },
-    { "id": "servidor", "label": "Servidor" },
-    { "id": "integracao", "label": "Integração" },
-    { "id": "registro", "label": "Registro" }
+    {
+      "id": "inbox",
+      "label": "Inbox"
+    },
+    {
+      "id": "servidor",
+      "label": "Servidor"
+    },
+    {
+      "id": "integracao",
+      "label": "Integração"
+    },
+    {
+      "id": "registro",
+      "label": "Registro"
+    }
   ],
-  "mainPath": ["botoes", "rota", "mcp", "hub"],
+  "mainPath": [
+    "botoes",
+    "rota",
+    "mcp",
+    "hub"
+  ],
   "nodes": [
     {
       "id": "botoes",
@@ -157,7 +174,12 @@
     }
   ],
   "edges": [
-    { "id": "e1", "from": "botoes", "to": "rota", "label": "consulta ou confirmação explícita" },
+    {
+      "id": "e1",
+      "from": "botoes",
+      "to": "rota",
+      "label": "consulta ou confirmação explícita"
+    },
     {
       "id": "e2",
       "from": "rota",
@@ -170,19 +192,54 @@
       "to": "hub",
       "label": "tools/call com identidade e, se anunciado, arquivos"
     },
-    { "id": "e4", "from": "rota", "to": "audit", "label": "ação e desfecho" },
-    { "id": "e5", "from": "rota", "to": "recibo", "label": "reserva antes da análise" },
-    { "id": "e6", "from": "hub", "to": "botoes", "label": "resumo estruturado ou erro visível" },
+    {
+      "id": "e4",
+      "from": "rota",
+      "to": "audit",
+      "label": "ação e desfecho"
+    },
+    {
+      "id": "e5",
+      "from": "rota",
+      "to": "recibo",
+      "label": "reserva antes da análise"
+    },
+    {
+      "id": "e6",
+      "from": "hub",
+      "to": "botoes",
+      "label": "resumo estruturado ou erro visível"
+    },
     {
       "id": "e7",
       "from": "botoes",
       "to": "composer",
       "label": "preenche sugestão; atendente decide envio"
     },
-    { "id": "e8", "from": "rota", "to": "anexos", "label": "200 mensagens mais recentes" },
-    { "id": "e9", "from": "anexos", "to": "visao", "label": "foto e PDF escaneado" },
-    { "id": "e10", "from": "anexos", "to": "storage", "label": "reabre original do tenant" },
-    { "id": "e11", "from": "anexos", "to": "botoes", "label": "prévia, aviso de senha e limites" },
+    {
+      "id": "e8",
+      "from": "rota",
+      "to": "anexos",
+      "label": "200 mensagens mais recentes"
+    },
+    {
+      "id": "e9",
+      "from": "anexos",
+      "to": "visao",
+      "label": "foto e PDF escaneado"
+    },
+    {
+      "id": "e10",
+      "from": "anexos",
+      "to": "storage",
+      "label": "reabre original do tenant"
+    },
+    {
+      "id": "e11",
+      "from": "anexos",
+      "to": "botoes",
+      "label": "prévia, aviso de senha e limites"
+    },
     {
       "id": "e12",
       "from": "storage",
@@ -249,7 +306,12 @@
       "to": "aviso_teto",
       "label": "PDF reaberto ou recorte marcado"
     },
-    { "id": "e19", "from": "aviso_teto", "to": "ficha_rota", "label": "fontes da ficha com aviso" },
+    {
+      "id": "e19",
+      "from": "aviso_teto",
+      "to": "ficha_rota",
+      "label": "fontes da ficha com aviso"
+    },
     {
       "id": "e20",
       "from": "aviso_teto",
@@ -269,25 +331,25 @@
       "label": "tabela mensal; declarado não é comprovado"
     },
     {
-      "id": "e23",
+      "id": "e29",
       "from": "botoes",
       "to": "analise_modal",
       "label": "Abrir análise"
     },
     {
-      "id": "e24",
+      "id": "e30",
       "from": "analise_modal",
       "to": "ficha_botao",
       "label": "aba Dados: ficha e relatório preliminar"
     },
     {
-      "id": "e25",
+      "id": "e31",
       "from": "mcp",
       "to": "pessoa_id",
       "label": "contato_superlogica_vinculos.superlogica_pessoa_id quando válido"
     },
     {
-      "id": "e26",
+      "id": "e32",
       "from": "pessoa_id",
       "to": "hub",
       "label": "toda tools/call da chave CRM"
@@ -303,6 +365,12 @@
       "from": "busca_rota",
       "to": "mcp",
       "label": "buscar_pessoas_superlogica só leitura"
+    },
+    {
+      "id": "e33",
+      "from": "botoes",
+      "to": "ficha_botao",
+      "label": "resposta do agente atualiza geração sem apagar edição local"
     }
   ]
 }

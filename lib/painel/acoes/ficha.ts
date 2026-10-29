@@ -40,7 +40,7 @@ import {
   textoDaFalhaDoRelatorio,
   type EtapaFalhaRelatorio,
 } from "@/lib/painel/relatorio-preliminar-motivo";
-import { listarGeracoesEmCurso } from "@/lib/painel/relatorio-preliminar-fila";
+import { eventoVencedor, listarGeracoesEmCurso } from "@/lib/painel/relatorio-preliminar-fila";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
 export {
@@ -74,8 +74,8 @@ export async function gerarRelatorioPreliminarDoPainel(
   opcoes: { eventoId?: string } = {},
 ): Promise<ResultadoDaFerramenta> {
   const emCurso = await listarGeracoesEmCurso(ctx.admin, ctx.orgId, ctx.conversationId);
-  const outro = emCurso.find((e) => e.id !== opcoes.eventoId);
-  if (outro) {
+  const vencedor = eventoVencedor(emCurso);
+  if (vencedor && vencedor.id !== opcoes.eventoId) {
     return {
       ok: false,
       texto: "O relatório preliminar já está sendo gerado.",

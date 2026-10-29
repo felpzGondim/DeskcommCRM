@@ -27,7 +27,7 @@ type CorpoDaFicha = {
   geracao?: Geracao | null;
 };
 
-export function useFichaPreliminar(conversationId: string) {
+export function useFichaPreliminar(conversationId: string, atualizacao = 0) {
   const [ficha, setFicha] = useState<FichaPreliminar | null>(null);
   const [relatorio, setRelatorio] = useState("");
   const [versao, setVersao] = useState(0);
@@ -37,12 +37,14 @@ export function useFichaPreliminar(conversationId: string) {
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const vivo = useRef(true);
+  const versaoAtual = useRef(0);
 
   const aplicar = useCallback((corpo: CorpoDaFicha) => {
     if (corpo.atual) {
       setFicha(corpo.atual.ficha);
       setRelatorio(corpo.atual.relatorio);
       setVersao(corpo.atual.versao);
+      versaoAtual.current = corpo.atual.versao;
     }
     setHistorico(corpo.historico ?? []);
     if (corpo.geracao?.status === "gerando") {
@@ -80,6 +82,20 @@ export function useFichaPreliminar(conversationId: string) {
     };
   }, [ler]);
 
+  // A resposta do agente pode ter enfileirado a ficha fora do botão.
+  // Uma consulta sem geração nova preserva as edições locais do atendente.
+  useEffect(() => {
+    if (atualizacao === 0) return;
+    let cancelado = false;
+    void apiClient.get<{ data: CorpoDaFicha }>(
+      `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
+    ).then((r) => {
+      if (cancelado) return;
+      if (r.data.geracao || (r.data.atual?.versao ?? 0) > versaoAtual.current) aplicar(r.data);
+    }).catch(() => { /* o GET inicial ou a próxima resposta permite retomar */ });
+    return () => { cancelado = true; };
+  }, [aplicar, atualizacao, conversationId]);
+
   useEffect(() => {
     if (!gerando) return;
     let cancelado = false;
@@ -104,12 +120,13 @@ export function useFichaPreliminar(conversationId: string) {
     if (carregando || gerando) return;
     setErro(null);
     setCarregando("gerar");
-    setGerando(true);
     try {
       await apiClient.post<{ data: { status: string; evento_id: string } }>(
         `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
         { etapa: "gerar", ...(senhasPdf.length ? { senhasPdf } : {}) },
       );
+      setGerando(true);
+      setSomenteLeitura(false);
       setCarregando(null);
     } catch (e) {
       setGerando(false);
@@ -130,6 +147,7 @@ export function useFichaPreliminar(conversationId: string) {
       setFicha(r.data.ficha);
       setRelatorio(r.data.relatorio);
       setVersao(r.data.versao);
+      versaoAtual.current = r.data.versao;
       setHistorico(r.data.historico ?? []);
       return true;
     } catch (e) {
