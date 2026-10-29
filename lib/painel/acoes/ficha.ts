@@ -1,9 +1,7 @@
 /**
- * Ficha preliminar local (A1) — ler e gerar relatório. O mesmo caminho do botão
- * Gerar relatório preliminar.
+ * Ficha preliminar local (A1) — ler e gerar relatório. O botão e a ferramenta
+ * enfileiram; o worker chama `gerarRelatorioPreliminarDoPainel`.
  */
-import { z } from "zod";
-
 import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import {
   enriquecerAnexosDaAnalise,
@@ -36,30 +34,20 @@ import {
 } from "@/lib/locacao/ficha-repositorio";
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
 import { logger } from "@/lib/logger";
+import {
+  codigoDaFalhaDoRelatorio,
+  motivoDaFalhaDoRelatorio,
+  textoDaFalhaDoRelatorio,
+  type EtapaFalhaRelatorio,
+} from "@/lib/painel/relatorio-preliminar-motivo";
+import { listarGeracoesEmCurso } from "@/lib/painel/relatorio-preliminar-fila";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
-type MotivoFalhaRelatorio =
-  | "extrator_json"
-  | "relatorio_json"
-  | "zod"
-  | "saida_truncada"
-  | "invalid_format";
-type EtapaFalhaRelatorio =
-  | "anexos"
-  | "extracao_extrato"
-  | "relatorio"
-  | "gravacao";
-
-function motivoDaFalhaDoRelatorio(err: unknown): MotivoFalhaRelatorio {
-  if (err instanceof z.ZodError) return "zod";
-  if (err instanceof Error && err.message === "saida_truncada") return "saida_truncada";
-  if (err instanceof SyntaxError) return "relatorio_json";
-  if (err instanceof Error && (err.message === "json_ausente" || err.message === "relatorio_ausente")) {
-    return "relatorio_json";
-  }
-  if (err instanceof Error && err.message === "extrator_json") return "extrator_json";
-  return "invalid_format";
-}
+export {
+  motivoDaFalhaDoRelatorio,
+  textoDaFalhaDoRelatorio,
+  type MotivoFalhaRelatorio,
+} from "@/lib/painel/relatorio-preliminar-motivo";
 
 export async function lerFichaDoPainel(ctx: ContextoDaFerramenta): Promise<ResultadoDaFerramenta> {
   const atual = await lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId);
@@ -83,7 +71,17 @@ export async function lerFichaDoPainel(ctx: ContextoDaFerramenta): Promise<Resul
 export async function gerarRelatorioPreliminarDoPainel(
   ctx: ContextoDaFerramenta,
   senhasPdf: Record<string, string> = {},
+  opcoes: { eventoId?: string } = {},
 ): Promise<ResultadoDaFerramenta> {
+  const emCurso = await listarGeracoesEmCurso(ctx.admin, ctx.orgId, ctx.conversationId);
+  const outro = emCurso.find((e) => e.id !== opcoes.eventoId);
+  if (outro) {
+    return {
+      ok: false,
+      texto: "O relatório preliminar já está sendo gerado.",
+      codigo: "idempotency_in_progress",
+    };
+  }
   const limites = limitesDaAnalise(ctx.settings);
   const { data: linhas, error: erroFontes } = await ctx.dbSessao
     .from("messages")
@@ -198,7 +196,7 @@ export async function gerarRelatorioPreliminarDoPainel(
       };
     }
     const motivo = motivoDaFalhaDoRelatorio(err);
-    const codigo = motivo === "saida_truncada" ? "saida_truncada" : "invalid_format";
+    const codigo = codigoDaFalhaDoRelatorio(motivo);
     logger.error("[painel-ficha] falha ao gerar relatório", {
       requestId: ctx.requestId,
       organizationId: ctx.orgId,
@@ -208,11 +206,9 @@ export async function gerarRelatorioPreliminarDoPainel(
     });
     return {
       ok: false,
-      texto:
-        codigo === "saida_truncada"
-          ? "Não foi possível gerar o relatório preliminar. A resposta da IA ficou incompleta. Tente de novo."
-          : "Não foi possível gerar o relatório preliminar. A resposta da IA veio em formato inválido. Tente de novo.",
+      texto: textoDaFalhaDoRelatorio(motivo),
       codigo,
+      extra: { motivo },
     };
   }
 }

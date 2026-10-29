@@ -5,7 +5,7 @@
 
 ## O que o atendente vê
 
-No Painel do agente, o botão **Gerar relatório preliminar** lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão). Devolve:
+No Painel do agente, o botão **Gerar relatório preliminar** enfileira o trabalho (`event_log` `painel.relatorio_preliminar_requested`) e responde na hora. O painel mostra “gerando…” e consulta o andamento; o worker lê as 200 mensagens mais recentes e o conteúdo dos anexos (Fase 2: PDF, OCR/visão, senha na sessão — senha só no Redis, TTL curto, nunca no evento). Dois cliques na mesma conversa reaproveitam o evento em curso. Devolve:
 
 1. um relatório interno em 6 seções da skill Análise De Inquilinos (1 Identificação, 2 Resumo da Análise, 3 Análise de Crédito, 4 Análise de Renda, 5 Análise Financeira e Despesas, 6 Análise de Risco para Locação), só para a equipe — nunca "alugue"/"não alugue";
 2. a **ficha de dados** (pessoas, renda, imóvel, documentos, pendências), que o atendente confere e corrige.
@@ -84,5 +84,5 @@ CPF completo vive **dentro** da ficha versionada (como o plano da Fase 3 descrev
 6. Anti-morte: pendências na ficha; sem celular do inquilino a análise para e pede o número.
 7. Configuração: mesmos limites de `organizations.settings.locacao.anexos` (Fase 2). Sem tela nova.
 8. Continuidade: a IA rascunha; o atendente corrige e salva. A IA não confirma FC.
-9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga.
-10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_tabela`, `extrato`).
+9. Laço: conflito de versão (409) obriga recarregar; gerar de novo acrescenta versão, não apaga. Falha de JSON/zod/corte fecha o evento com motivo visível na tela — retry automático gastaria o mesmo teto.
+10. Mapa: `docs/architecture/painel-acoes-hub.architecture.json` (nós `ficha_botao`, `ficha_rota`, `ficha_fila`, `ficha_worker`, `ficha_tabela`, `extrato`).

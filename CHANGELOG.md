@@ -10,6 +10,10 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [1.88.0-felpz.13] — 2026-10-29
 
+### Alterado
+
+- **Gerar relatório preliminar roda em segundo plano** O clique enfileira o trabalho no `event_log` e responde na hora. O painel mostra “gerando…” e consulta o andamento até o relatório aparecer, ou o erro com o motivo (`extrator_json`, `relatorio_json`, `zod`, `saida_truncada`). Dois cliques na mesma conversa não geram duas vezes. Os limites de custo e o log por motivo continuam; sem dado pessoal no log. Chaves da Fase 4 seguem desligadas. Quem já instalou não precisa fazer nada.
+
 ### Corrigido
 
 - **Gerar relatório preliminar deixa de falhar com formato inválido em extrato longo** O botão não cai mais quando a IA corta o JSON do extrato. A extração vai em blocos de 2–3 páginas, em paralelo, e bloco cortado ou ilegível vira pendência (“lote N não lido”) — nenhuma página some em silêncio. Se a IA falhar, o relatório mantém o que o leitor automático já leu e pede conferência. Layout Stone multilinha entra só como atalho (Entrada/Saída). Timeout do botão sobe para 4 minutos. Quem já instalou não precisa fazer nada.

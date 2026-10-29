@@ -19,7 +19,8 @@ import { aprovarRelatorioDoPainel, gerarRelatorioDoPainel } from "@/lib/painel/a
 import { lerAnexoDoPainel } from "@/lib/painel/acoes/anexo";
 import { confirmarContratoDoPainel, prepararContratoDoPainel } from "@/lib/painel/acoes/contrato";
 import { lerConversaDoPainel, resumirOuSugerir } from "@/lib/painel/acoes/conversa";
-import { gerarRelatorioPreliminarDoPainel, lerFichaDoPainel } from "@/lib/painel/acoes/ficha";
+import { lerFichaDoPainel } from "@/lib/painel/acoes/ficha";
+import { enfileirarRelatorioPreliminar } from "@/lib/painel/relatorio-preliminar-fila";
 import { lerFcExistenteDoPainel, lerProcessoDoPainel } from "@/lib/painel/acoes/processo";
 import { dadosContratoSchema } from "@/lib/agent-engine/agent/painel-contrato";
 import type { DefinicaoDaFerramenta, NivelFerramenta } from "./tipos";
@@ -137,8 +138,24 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     rotuloAndamento: "gerando relatório…",
     acaoDoBotao: "relatorio_preliminar",
     padraoLigada: true,
-    executar: (ctx, args) =>
-      gerarRelatorioPreliminarDoPainel(ctx, (args as { senhas?: Record<string, string> } | null)?.senhas ?? {}),
+    executar: async (ctx, args) => {
+      const senhas = (args as { senhas?: Record<string, string> } | null)?.senhas ?? {};
+      const fila = await enfileirarRelatorioPreliminar(ctx.admin, {
+        orgId: ctx.orgId,
+        conversationId: ctx.conversationId,
+        contactId: ctx.contactId,
+        userId: ctx.userId,
+        requestId: ctx.requestId,
+        senhas,
+      });
+      return {
+        ok: true,
+        texto: fila.existente
+          ? "O relatório preliminar já está sendo gerado."
+          : "O relatório preliminar está sendo gerado. A ficha atualiza sozinha quando ficar pronta.",
+        extra: { status: "gerando", evento_id: fila.eventoId, existente: fila.existente },
+      };
+    },
   },
   {
     nome: "ler_processo",

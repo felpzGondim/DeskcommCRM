@@ -231,6 +231,14 @@ describe("registro único do painel", () => {
     expect(relatorioRota).toContain('executarFerramenta("aprovar_relatorio"');
     expect(relatorioRota).toContain('origem: "botao"');
     expect(relatorioRota).not.toMatch(/alugue|Contratar|valor_exibido/);
+    const fichaRota = readFileSync(
+      "app/api/v1/conversations/[id]/painel-agente/ficha/route.ts",
+      "utf8",
+    );
+    expect(fichaRota).toContain("enfileirarRelatorioPreliminar");
+    expect(fichaRota).not.toContain("gerarRelatorioPreliminarDoPainel");
+    const registro = readFileSync("lib/painel/ferramentas/registro.ts", "utf8");
+    expect(registro).toContain("enfileirarRelatorioPreliminar");
     const acoes = appApiAcoes();
     expect(acoes).toContain("executarFerramenta");
     expect(acoes).toMatch(/boletos:\s*"buscar_boletos"/);

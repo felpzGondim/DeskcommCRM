@@ -139,11 +139,41 @@ describe("Painel do agente (UI)", () => {
     expect(postMock).toHaveBeenCalledTimes(1);
   });
 
-  it("gera o relatório preliminar e deixa salvar a ficha sem enviar ao cliente", async () => {
-    postMock.mockResolvedValue({
+  it("mostra gerando… quando a ficha ainda está na fila", async () => {
+    getMock.mockResolvedValue({
       data: {
+        atual: null,
+        historico: [],
+        geracao: { status: "gerando", motivo: null, mensagem: null, evento_id: "e1" },
+      },
+    });
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
+    await screen.findByTestId("ficha-gerando");
+    expect(screen.getByRole("button", { name: "gerando…" })).toBeDisabled();
+  });
+
+  it("mostra o erro do relatório preliminar com motivo legível", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        atual: null,
+        historico: [],
+        geracao: {
+          status: "erro",
+          motivo: "relatorio_json",
+          mensagem:
+            "Não foi possível gerar o relatório preliminar. A resposta da IA veio em formato inválido. Tente de novo.",
+          evento_id: "e1",
+        },
+      },
+    });
+    render(<PainelDoAgente conversationId="c1" onUsarComoResposta={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("formato inválido");
+  });
+
+  it("gera o relatório preliminar e deixa salvar a ficha sem enviar ao cliente", async () => {
+    const fichaPronta = {
         versao: 1,
-        origem: "preliminar_ia",
+        origem: "preliminar_ia" as const,
         relatorio: "Maria quer o apto 10.",
         ficha: {
           versao: "preliminar-v1",
@@ -401,7 +431,21 @@ describe("Painel do agente (UI)", () => {
             alterado_em: "2026-10-28",
           },
         ],
-      },
+    };
+    postMock.mockImplementation(async (_url: unknown, body: { etapa?: string }) => {
+      if (body?.etapa === "gerar") {
+        return { data: { status: "gerando", evento_id: "e1", existente: false } };
+      }
+      return { data: fichaPronta };
+    });
+    getMock.mockImplementation(async () => {
+      const gerou = postMock.mock.calls.some(
+        (c) => (c[1] as { etapa?: string } | undefined)?.etapa === "gerar",
+      );
+      if (gerou) {
+        return { data: { atual: fichaPronta, historico: fichaPronta.historico, geracao: null } };
+      }
+      return { data: { atual: null, historico: [], geracao: null } };
     });
     const usar = vi.fn();
     render(<PainelDoAgente conversationId="c1" onUsarComoResposta={usar} />);
@@ -413,8 +457,8 @@ describe("Painel do agente (UI)", () => {
     expect(postMock).toHaveBeenCalledWith(
       "/api/v1/conversations/c1/painel-agente/ficha",
       { etapa: "gerar" },
-      expect.objectContaining({ timeoutMs: 240000 }),
     );
+    expect(postMock.mock.calls[0]?.[2]).toBeUndefined();
     fireEvent.click(screen.getByRole("button", { name: "Salvar ficha" }));
     await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));
     expect(usar).not.toHaveBeenCalled();

@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
-import { apiClient } from "@/lib/api/client";
 import {
   PAPEIS_DA_FICHA,
   pessoaVazia,
@@ -16,14 +15,6 @@ import {
   type NumeroFicha,
   type PapelDaFicha,
 } from "@/lib/locacao/ficha-schema";
-
-type AvisoAnexo = { tipo: string; nome: string; tentativas?: number };
-type ResumoVersao = {
-  versao: number;
-  origem: "preliminar_ia" | "atendente";
-  campos_alterados: string[];
-  alterado_em: string;
-};
 
 interface Props {
   conversationId: string;
@@ -57,101 +48,11 @@ function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
 
 export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf }: Props) {
   const t = useT();
-  const [ficha, setFicha] = useState<FichaPreliminar | null>(null);
-  const [relatorio, setRelatorio] = useState("");
-  const [versao, setVersao] = useState(0);
-  const [historico, setHistorico] = useState<ResumoVersao[]>([]);
-  const [somenteLeitura, setSomenteLeitura] = useState(false);
-  const [carregando, setCarregando] = useState<"gerar" | "salvar" | "ler" | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    let vivo = true;
-    setCarregando("ler");
-    void apiClient.get<{ data: { atual: { versao: number; ficha: FichaPreliminar; relatorio: string } | null; historico: ResumoVersao[] } }>(
-      `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
-    ).then((r) => {
-      if (!vivo) return;
-      if (r.data.atual) {
-        setFicha(r.data.atual.ficha);
-        setRelatorio(r.data.atual.relatorio);
-        setVersao(r.data.atual.versao);
-      }
-      setHistorico(r.data.historico ?? []);
-    }).catch(() => {
-      if (vivo) setErro(null);
-    }).finally(() => {
-      if (vivo) setCarregando(null);
-    });
-    return () => { vivo = false; };
-  }, [conversationId]);
-
-  async function gerar() {
-    if (carregando || desabilitado) return;
-    setErro(null);
-    setCarregando("gerar");
-    try {
-      const r = await apiClient.post<{ data: {
-        versao: number; ficha: FichaPreliminar; relatorio: string; historico: ResumoVersao[]; avisos?: AvisoAnexo[];
-      } }>(
-        `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
-        { etapa: "gerar", ...(senhasPdf.length ? { senhasPdf } : {}) },
-        // 240s cobre extração em paralelo de extrato longo. Alternativa: rodar em segundo plano.
-        { timeoutMs: 240_000 },
-      );
-      setFicha(r.data.ficha);
-      setRelatorio(r.data.relatorio);
-      setVersao(r.data.versao);
-      setHistorico(r.data.historico ?? []);
-      setSomenteLeitura(false);
-    } catch (e) {
-      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível gerar o relatório preliminar."));
-    } finally {
-      setCarregando(null);
-    }
-  }
-
-  async function salvar() {
-    if (!ficha || carregando || desabilitado || somenteLeitura) return;
-    setErro(null);
-    setCarregando("salvar");
-    try {
-      const r = await apiClient.post<{ data: {
-        versao: number; ficha: FichaPreliminar; relatorio: string; historico: ResumoVersao[];
-      } }>(
-        `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
-        { etapa: "salvar", ficha, relatorio, base_versao: versao },
-      );
-      setFicha(r.data.ficha);
-      setRelatorio(r.data.relatorio);
-      setVersao(r.data.versao);
-      setHistorico(r.data.historico ?? []);
-      toast.success(t("Ficha salva."));
-    } catch (e) {
-      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível salvar a ficha preliminar."));
-    } finally {
-      setCarregando(null);
-    }
-  }
-
-  async function verVersao(n: number) {
-    setCarregando("ler");
-    try {
-      const r = await apiClient.get<{ data: { atual: { versao: number; ficha: FichaPreliminar; relatorio: string } | null } }>(
-        `/api/v1/conversations/${conversationId}/painel-agente/ficha?versao=${n}`,
-      );
-      if (r.data.atual) {
-        setFicha(r.data.atual.ficha);
-        setRelatorio(r.data.atual.relatorio);
-        setVersao(r.data.atual.versao);
-        setSomenteLeitura(true);
-      }
-    } catch (e) {
-      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível ler a ficha preliminar."));
-    } finally {
-      setCarregando(null);
-    }
-  }
+  const {
+    ficha, setFicha, relatorio, setRelatorio, versao, historico,
+    somenteLeitura, setSomenteLeitura, carregando, gerando, erro,
+    gerar, salvar, verVersao,
+  } = useFichaPreliminar(conversationId);
 
   function patchPessoa(i: number, patch: Partial<FichaPreliminar["pessoas"][number]>) {
     setFicha((atual) => {
@@ -161,18 +62,20 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
     });
   }
 
-  const bloqueado = desabilitado || carregando !== null;
+  const bloqueado = desabilitado || carregando !== null || gerando;
 
   return (
     <div className="space-y-2" data-testid="ficha-preliminar">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-          disabled={bloqueado} onClick={() => void gerar()}>
-          {carregando === "gerar" ? t("Gerando relatório…") : t("Gerar relatório preliminar")}
+          disabled={bloqueado} onClick={() => void gerar(senhasPdf)}>
+          {gerando || carregando === "gerar" ? t("gerando…") : t("Gerar relatório preliminar")}
         </Button>
         {ficha && !somenteLeitura && (
           <Button size="sm" variant="secondary" className="h-7 px-2 text-xs"
-            disabled={bloqueado} onClick={() => void salvar()}>
+            disabled={bloqueado} onClick={() => void salvar(ficha, relatorio, versao).then((ok) => {
+              if (ok) toast.success(t("Ficha salva."));
+            })}>
             {carregando === "salvar" ? t("Salvando ficha…") : t("Salvar ficha")}
           </Button>
         )}
@@ -186,6 +89,9 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
       <p className="text-[11px] text-muted-foreground">
         {t("A ficha preliminar alimenta a análise, a FC e o contrato. Confira o celular do inquilino — não use o número de quem só conversa.")}
       </p>
+      {gerando && !erro && (
+        <p className="text-[11px] text-muted-foreground" data-testid="ficha-gerando">{t("gerando…")}</p>
+      )}
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
       {ficha && (
         <div className="space-y-3 rounded-md border border-border p-2">
