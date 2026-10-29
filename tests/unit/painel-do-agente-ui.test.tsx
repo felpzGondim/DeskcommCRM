@@ -71,7 +71,7 @@ describe("Painel do agente (UI)", () => {
     ficha.pessoas[0]!.renda_individual.valor = 5000;
     getMock.mockImplementation(async (url: unknown) => {
       const u = String(url);
-      if (u.endsWith("/locacao/documentos")) return {data: {recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false}};
+      if (u.includes("/locacao/documentos")) return {data: {recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false}};
       if (u.endsWith("/locacao")) return {data: {habilitado: true, analise: {fc: true, seguro: true}, processos: [{id: "proc-1", status: "lead", imovel: "Rua 1"}], contato: {id: "c1"}}};
       if (u.includes("/ficha")) return {data: {atual: {versao: 1, ficha, relatorio: "Cadastro de teste"}, historico: []}};
       return {data: {}};
