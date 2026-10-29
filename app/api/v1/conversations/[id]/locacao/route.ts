@@ -13,8 +13,9 @@ import {
   lerFichaAtualDoProcesso,
   listarParticipantes,
   listarProcessosDaConversa,
+  vinculoDoContato,
 } from "@/lib/locacao/repositorio";
-import { vinculoEmCustomFields } from "@/lib/locacao/superlogica-id";
+import { vinculoDaLinha } from "@/lib/locacao/superlogica-id";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -47,22 +48,22 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     relatorio: relatorioLigada,
   };
   const contactId = typeof conv.contact_id === "string" ? conv.contact_id : null;
+  const admin = createAdminClient();
   const { data: contatoLinha } = contactId
-    ? await db.from("contacts").select("id,custom_fields")
+    ? await db.from("contacts").select("id")
       .eq("organization_id", auth.org.orgId).eq("id", contactId).maybeSingle()
     : { data: null };
-  const vinculoCf = vinculoEmCustomFields(
-    (contatoLinha as { custom_fields?: unknown } | null)?.custom_fields,
+  const vinculo = vinculoDaLinha(
+    contactId ? await vinculoDoContato(admin, auth.org.orgId, contactId) : null,
   );
   const contato = {
     id: typeof (contatoLinha as { id?: unknown } | null)?.id === "string"
       ? (contatoLinha as { id: string }).id
       : contactId,
-    superlogica_id_pessoa: vinculoCf.superlogica_id_pessoa,
-    superlogica_tipo: vinculoCf.superlogica_tipo,
+    superlogica_id_pessoa: vinculo.superlogica_id_pessoa,
+    superlogica_tipo: vinculo.superlogica_tipo,
   };
   if (!habilitado) return ok({ habilitado: false, analise, processos: [], contato }, { requestId });
-  const admin = createAdminClient();
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
   const imoveisIds = [...new Set(processos.map((p) => String(p.imovel_id ?? "")))].filter(Boolean);
   const rotulos = new Map<string, string>();

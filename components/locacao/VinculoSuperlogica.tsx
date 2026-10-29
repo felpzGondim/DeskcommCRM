@@ -54,6 +54,8 @@ export function VinculoSuperlogica({
   const [motivo, setMotivo] = useState<(typeof MOTIVOS_DE_DESFAZER_VINCULO)[number]>("errado");
   const contactId = contato?.id ?? null;
 
+  const vinculoAtivoId = contactId ? vinculoId : null;
+
   useEffect(() => {
     if (!contactId) return;
     let vivo = true;
@@ -108,11 +110,13 @@ export function VinculoSuperlogica({
     setLigando(c.id);
     setErro(null);
     try {
-      await apiClient.post("/api/v1/locacao/vinculos", {
+      const r = await apiClient.post<{ data?: { id?: string } }>("/api/v1/locacao/vinculos", {
         contact_id: contactId,
         superlogica_pessoa_id: c.id,
         ...(tipo ? { tipos: [tipo] } : {}),
       });
+      const id = typeof r.data?.id === "string" ? r.data.id : null;
+      if (id) setVinculoId(id);
       setCandidatos([]);
       onAtualizado?.();
     } catch (e) {
@@ -123,11 +127,12 @@ export function VinculoSuperlogica({
   }
 
   async function desfazer() {
-    if (!vinculoId || desfazendo || desabilitado) return;
+    if (!vinculoAtivoId || desfazendo || desabilitado) return;
     setDesfazendo(true);
     setErro(null);
     try {
-      await apiClient.delete("/api/v1/locacao/vinculos", { vinculo_id: vinculoId, motivo });
+      await apiClient.delete("/api/v1/locacao/vinculos", { vinculo_id: vinculoAtivoId, motivo });
+      setVinculoId(null);
       onAtualizado?.();
     } catch (e) {
       setErro(e instanceof Error ? e.message : t("Não foi possível desligar."));
@@ -147,7 +152,7 @@ export function VinculoSuperlogica({
       ) : (
         <p className="text-xs text-muted-foreground">{t("Sem vínculo Superlógica neste contato.")}</p>
       )}
-      {vinculoId ? (
+      {vinculoAtivoId ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className="grid gap-1 text-[11px]">
             {t("Motivo")}

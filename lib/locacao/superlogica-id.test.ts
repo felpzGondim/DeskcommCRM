@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { idPessoaSuperlogica, vinculoEmCustomFields } from "@/lib/locacao/superlogica-id";
+import { idPessoaSuperlogica, vinculoDaLinha, vinculoEmCustomFields } from "@/lib/locacao/superlogica-id";
 
 describe("idPessoaSuperlogica", () => {
   it("aceita 1 a 12 dígitos e recusa o resto", () => {
@@ -11,6 +11,23 @@ describe("idPessoaSuperlogica", () => {
     expect(idPessoaSuperlogica("abc")).toBeNull();
     expect(idPessoaSuperlogica(0)).toBeNull();
     expect(idPessoaSuperlogica(-3)).toBeNull();
+  });
+});
+
+describe("vinculoDaLinha", () => {
+  it("lê a pessoa e o primeiro tipo da tabela de vínculo", () => {
+    expect(vinculoDaLinha({
+      superlogica_pessoa_id: "7788",
+      tipos: ["locatario", "fiador"],
+    })).toEqual({ superlogica_id_pessoa: "7788", superlogica_tipo: "locatario" });
+    expect(vinculoDaLinha({ superlogica_pessoa_id: "abc", tipos: [] })).toEqual({
+      superlogica_id_pessoa: null,
+      superlogica_tipo: null,
+    });
+    expect(vinculoDaLinha(null)).toEqual({
+      superlogica_id_pessoa: null,
+      superlogica_tipo: null,
+    });
   });
 });
 

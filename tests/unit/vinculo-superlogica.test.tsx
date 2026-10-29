@@ -51,6 +51,24 @@ describe("VinculoSuperlogica", () => {
       superlogica_pessoa_id: "1001",
       tipos: ["locatario"],
     });
+    expect(await screen.findByRole("button", { name: "Desfazer vínculo" })).toBeVisible();
+  });
+
+  it("some o Desfazer depois de desligar", async () => {
+    get.mockResolvedValue({ data: { vinculo: { id: "vinculo-1" } } });
+    del.mockResolvedValue({ data: {} });
+    render(
+      <VinculoSuperlogica
+        conversationId="conv-1"
+        contato={{ id: "c1", superlogica_id_pessoa: "1001", superlogica_tipo: "locatario" }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Desfazer vínculo" }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith("/api/v1/locacao/vinculos", {
+      vinculo_id: "vinculo-1",
+      motivo: "errado",
+    }));
+    expect(screen.queryByRole("button", { name: "Desfazer vínculo" })).toBeNull();
   });
 
   it("sem match avisa e não afirma que a pessoa não existe", async () => {

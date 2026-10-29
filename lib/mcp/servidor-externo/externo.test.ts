@@ -606,6 +606,7 @@ function bancoDoAtendimento(op: {
   contato?: { id: string; organization_id: string; phone_number: string | null; custom_fields?: unknown } | null;
   erroNoContato?: boolean;
   canal?: string;
+  vinculo?: { superlogica_pessoa_id: string; tipos?: string[] } | null;
 }) {
   const consultas: string[] = [];
   const cliente = {
@@ -644,6 +645,23 @@ function bancoDoAtendimento(op: {
               filtros.contact_id === CONTATO &&
               filtros.organization_id === ORG;
             return { data: casa && op.canal ? { channel: op.canal } : null, error: null };
+          }
+          if (tabela === "contato_superlogica_vinculos") {
+            const vinculo = op.vinculo;
+            const casa =
+              vinculo &&
+              filtros.contact_id === CONTATO &&
+              filtros.organization_id === ORG &&
+              filtros.ativo === true;
+            return {
+              data: casa && vinculo
+                ? {
+                    superlogica_pessoa_id: vinculo.superlogica_pessoa_id,
+                    tipos: vinculo.tipos ?? [],
+                  }
+                : null,
+              error: null,
+            };
           }
           return { data: null, error: null };
         },
@@ -836,12 +854,10 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     }
   });
 
-  it("cabeçalho opcional de pessoa Superlógica sai só com id de 1 a 12 dígitos no custom_fields", async () => {
+  it("cabeçalho opcional de pessoa Superlógica sai só do vínculo ativo na tabela", async () => {
     const { cliente } = bancoDoAtendimento({
-      contato: {
-        ...contatoDaOrg,
-        custom_fields: { superlogica_id_pessoa: "7788", superlogica_tipo: "locatario" },
-      },
+      contato: contatoDaOrg,
+      vinculo: { superlogica_pessoa_id: "7788", tipos: ["locatario"] },
       canal: "whatsapp",
     });
     const montado = await carregarServidorMcpExterno(cliente, ORG, {
@@ -861,11 +877,27 @@ describe("uso durante o atendimento: opção do agente + identidade do contato (
     }
 
     requisicoes.length = 0;
-    const { cliente: semId } = bancoDoAtendimento({
-      contato: { ...contatoDaOrg, custom_fields: { superlogica_id_pessoa: "abc" } },
+    const { cliente: soCustom } = bancoDoAtendimento({
+      contato: { ...contatoDaOrg, custom_fields: { superlogica_id_pessoa: "7788" } },
       canal: "whatsapp",
     });
-    await carregarServidorMcpExterno(semId, ORG, {
+    await carregarServidorMcpExterno(soCustom, ORG, {
+      contatoDoTurno: CONTATO,
+      noAtendimento: true,
+      conversaDoTurno: CONVERSA,
+      fetch: fetchDoStub(),
+    });
+    for (const r of requisicoes.filter((x) => x.metodo === "POST")) {
+      expect(identidadeNoFio(r.cabecalhos).pessoa).toBeUndefined();
+    }
+
+    requisicoes.length = 0;
+    const { cliente: invalido } = bancoDoAtendimento({
+      contato: contatoDaOrg,
+      vinculo: { superlogica_pessoa_id: "abc" },
+      canal: "whatsapp",
+    });
+    await carregarServidorMcpExterno(invalido, ORG, {
       contatoDoTurno: CONTATO,
       noAtendimento: true,
       conversaDoTurno: CONVERSA,

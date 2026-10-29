@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,10 +17,12 @@ export function FormularioGerarContrato({
   conversationId,
   desabilitado = false,
   modo = "embutido",
+  onOcupadoChange,
 }: {
   conversationId: string;
   desabilitado?: boolean;
   modo?: "embutido" | "dialogo";
+  onOcupadoChange?: (ocupado: boolean) => void;
 }) {
   const t = useT();
   const campoId = useId();
@@ -35,6 +37,10 @@ export function FormularioGerarContrato({
     { nome: "cep", rotulo: t("CEP") }, { nome: "cidade", rotulo: t("Cidade") }, { nome: "uf", rotulo: t("UF") },
   ];
   const [ocupado, setOcupado] = useState(false);
+  useEffect(() => {
+    onOcupadoChange?.(ocupado);
+    return () => onOcupadoChange?.(false);
+  }, [ocupado, onOcupadoChange]);
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [resultado, setResultado] = useState<ResultadoContrato | null>(null);
   const [erro, setErro] = useState<string | null>(null);

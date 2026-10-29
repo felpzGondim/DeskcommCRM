@@ -246,7 +246,7 @@
       "id": "e25",
       "from": "mcp",
       "to": "pessoa_id",
-      "label": "custom_fields.superlogica_id_pessoa quando válido"
+      "label": "contato_superlogica_vinculos.superlogica_pessoa_id quando válido"
     },
     {
       "id": "e26",

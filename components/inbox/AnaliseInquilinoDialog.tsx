@@ -45,6 +45,7 @@ export function AnaliseInquilinoDialog({
   const [aba, setAba] = useState<Aba>("dados");
   const [contato, setContato] = useState<ContatoLocacao | null>(null);
   const [epoch, setEpoch] = useState(0);
+  const [ocupado, setOcupado] = useState(false);
 
   const recarregarContato = useCallback(() => {
     setEpoch((n) => n + 1);
@@ -70,7 +71,7 @@ export function AnaliseInquilinoDialog({
   }, [aberto, conversationId, epoch]);
 
   return (
-    <Dialog open={aberto} onOpenChange={onAbertoChange}>
+    <Dialog open={aberto} onOpenChange={(v) => { if (!v && ocupado) return; onAbertoChange(v); }}>
       <DialogContent
         className="max-h-[90dvh] overflow-y-auto bg-bg text-text sm:max-w-4xl"
         onInteractOutside={(e) => e.preventDefault()}
@@ -91,27 +92,27 @@ export function AnaliseInquilinoDialog({
             <TabsTrigger value="contrato" onClick={() => setAba("contrato")}>{t("Gerar contrato")}</TabsTrigger>
           </TabsList>
         </Tabs>
-        {aba === "dados" ? (
-          <div className="space-y-3" role="tabpanel">
-            <EncaixeCamposDoImovel />
-            <VinculoSuperlogica
-              conversationId={conversationId}
-              contato={contato}
-              desabilitado={desabilitado}
-              onAtualizado={recarregarContato}
-            />
-            <FichaPreliminarPainel
-              conversationId={conversationId}
-              desabilitado={desabilitado}
-              senhasPdf={senhasPdf}
-            />
-          </div>
-        ) : null}
-        {aba === "contrato" ? (
-          <div className="space-y-3" role="tabpanel">
-            <FormularioGerarContrato conversationId={conversationId} desabilitado={desabilitado} />
-          </div>
-        ) : null}
+        <div className={aba === "dados" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "dados"}>
+          <EncaixeCamposDoImovel />
+          <VinculoSuperlogica
+            conversationId={conversationId}
+            contato={contato}
+            desabilitado={desabilitado}
+            onAtualizado={recarregarContato}
+          />
+          <FichaPreliminarPainel
+            conversationId={conversationId}
+            desabilitado={desabilitado}
+            senhasPdf={senhasPdf}
+          />
+        </div>
+        <div className={aba === "contrato" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "contrato"}>
+          <FormularioGerarContrato
+            conversationId={conversationId}
+            desabilitado={desabilitado}
+            onOcupadoChange={setOcupado}
+          />
+        </div>
         {aba !== "contrato" ? (
           <ProcessoDeLocacaoPainel
             conversationId={conversationId}

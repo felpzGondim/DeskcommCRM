@@ -69,7 +69,13 @@ describe("Painel do agente (UI)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Abrir análise" }));
     expect(screen.getByRole("dialog", { name: "Análise de inquilino" })).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
-    expect(await screen.findByRole("button", { name: "Preparar locação" })).toBeVisible();
+    const preparar = await screen.findByRole("button", { name: "Preparar locação" });
+    expect(preparar).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Dados" }));
+    expect(preparar).toBeInTheDocument();
+    expect(preparar).not.toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Gerar contrato" }));
+    expect(preparar).toBeVisible();
     expect(postMock).not.toHaveBeenCalled();
   });
 
