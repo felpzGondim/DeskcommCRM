@@ -2,6 +2,8 @@
  * Ficha preliminar local (A1) — ler e gerar relatório. O mesmo caminho do botão
  * Gerar relatório preliminar.
  */
+import { z } from "zod";
+
 import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
 import {
   enriquecerAnexosDaAnalise,
@@ -35,6 +37,29 @@ import {
 import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
 import { logger } from "@/lib/logger";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
+
+type MotivoFalhaRelatorio =
+  | "extrator_json"
+  | "relatorio_json"
+  | "zod"
+  | "saida_truncada"
+  | "invalid_format";
+type EtapaFalhaRelatorio =
+  | "anexos"
+  | "extracao_extrato"
+  | "relatorio"
+  | "gravacao";
+
+function motivoDaFalhaDoRelatorio(err: unknown): MotivoFalhaRelatorio {
+  if (err instanceof z.ZodError) return "zod";
+  if (err instanceof Error && err.message === "saida_truncada") return "saida_truncada";
+  if (err instanceof SyntaxError) return "relatorio_json";
+  if (err instanceof Error && (err.message === "json_ausente" || err.message === "relatorio_ausente")) {
+    return "relatorio_json";
+  }
+  if (err instanceof Error && err.message === "extrator_json") return "extrator_json";
+  return "invalid_format";
+}
 
 export async function lerFichaDoPainel(ctx: ContextoDaFerramenta): Promise<ResultadoDaFerramenta> {
   const atual = await lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId);
@@ -78,6 +103,7 @@ export async function gerarRelatorioPreliminarDoPainel(
   }
   const janela = (linhas ?? []).slice(0, 200) as Record<string, unknown>[];
   const deps = requestTurnDeps();
+  let etapa: EtapaFalhaRelatorio = "anexos";
   try {
     const enriquecido = await enriquecerAnexosDaAnalise(janela, ctx.orgId, ctx.conversationId, {
       limites,
@@ -91,6 +117,7 @@ export async function gerarRelatorioPreliminarDoPainel(
     const fichaPrevia = atualPrevia ? completarFicha(atualPrevia.ficha) : null;
     const familiares = fichaPrevia ? familiaresDaFicha(fichaPrevia) : [];
     const pool = getRequestPool();
+    etapa = "extracao_extrato";
     const preparado = await prepararFontesDoRelatorio(fontes, {
       familiares,
       extrator: criarExtratorComModelo(
@@ -98,10 +125,6 @@ export async function gerarRelatorioPreliminarDoPainel(
         deps.llmCfg,
         { tenantId: ctx.orgId, contactId: ctx.contactId },
         { registry: deps.registry, log: deps.log },
-        {
-          paginasPorLote: limites.paginas_por_lote_ocr,
-          charsPorLote: limites.chars_ficha_por_anexo,
-        },
       ),
     });
     const bloco = blocoDasFontesDaFicha(preparado.fontes);
@@ -121,6 +144,7 @@ export async function gerarRelatorioPreliminarDoPainel(
       superlogica: sl,
       conversa: { seguroIncendioCentavos: incendio },
     });
+    etapa = "relatorio";
     const { saida } = await gerarRelatorioPreliminarNoPainel(
       pool,
       deps.llmCfg,
@@ -141,6 +165,7 @@ export async function gerarRelatorioPreliminarDoPainel(
       ...saida.ficha,
       pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),
     };
+    etapa = "gravacao";
     const linha = await gravarVersaoDaFicha(ctx.admin, {
       organizationId: ctx.orgId,
       conversationId: ctx.conversationId,
@@ -172,14 +197,14 @@ export async function gerarRelatorioPreliminarDoPainel(
         codigo: "idempotency_conflict",
       };
     }
-    const codigo =
-      err instanceof Error && err.message === "saida_truncada"
-        ? "saida_truncada"
-        : "invalid_format";
+    const motivo = motivoDaFalhaDoRelatorio(err);
+    const codigo = motivo === "saida_truncada" ? "saida_truncada" : "invalid_format";
     logger.error("[painel-ficha] falha ao gerar relatório", {
       requestId: ctx.requestId,
       organizationId: ctx.orgId,
       codigo,
+      motivo,
+      etapa,
     });
     return {
       ok: false,

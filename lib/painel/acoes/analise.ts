@@ -154,8 +154,6 @@ export async function analisarRendaDoPainel(
         { tenantId: ctx.orgId, contactId: ctx.contactId },
         { registry: deps.registry, log: deps.log },
         {
-          paginasPorLote: limites.paginas_por_lote_ocr,
-          charsPorLote: limites.chars_ficha_por_anexo,
           purpose: "painel_analise",
         },
       ),
