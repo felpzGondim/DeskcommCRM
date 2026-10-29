@@ -63,8 +63,8 @@ export async function sincronizarFichaCompartilhada(admin: SupabaseClient, input
     if (!hash) continue;
     const papel = pessoa.papel === "inquilino" ? "locatario" : pessoa.papel;
     const existente = participantes.find((p) => p.cpf_hash === hash && p.papel === papel);
-    if (existente && existente.principal !== pessoa.principal) {
-      const {error} = await tabelaLocacao(admin, "locacao_processo_participantes").update({principal: pessoa.principal})
+    if (existente) {
+      const {error} = await tabelaLocacao(admin, "locacao_processo_participantes").update({principal: pessoa.principal, nome_exibicao: pessoa.nome.valor})
         .eq("organization_id", input.orgId).eq("processo_id", id).eq("id", String(existente.id));
       if (error) throw new LocacaoErro("participante_gravacao", "participante");
     }

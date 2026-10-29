@@ -176,7 +176,12 @@ export function montarRelatorioFinanceiro(bloco: BlocoDoRelatorio): RelatorioFin
   const financeira = !ficha
     ? secao("financeira", [TEXTO_SECAO_PENDENTE], true)
     : secao("financeira", [
+      "RENDA atual utilizada na esteira: " + dinheiro(ficha.renda.mensal.valor),
+      ficha.renda.mensal.valor != null && ficha.renda.mensal.valor > 0 && ficha.imovel.aluguel.valor != null
+        ? "Aluguel / RENDA utilizada: " + (ficha.imovel.aluguel.valor / ficha.renda.mensal.valor * 100).toFixed(2) + "%."
+        : "Comprometimento sobre RENDA utilizada: pendente.",
       `Aluguel: ${dinheiro(ficha.imovel.aluguel.valor)}`,
+
       `Condomínio: ${dinheiro(ficha.imovel.condominio.valor)}`,
       `IPTU: ${dinheiro(ficha.imovel.iptu.valor)}`,
       seguroPronto

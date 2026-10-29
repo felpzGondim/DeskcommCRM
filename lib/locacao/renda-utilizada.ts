@@ -22,7 +22,16 @@ export function normalizarRendaUtilizada(ficha: FichaPreliminar): FichaPrelimina
     valor: completos ? Math.round(locatarios.reduce((s, p) => s + (p.renda_individual.valor ?? 0), 0) * 100) / 100 : null,
     fonte: locatarios.some((p) => p.renda_individual.fonte === "atendente") ? "atendente" : ficha.renda.mensal.fonte,
   };
-  return { ...ficha, pessoas, renda: { ...ficha.renda, mensal: renda, proposta_fc: { ...renda } } };
+  const campos = [ficha.imovel.aluguel, ficha.imovel.condominio, ficha.imovel.iptu, ficha.imovel.seguro_incendio];
+  const completo = campos.every((c) => c?.valor != null);
+  const pacote = completo ? Math.round(campos.reduce((s, c) => s + (c?.valor ?? 0), 0) * 100) / 100 : null;
+  const bloco = ficha.renda.bloco_calculado;
+  const calculado = bloco && campos.some((c) => c?.fonte === "atendente") ? {
+    ...bloco, pacote, tres_vezes_pacote: pacote == null ? null : Math.round(pacote * 300) / 100,
+    abaixo_de_3x: pacote != null && bloco.comprovada != null ? bloco.comprovada < pacote * 3 : null,
+  } : bloco;
+  return { ...ficha, pessoas, renda: { ...ficha.renda, mensal: renda, proposta_fc: { ...renda }, bloco_calculado: calculado } };
+
 }
 
 /** Inicializa a única RENDA com o valor declarado; não atribui um total a várias pessoas. */

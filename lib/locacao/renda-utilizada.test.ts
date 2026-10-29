@@ -41,4 +41,16 @@ describe("RENDA compartilhada na esteira", () => {
     expect(limpa.pessoas[0]!.renda_individual.valor).toBeNull();
     expect(limpa.renda.mensal.valor).toBeNull();
   });
+  it("recalcula o pacote quando os valores da locação são corrigidos", () => {
+    const ficha = fichaVazia();
+    ficha.imovel.aluguel = {...ficha.imovel.aluguel, valor: 1500, fonte: "atendente"};
+    ficha.imovel.condominio.valor = 85; ficha.imovel.iptu.valor = 70; ficha.imovel.seguro_incendio.valor = 20;
+    ficha.renda.bloco_calculado = {comprovada: 6000, declarada: 5000, tabela: "memória documental",
+      motivo_nao_comprovacao: null, pacote: 9999, tres_vezes_pacote: 29997, abaixo_de_3x: true};
+    const atual = normalizarRendaUtilizada(ficha);
+    expect(atual.renda.bloco_calculado?.pacote).toBe(1675);
+    expect(atual.renda.bloco_calculado?.tres_vezes_pacote).toBe(5025);
+    expect(atual.renda.bloco_calculado?.abaixo_de_3x).toBe(false);
+    expect(atual.renda.bloco_calculado?.tabela).toBe("memória documental");
+  });
 });
