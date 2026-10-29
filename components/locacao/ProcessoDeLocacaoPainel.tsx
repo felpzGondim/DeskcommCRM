@@ -59,6 +59,10 @@ type ProcessoResumo = {
   fc_reaproveitada?: boolean;
   fc_cobranca?: "ja_cobrado" | "incerta" | null;
   fc_fiadores?: FiadorFc[];
+  relatorio_rascunho?: string | null;
+  relatorio_rascunho_em?: string | null;
+  relatorio_aprovado_em?: string | null;
+  relatorio_documento_id?: string | null;
 };
 
 type AvisoSenha = { tipo?: string; nome: string; tentativas?: number };
@@ -97,6 +101,7 @@ export function ProcessoDeLocacaoPainel({
   const [analiseSeguro, setAnaliseSeguro] = useState(false);
   const [analiseFc, setAnaliseFc] = useState(false);
   const [analiseManual, setAnaliseManual] = useState(false);
+  const [analiseRelatorio, setAnaliseRelatorio] = useState(false);
   const [processos, setProcessos] = useState<ProcessoResumo[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -117,6 +122,9 @@ export function ProcessoDeLocacaoPainel({
   const [revelandoCpf, setRevelandoCpf] = useState(false);
   const [registrandoFc, setRegistrandoFc] = useState(false);
   const [registrandoSeguro, setRegistrandoSeguro] = useState(false);
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+  const [aprovandoRelatorio, setAprovandoRelatorio] = useState(false);
+  const [resumoRelatorio, setResumoRelatorio] = useState<string | null>(null);
   const [scoreManual, setScoreManual] = useState("");
   const [riscoManual, setRiscoManual] = useState("");
   const [idFcManual, setIdFcManual] = useState("");
@@ -131,7 +139,7 @@ export function ProcessoDeLocacaoPainel({
         const r = await apiClient.get<{
           data: {
             habilitado?: boolean;
-            analise?: { renda?: boolean; seguro?: boolean; fc?: boolean; manual?: boolean };
+            analise?: { renda?: boolean; seguro?: boolean; fc?: boolean; manual?: boolean; relatorio?: boolean };
             processos?: ProcessoResumo[];
           };
         }>(`/api/v1/conversations/${conversationId}/locacao`);
@@ -141,6 +149,7 @@ export function ProcessoDeLocacaoPainel({
         setAnaliseSeguro(r.data?.analise?.seguro === true);
         setAnaliseFc(r.data?.analise?.fc === true);
         setAnaliseManual(r.data?.analise?.manual === true);
+        setAnaliseRelatorio(r.data?.analise?.relatorio === true);
         setProcessos(r.data?.processos ?? []);
       } catch {
         if (vivo) setHabilitado(false);
@@ -664,6 +673,66 @@ export function ProcessoDeLocacaoPainel({
     }
   }
 
+  async function gerarRelatorio() {
+    if (gerandoRelatorio || desabilitado || !processo) return;
+    setErro(null);
+    setGerandoRelatorio(true);
+    try {
+      const r = await apiClient.post<{
+        data: {
+          resumo?: string;
+          risco?: string | null;
+          renda?: { comprovada?: number | null };
+        };
+      }>(`/api/v1/conversations/${conversationId}/painel-agente/relatorio`, {
+        etapa: "gerar",
+        processo_id: processo.id,
+      });
+      setResumoRelatorio(r.data?.resumo ?? null);
+      setProcessos((atual) =>
+        atual.map((p) =>
+          p.id === processo.id
+            ? { ...p, relatorio_rascunho: r.data?.resumo ?? p.relatorio_rascunho }
+            : p,
+        ),
+      );
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível gerar o relatório."));
+    } finally {
+      setGerandoRelatorio(false);
+    }
+  }
+
+  async function aprovarRelatorio() {
+    if (aprovandoRelatorio || desabilitado || !processo) return;
+    setErro(null);
+    setAprovandoRelatorio(true);
+    try {
+      const r = await apiClient.post<{
+        data: { resumo?: string; documento_id?: string | null };
+      }>(`/api/v1/conversations/${conversationId}/painel-agente/relatorio`, {
+        etapa: "aprovar",
+        processo_id: processo.id,
+      });
+      setResumoRelatorio(r.data?.resumo ?? t("Relatório aprovado."));
+      setProcessos((atual) =>
+        atual.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                relatorio_aprovado_em: new Date().toISOString(),
+                relatorio_documento_id: r.data?.documento_id ?? p.relatorio_documento_id,
+              }
+            : p,
+        ),
+      );
+    } catch (e) {
+      setErro(e instanceof Error && e.message ? e.message : t("Não foi possível aprovar o relatório."));
+    } finally {
+      setAprovandoRelatorio(false);
+    }
+  }
+
   return (
     <div className="space-y-2 rounded-md border border-border p-2">
       <p className="text-xs font-medium">{t("Processo de locação")}</p>
@@ -850,6 +919,47 @@ export function ProcessoDeLocacaoPainel({
                   {t("Pedir FC do fiador")}{f.cpf_mascarado ? ` ${f.cpf_mascarado}` : ""}
                 </Button>
               ))}
+            </>
+          )}
+        </div>
+      ) : null}
+      {analiseRelatorio ? (
+        <div className="space-y-1.5 border-t border-border pt-2" data-testid="analise-relatorio">
+          <p className="text-xs font-medium">{t("Relatório financeiro")}</p>
+          {!processo ? (
+            <p className="text-xs text-text-muted">{t("Abra um processo antes de gerar o relatório.")}</p>
+          ) : (
+            <>
+              {processo.relatorio_aprovado_em ? (
+                <p className="text-xs text-text-muted">{t("Relatório aprovado.")}</p>
+              ) : processo.relatorio_rascunho_em ? (
+                <p className="text-xs text-text-muted">{t("Há um rascunho para conferir.")}</p>
+              ) : (
+                <p className="text-[11px] text-text-muted">
+                  {t("Monta as 6 seções com os blocos já gravados. Sem renda comprovada, a seção fica pendente.")}
+                </p>
+              )}
+              {resumoRelatorio || processo.relatorio_rascunho ? (
+                <p className="text-xs whitespace-pre-wrap">
+                  {resumoRelatorio ?? processo.relatorio_rascunho}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                  disabled={desabilitado || gerandoRelatorio || aprovandoRelatorio}
+                  onClick={() => void gerarRelatorio()}>
+                  {gerandoRelatorio ? t("Gerando relatório…") : t("Gerar relatório")}
+                </Button>
+                <Button size="sm" className="h-7 px-2 text-xs"
+                  disabled={
+                    desabilitado || gerandoRelatorio || aprovandoRelatorio
+                    || !(resumoRelatorio || processo.relatorio_rascunho)
+                    || !!processo.relatorio_aprovado_em
+                  }
+                  onClick={() => void aprovarRelatorio()}>
+                  {aprovandoRelatorio ? t("Aprovando relatório…") : t("Aprovar relatório")}
+                </Button>
+              </div>
             </>
           )}
         </div>

@@ -37,7 +37,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const seguroLigada = analiseLigada(org?.settings, "seguro");
   const fcLigada = analiseLigada(org?.settings, "fc");
   const manualLigada = analiseLigada(org?.settings, "manual");
-  const analise = { renda: rendaLigada, seguro: seguroLigada, fc: fcLigada, manual: manualLigada };
+  const relatorioLigada = analiseLigada(org?.settings, "relatorio");
+  const analise = {
+    renda: rendaLigada,
+    seguro: seguroLigada,
+    fc: fcLigada,
+    manual: manualLigada,
+    relatorio: relatorioLigada,
+  };
   if (!habilitado) return ok({ habilitado: false, analise, processos: [] }, { requestId });
   const admin = createAdminClient();
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
@@ -140,6 +147,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         fc_reaproveitada: fc?.reaproveitada === true,
         fc_cobranca: fc?.cobranca ?? null,
         fc_fiadores: fc?.fiadores ?? [],
+        relatorio_rascunho: typeof p.relatorio_rascunho === "string" ? p.relatorio_rascunho : null,
+        relatorio_rascunho_em: p.relatorio_rascunho_em ?? null,
+        relatorio_aprovado_em: p.relatorio_aprovado_em ?? null,
+        relatorio_documento_id: p.relatorio_documento_id ?? null,
       };
     }),
   }, { requestId });
