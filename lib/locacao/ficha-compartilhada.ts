@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { caminhosAlterados } from "@/lib/locacao/ficha-diff";
 import { completarFicha, type FichaPreliminar } from "@/lib/locacao/ficha-schema";
-import { hashCpfDoParticipante, mascararCpf } from "@/lib/locacao/cpf";
+import { camposCpfDoParticipante, hashCpfDoParticipante } from "@/lib/locacao/cpf";
 import {
   adicionarParticipante, confirmarRendaDoProcesso, criarOuReusarImovel, criarProcesso,
   gravarFichaDoProcesso, lerFichaAtualDoProcesso, listarParticipantesParaFc, listarProcessosDaConversa, LocacaoErro,
@@ -68,10 +68,14 @@ export async function sincronizarFichaCompartilhada(admin: SupabaseClient, input
         .eq("organization_id", input.orgId).eq("processo_id", id).eq("id", String(existente.id));
       if (error) throw new LocacaoErro("participante_gravacao", "participante");
     }
-    if (!existente) await adicionarParticipante(admin, {
+    if (!existente) {
+      const cpf = await camposCpfDoParticipante(admin, pessoa.cpf.valor ?? "");
+      if (!cpf.cpf_hash || !cpf.cpf_encrypted) throw new LocacaoErro("cpf_indisponivel", "Não foi possível proteger o CPF do participante.");
+      await adicionarParticipante(admin, {
       orgId: input.orgId, processoId: id, userId: input.userId, papel,
-      principal: pessoa.principal, cpfHash: hash, cpfMascarado: mascararCpf(pessoa.cpf.valor ?? ""),
+      principal: pessoa.principal, cpfHash: cpf.cpf_hash, cpfMascarado: cpf.cpf_mascarado, cpfEncrypted: cpf.cpf_encrypted, nomeExibicao: pessoa.nome.valor,
     });
+    }
   }
   const fonte = extrairValoresDaConversa({ficha: input.ficha});
   const patch = Object.fromEntries(Object.entries(fonte).filter(([, v]) => typeof v === "number"));

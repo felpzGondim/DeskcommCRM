@@ -9,7 +9,7 @@ const sufixo = randomUUID().slice(0, 8);
 const email = "esteira-" + sufixo + "@deskcomm.test";
 const senha = "E2e!" + randomUUID();
 let orgId = "", userId = "", conversaId = "", mensagemId = "", arquivoPath = "";
-const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=", "base64");
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
 
 async function inserir(tabela: string, valores: Record<string, unknown>) {
   const {data, error} = await db.from(tabela).insert(valores).select("id").single();
