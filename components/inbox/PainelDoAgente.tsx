@@ -97,11 +97,11 @@ export function PainelDoAgente({
     let vivo = true;
     void (async () => {
       try {
-        const r = await apiClient.get<{ data: { analise?: { seguro?: boolean; fc?: boolean } } }>(
+        const r = await apiClient.get<{ data: { habilitado?: boolean; analise?: { seguro?: boolean; fc?: boolean } } }>(
           `/api/v1/conversations/${conversationId}/locacao`,
         );
         if (!vivo) return;
-        setEsconderAnaliseAntiga(r.data?.analise?.seguro === true && r.data?.analise?.fc === true);
+        setEsconderAnaliseAntiga(r.data?.habilitado === true || (r.data?.analise?.seguro === true && r.data?.analise?.fc === true));
       } catch {
         if (vivo) setEsconderAnaliseAntiga(false);
       }

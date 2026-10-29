@@ -186,7 +186,7 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               </label>
             ))}
             <label className="block text-[11px]">{t("Tipo de imóvel")}
-              <select className="h-8 w-full rounded border border-input bg-background text-xs" value={ficha.imovel.tipo ?? ""} disabled={somenteLeitura || desabilitado}
+              <select className="h-8 w-full rounded-md border border-input bg-background text-xs" value={ficha.imovel.tipo ?? ""} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => { const tipo = e.target.value as FichaPreliminar["imovel"]["tipo"]; setFicha((a) => a ? {...a, imovel: {...a.imovel, tipo: tipo || null}} : a); }}>
                 <option value="">{t("Selecionar")}</option><option value="residencial">{t("Residencial")}</option><option value="comercial">{t("Comercial")}</option>
               </select>

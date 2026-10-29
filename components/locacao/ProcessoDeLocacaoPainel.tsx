@@ -356,6 +356,7 @@ export function ProcessoDeLocacaoPainel({
         processo_id: processo.id,
         senhasPdf: senhasPdf.length ? senhasPdf : undefined,
       });
+      window.dispatchEvent(new CustomEvent("locacao:atualizada", {detail: {conversationId}}));
       setResumo(r.data?.resumo ?? null);
       setAvisos((r.data?.avisos ?? []).filter((a) => a.tipo === "pdf_protegido" || a.nome));
       setProcessos((atual) =>

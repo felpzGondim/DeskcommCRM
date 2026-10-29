@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { useT } from "@/hooks/i18n/useT";
+import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { Button } from "@/components/ui/button";
 import { CATEGORIAS_DE_DOCUMENTO } from "@/lib/locacao/vocabulario";
 
@@ -22,6 +23,7 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
   conversationId: string; atualizacao?: number; desabilitado?: boolean;
 }) {
   const t = useT();
+  const tag = useTagDeIdioma();
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -71,19 +73,19 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
     return <section className="space-y-2">
       <h3 className="text-sm font-semibold">{titulo}</h3>
       {!docs.length && <p className="text-xs text-muted-foreground">{t("Nenhum documento nesta seção.")}</p>}
-      {docs.map((doc) => <article key={doc.origem + doc.id} className="space-y-2 rounded border border-border p-3">
+      {docs.map((doc) => <article key={doc.origem + doc.id} className="space-y-2 rounded-md border border-border p-3">
         <p className="text-sm font-medium">{doc.nome}</p>
-        <p className="text-xs text-muted-foreground">{new Date(doc.data).toLocaleDateString("pt-BR")} · {t(doc.situacao)}</p>
+        <p className="text-xs text-muted-foreground">{new Date(doc.data).toLocaleDateString(tag)} · {t(doc.situacao)}</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="text-xs">{t("Categoria")}
-            <select aria-label={t("Categoria") + " " + doc.nome} className="mt-1 w-full rounded border border-input bg-background p-1"
+            <select aria-label={t("Categoria") + " " + doc.nome} className="mt-1 w-full rounded-md border border-input bg-background p-1"
               value={doc.categoria} disabled={desabilitado || salvando !== null}
               onChange={(e) => void classificar(doc, {categoria: e.target.value})}>
               {CATEGORIAS_DE_DOCUMENTO.map((c) => <option key={c} value={c}>{t(ROTULOS[c] ?? c)}</option>)}
             </select>
           </label>
           <label className="text-xs">{t("Participante")}
-            <select aria-label={t("Participante") + " " + doc.nome} className="mt-1 w-full rounded border border-input bg-background p-1"
+            <select aria-label={t("Participante") + " " + doc.nome} className="mt-1 w-full rounded-md border border-input bg-background p-1"
               value={doc.participante_id ?? ""} disabled={desabilitado || salvando !== null}
               onChange={(e) => void classificar(doc, {participante_id: e.target.value || null})}>
               <option value="">{t("A identificar / documento do processo")}</option>
@@ -110,13 +112,13 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
     {lista(t("Documentos recebidos"), recebidos)}
     {dados?.ha_mais && <Button size="sm" variant="outline" disabled={carregando} onClick={() => void carregar(pagina + 1)}>{t("Carregar mais documentos")}</Button>}
     {lista(t("Resultados das etapas"), resultados)}
-    {(dados?.relatorios ?? []).map((r) => <article key={r.id} className="space-y-2 rounded border p-3">
+    {(dados?.relatorios ?? []).map((r) => <article key={r.id} className="space-y-2 rounded-md border p-3">
       <p className="text-sm font-medium">{r.nome}</p><div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => setVisualizacao({nome: r.nome, texto: r.texto})}>{t("Visualizar")}</Button>
         <Button size="sm" variant="ghost" onClick={() => baixarRelatorio(r)}>{t("Baixar .md")}</Button>
       </div></article>)}
     {lista(t("Contrato"), contratos)}
-    {visualizacao && <section className="space-y-2 rounded border p-3">
+    {visualizacao && <section className="space-y-2 rounded-md border p-3">
       <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">{visualizacao.nome}</h3>
         <Button size="sm" variant="ghost" onClick={() => setVisualizacao(null)}>{t("Fechar visualização")}</Button></div>
       {visualizacao.texto ? <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap text-xs">{visualizacao.texto}</pre>

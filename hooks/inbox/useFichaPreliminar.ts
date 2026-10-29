@@ -94,7 +94,7 @@ export function useFichaPreliminar(conversationId: string, atualizacao = 0) {
       `/api/v1/conversations/${conversationId}/painel-agente/ficha`,
     ).then((r) => {
       if (cancelado) return;
-      if (r.data.geracao || (r.data.atual?.versao ?? 0) > versaoAtual.current) aplicar(r.data);
+      if (r.data.geracao || (r.data.atual?.versao ?? 0) > versaoAtual.current || (r.data.atual?.processo_versao ?? 0) > processoVersao.current) aplicar(r.data);
     }).catch(() => { /* o GET inicial ou a próxima resposta permite retomar */ });
     return () => { cancelado = true; };
   }, [aplicar, atualizacao, conversationId]);
