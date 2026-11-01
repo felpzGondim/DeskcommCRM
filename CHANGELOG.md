@@ -14,6 +14,14 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+### Alterado
+
+- **Documentos agrupados por origem, aba por último.** Inquilino, ficha cadastral impressa, laudo da FC, Migra e contrato. Grupo sem arquivo mostra "nenhum arquivo ainda". Superlógica fica antes de Documentos.
+
+### Corrigido
+
+- **A aba Documentos abre e baixa os arquivos que já estão no Storage.** Cada arquivo tem Abrir (nova aba) e Baixar. A URL é assinada no servidor depois de conferir a organização da sessão; o clique não depende mais de prévia no modal (imagem/iframe), que falhava em PDF e em bucket privado.
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado

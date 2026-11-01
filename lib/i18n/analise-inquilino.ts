@@ -75,4 +75,9 @@ export const TEXTOS_ANALISE_INQUILINO = {
   "Texto disponível": { es: "Texto disponible" },
   "Leitura a conferir": { es: "Lectura por revisar" },
   "Arquivo disponível": { es: "Archivo disponible" },
+  "Inquilino": { es: "Inquilino" },
+  "Ficha cadastral impressa": { es: "Ficha catastral impresa" },
+  "Laudo da FC": { es: "Informe de FC" },
+  "Migra": { es: "Migra" },
+  "nenhum arquivo ainda": { es: "ningún archivo todavía" },
 };
