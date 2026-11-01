@@ -59,24 +59,30 @@ describe("valores do imóvel no processo", () => {
       conversa: { aluguel: 2000, condominio: 500 },
     });
     expect(r.valores.aluguel).toMatchObject({ valor: 1999, origem: "manual", editado_por: "u1" });
-    expect(r.valores.condominio).toMatchObject({ valor: 400, origem: "superlogica" });
+    expect(r.valores.condominio).toMatchObject({ valor: 500, origem: "conversa" });
     expect(r.campos).toEqual(["condominio"]);
+    expect(r.divergencias.map((d) => d.campo)).toEqual(expect.arrayContaining(["aluguel", "condominio"]));
   });
 
-  it("Superlógica prevalece sobre a conversa; conversa não sobrescreve Superlógica", () => {
+  it("conversa vence Superlógica; Superlógica só preenche vazio e avisa divergência", () => {
     const primeiro = preencherValores({
       atuais: valoresVazios(),
-      superlogica: { aluguel: 3000 },
+      superlogica: { aluguel: 3000, seguro_incendio: 80 },
       conversa: { aluguel: 2000, iptu: 180 },
+      enderecoFicha: { logradouro: "Rua A", numero: "10", cep: "01310-100" },
+      enderecoSuperlogica: { endereco: "Rua B, 20", cep: "01310200" },
     });
-    expect(primeiro.valores.aluguel).toMatchObject({ valor: 3000, origem: "superlogica" });
+    expect(primeiro.valores.aluguel).toMatchObject({ valor: 2000, origem: "conversa" });
     expect(primeiro.valores.iptu).toMatchObject({ valor: 180, origem: "conversa" });
+    expect(primeiro.valores.seguro_incendio).toMatchObject({ valor: 80, origem: "superlogica" });
+    expect(primeiro.divergencias.map((d) => d.campo)).toEqual(["aluguel", "endereco", "cep"]);
     const segundo = preencherValores({
       atuais: primeiro.valores,
-      conversa: { aluguel: 1, iptu: 1 },
+      superlogica: { aluguel: 1, iptu: 1 },
     });
     expect(segundo.campos).toEqual([]);
-    expect(segundo.valores.aluguel.valor).toBe(3000);
+    expect(segundo.valores.aluguel.valor).toBe(2000);
+    expect(segundo.divergencias.map((d) => d.campo)).toEqual(["aluguel", "iptu"]);
   });
 
   it("edição humana grava origem manual", () => {

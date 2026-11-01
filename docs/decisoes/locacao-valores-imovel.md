@@ -39,7 +39,11 @@ authenticated, escrita só `service_role`).
    O Hub ainda precisa expor a rota; até lá a leitura devolve aviso e o
    CRM cai na conversa. Falha do Hub **não** quebra o fluxo.
 2. Senão (ou para o que a Superlógica não trouxe): ficha/relatório preliminar.
-3. Manual vence Superlógica, que vence conversa.
+3. Valor já preenchido (manual ou conversa) permanece. Superlógica só
+   preenche campo vazio, com origem `superlogica`, e confronta o resto:
+   se o valor da Superlógica diferir, o modal/ficha mostra aviso por
+   campo (ficha × Superlógica). Endereço/CEP, quando o Hub trouxer, só
+   entram nesse aviso — nunca são gravados da Superlógica.
 
 ---
 

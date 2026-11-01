@@ -66,8 +66,27 @@ describe("interpretarPacoteHub", () => {
     });
     expect(lido).not.toHaveProperty("aviso");
     const p = montarPacote({ superlogica: lido, conversa: { aluguelCentavos: 1 } });
-    expect(p.aluguel).toEqual({ valorCentavos: 200_000, origem: "superlogica" });
-    expect(p.vezes3Centavos).toBe(3 * 270_000);
+    expect(p.aluguel).toEqual({ valorCentavos: 1, origem: "conversa" });
+    expect(p.divergencias.map((d) => d.campo)).toContain("aluguel");
+    const soSuperlogica = montarPacote({ superlogica: lido, conversa: {} });
+    expect(soSuperlogica.aluguel).toEqual({ valorCentavos: 200_000, origem: "superlogica" });
+    expect(soSuperlogica.vezes3Centavos).toBe(3 * 270_000);
+  });
+
+  it("lê endereço e CEP opcionais só para confronto", () => {
+    const lido = interpretarPacoteHub({
+      status: "ok",
+      encontrado: true,
+      pacote: {
+        aluguel_centavos: 200_000,
+        endereco: "Rua Exemplo, 100",
+        cep: "01310-100",
+        seguro_fianca_centavos: 90_000,
+      },
+    });
+    expect(lido.endereco).toBe("Rua Exemplo, 100");
+    expect(lido.cep).toBe("01310-100");
+    expect(JSON.stringify(lido)).not.toMatch(/fianca/i);
   });
 
   it("aceita reais no fallback e marca origem Superlógica no pacote", () => {

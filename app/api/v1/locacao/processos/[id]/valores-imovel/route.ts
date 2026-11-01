@@ -35,12 +35,15 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!g.ok) return g.response;
   const processo = await lerProcesso(g.gate.admin, g.gate.orgId, id);
   if (!processo) return fail("not_found", g.gate.t("Processo não encontrado."), 404, { requestId });
-  const valores = await garantirValoresDoProcesso(g.gate.admin, {
+  const { valores, divergencias } = await garantirValoresDoProcesso(g.gate.admin, {
     orgId: g.gate.orgId,
     processoId: id,
     settings: g.gate.settings,
   });
-  return ok({ valores: valoresParaJson(valores) }, { requestId });
+  return ok({
+    valores: valoresParaJson(valores),
+    divergencias: divergencias.map((d) => ({ campo: d.campo, aviso: d.aviso })),
+  }, { requestId });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {

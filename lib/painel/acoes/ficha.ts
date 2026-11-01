@@ -147,9 +147,23 @@ export async function gerarRelatorioPreliminarDoPainel(
         })
       : null;
     const avisoSuperlogica = sl?.aviso;
+    const reaisParaCentavos = (v: number | null | undefined) =>
+      v == null ? null : Math.round(v * 100);
+    const imovelPrevio = fichaPrevia?.imovel;
     const pacote = montarPacote({
       superlogica: sl,
-      conversa: { seguroIncendioCentavos: incendio },
+      conversa: {
+        aluguelCentavos: reaisParaCentavos(imovelPrevio?.aluguel.valor),
+        condominioCentavos: reaisParaCentavos(imovelPrevio?.condominio.valor),
+        iptuCentavos: reaisParaCentavos(imovelPrevio?.iptu.valor),
+        seguroIncendioCentavos:
+          reaisParaCentavos(imovelPrevio?.seguro_incendio.valor) ?? incendio,
+        endereco: [imovelPrevio?.logradouro.valor, imovelPrevio?.numero.valor]
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .join(", ") || null,
+        cep: imovelPrevio?.cep.valor ?? null,
+      },
     });
     etapa = "relatorio";
     const { saida } = await gerarRelatorioPreliminarNoPainel(
@@ -176,6 +190,7 @@ export async function gerarRelatorioPreliminarDoPainel(
         ...saida.ficha.pendencias,
         ...avisos,
         ...(avisoSuperlogica ? [avisoSuperlogica] : []),
+        ...pacote.divergencias.map((d) => d.aviso),
       ])].slice(0, 20),
     };
     etapa = "gravacao";

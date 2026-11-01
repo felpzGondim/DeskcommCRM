@@ -115,7 +115,15 @@ export function interpretarPacoteHub(dados: unknown): LeituraDePacoteSuperlogica
     "seguro_incendio_centavos",
     "seguro_incendio",
   );
+  const endereco = textoOpcional(pacoteBruto.endereco ?? pacoteBruto.logradouro);
+  const cep = textoOpcional(pacoteBruto.cep);
   if (aluguel == null && condominio == null && iptu == null && seguroIncendio == null) {
+    if (endereco || cep) {
+      return {
+        ...(endereco ? { endereco } : {}),
+        ...(cep ? { cep } : {}),
+      };
+    }
     return status === "ok" ? {} : avisoSo();
   }
   return {
@@ -123,7 +131,15 @@ export function interpretarPacoteHub(dados: unknown): LeituraDePacoteSuperlogica
     ...(condominio != null ? { condominioCentavos: condominio } : {}),
     ...(iptu != null ? { iptuCentavos: iptu } : {}),
     ...(seguroIncendio != null ? { seguroIncendioCentavos: seguroIncendio } : {}),
+    ...(endereco ? { endereco } : {}),
+    ...(cep ? { cep } : {}),
   };
+}
+
+function textoOpcional(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t ? t.slice(0, 180) : null;
 }
 
 export async function resolverIdsDoPacote(

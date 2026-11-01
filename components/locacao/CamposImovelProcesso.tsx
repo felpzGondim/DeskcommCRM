@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import type { CampoDeDivergencia } from "@/lib/locacao/extrato/divergencia-superlogica";
 import {
   CAMPOS_DO_VALOR_DO_IMOVEL,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
@@ -29,11 +30,13 @@ export function CamposImovelProcesso({
   onSalvar,
   desabilitado = false,
   aviso = null,
+  divergencias = [],
 }: {
   valores: ValoresDoImovel;
   onSalvar?: (patch: Partial<Record<CampoDoValorDoImovel, number>>) => Promise<void> | void;
   desabilitado?: boolean;
   aviso?: string | null;
+  divergencias?: Array<{ campo: CampoDeDivergencia; aviso: string }>;
 }) {
   const t = useT();
   const [rascunho, setRascunho] = useState<Record<CampoDoValorDoImovel, string>>(() => textosDe(valores));
@@ -78,9 +81,15 @@ export function CamposImovelProcesso({
       </p>
       {aviso && <p className="text-[11px] text-muted-foreground">{aviso}</p>}
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
+      {divergencias.filter((d) => d.campo === "endereco" || d.campo === "cep").map((d) => (
+        <p key={d.campo} role="status" className="text-[11px] text-amber-700 dark:text-amber-400">
+          {d.aviso}
+        </p>
+      ))}
       {CAMPOS_DO_VALOR_DO_IMOVEL.map((campo) => {
         const obrigatorio = (CAMPOS_OBRIGATORIOS_DO_PACOTE as readonly string[]).includes(campo);
         const origem = valores[campo].origem;
+        const divergencia = divergencias.find((d) => d.campo === campo);
         return (
           <label key={campo} className="block text-[11px]">
             {t(ROTULO_CAMPO_TELA[campo])}
@@ -99,6 +108,11 @@ export function CamposImovelProcesso({
               {t("Origem")}: {t(rotuloDaOrigemDoValor(origem))}
               {obrigatorio && valores[campo].valor == null ? ` · ${t("obrigatório para FC e Migra")}` : ""}
             </span>
+            {divergencia && (
+              <span role="status" className="block text-[10px] text-amber-700 dark:text-amber-400">
+                {divergencia.aviso}
+              </span>
+            )}
           </label>
         );
       })}
@@ -153,14 +167,24 @@ export function CamposImovelProcessoDoProcesso({
   const t = useT();
   const [valores, setValores] = useState<ValoresDoImovel>(valoresVazios());
   const [aviso, setAviso] = useState<string | null>(null);
+  const [divergencias, setDivergencias] = useState<Array<{
+    campo: CampoDeDivergencia;
+    aviso: string;
+  }>>([]);
 
   useEffect(() => {
     let vivo = true;
-    void apiClient.get<{ data: { valores: Record<string, ValorJson> } }>(
+    void apiClient.get<{
+      data: {
+        valores: Record<string, ValorJson>;
+        divergencias?: Array<{ campo: CampoDeDivergencia; aviso: string }>;
+      };
+    }>(
       `/api/v1/locacao/processos/${processoId}/valores-imovel`,
     ).then((r) => {
       if (!vivo) return;
       setValores(valoresDeJson(r.data.valores));
+      setDivergencias(r.data.divergencias ?? []);
       setAviso(null);
     }).catch(() => {
       if (vivo) setAviso(t("Não foi possível ler os valores do imóvel."));
@@ -173,6 +197,7 @@ export function CamposImovelProcessoDoProcesso({
       valores={valores}
       desabilitado={desabilitado}
       aviso={aviso}
+      divergencias={divergencias}
       onSalvar={async (patch) => {
         const r = await apiClient.patch<{ data: { valores: Record<string, ValorJson> } }>(
           `/api/v1/locacao/processos/${processoId}/valores-imovel`,

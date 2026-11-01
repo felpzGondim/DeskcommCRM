@@ -28,9 +28,14 @@ import {
   preencherValores,
   valoresVazios,
   type CampoDoValorDoImovel,
+  type EnderecoParaConfronto,
   type FonteNumerica,
   type ValoresDoImovel,
 } from "@/lib/locacao/valores-imovel";
+import {
+  textoEnderecoParaConfronto,
+  type DivergenciaDoPacote,
+} from "@/lib/locacao/extrato/divergencia-superlogica";
 
 function asRec(row: unknown): Record<string, unknown> {
   return (row ?? {}) as Record<string, unknown>;
@@ -72,7 +77,7 @@ async function fonteSuperlogica(
     settings: unknown;
     leitor?: LeitorDePacoteSuperlogica;
   },
-): Promise<FonteNumerica | null> {
+): Promise<(FonteNumerica & EnderecoParaConfronto) | null> {
   if (!pacoteSuperlogicaLigado(input.settings)) return null;
   let slImovel: unknown = null;
   if (input.imovelId) {
@@ -128,6 +133,8 @@ async function fonteSuperlogica(
     condominio: centavosParaReais(bruto.condominioCentavos),
     iptu: centavosParaReais(bruto.iptuCentavos),
     seguro_incendio: centavosParaReais(bruto.seguroIncendioCentavos),
+    endereco: bruto.endereco ?? null,
+    cep: bruto.cep ?? null,
   };
 }
 
@@ -161,9 +168,9 @@ export async function garantirValoresDoProcesso(
     settings: unknown;
     leitor?: LeitorDePacoteSuperlogica;
   },
-): Promise<ValoresDoImovel> {
+): Promise<{ valores: ValoresDoImovel; divergencias: DivergenciaDoPacote[] }> {
   const proc = await lerProcesso(admin, input.orgId, input.processoId);
-  if (!proc) return valoresVazios();
+  if (!proc) return { valores: valoresVazios(), divergencias: [] };
   const atuais = lerValoresDaLinha(proc);
   const superlogica = await fonteSuperlogica(admin, {
     orgId: input.orgId,
@@ -173,7 +180,16 @@ export async function garantirValoresDoProcesso(
     leitor: input.leitor,
   });
   const conversa = await fonteConversa(admin, input.orgId, input.processoId);
-  const { valores, campos } = preencherValores({ atuais, superlogica, conversa });
+  const enderecoFicha = enderecoDaFichaDoProcesso(admin, input.orgId, input.processoId);
+  const { valores, campos, divergencias } = preencherValores({
+    atuais,
+    superlogica,
+    conversa,
+    enderecoFicha: await enderecoFicha,
+    enderecoSuperlogica: superlogica
+      ? { endereco: superlogica.endereco, cep: superlogica.cep }
+      : null,
+  });
   await gravarPatch(admin, {
     orgId: input.orgId,
     processoId: input.processoId,
@@ -182,7 +198,33 @@ export async function garantirValoresDoProcesso(
     atorTipo: "sistema",
     atorId: null,
   });
-  return valores;
+  return { valores, divergencias };
+}
+
+async function enderecoDaFichaDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<EnderecoParaConfronto | null> {
+  const atual = await lerFichaAtualDoProcesso(admin, orgId, processoId);
+  const imovel = atual?.ficha && typeof atual.ficha === "object"
+    ? enderecoDoImovelDaFicha(atual.ficha)
+    : null;
+  return imovel;
+}
+
+function enderecoDoImovelDaFicha(ficha: unknown): EnderecoParaConfronto | null {
+  const completa = completarFicha(ficha);
+  const im = completa.imovel;
+  return {
+    logradouro: im.logradouro.valor,
+    numero: im.numero.valor,
+    endereco: textoEnderecoParaConfronto({
+      logradouro: im.logradouro.valor,
+      numero: im.numero.valor,
+    }),
+    cep: im.cep.valor,
+  };
 }
 
 export async function editarValoresDoProcesso(

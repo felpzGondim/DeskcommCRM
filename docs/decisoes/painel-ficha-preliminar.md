@@ -44,7 +44,7 @@ O relatório mostra a renda **com** e **sem** os prováveis, para o analista rec
 
 ## 3× o pacote (Q7, 20:51)
 
-3× = 3 × (aluguel + condomínio + IPTU + **seguro-incêndio**). Seguro-fiança **não** entra. Superlógica só GET via Hub (`GET /imovel/pacote` / `ler_pacote_imovel`), quando o imóvel ou o contato está vinculado, atrás da chave `locacao.pacote_superlogica_habilitado` (desligada). Falha do Hub cai na conversa com aviso. Componente ausente é declarado, não vira zero silencioso. Sem o aluguel: `3x não calculado: falta o valor do pacote`. Contrato: `docs/planos/hub-pacote-imovel-superlogica.md`.
+3× = 3 × (aluguel + condomínio + IPTU + **seguro-incêndio**). Seguro-fiança **não** entra. Superlógica só GET via Hub (`GET /imovel/pacote` / `ler_pacote_imovel`), quando o imóvel ou o contato está vinculado, atrás da chave `locacao.pacote_superlogica_habilitado` (desligada). Confronta a ficha e só sinaliza divergência; valor preenchido (conversa ou manual) permanece. Só o campo vazio pode receber Superlógica, origem `superlogica`. Endereço/CEP, se o Hub trouxer, só entram no aviso. Falha do Hub cai na conversa com aviso. Componente ausente é declarado, não vira zero silencioso. Sem o aluguel: `3x não calculado: falta o valor do pacote`. Contrato: `docs/planos/hub-pacote-imovel-superlogica.md`.
 
 ## Extração de qualquer banco (Q6, 20:51)
 

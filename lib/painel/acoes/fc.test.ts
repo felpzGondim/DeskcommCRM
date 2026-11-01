@@ -46,7 +46,11 @@ vi.mock("@/lib/locacao/repositorio", () => ({
   lerParticipanteDoProcesso: (...args: unknown[]) => mocks.participante(...args),
 }));
 vi.mock("@/lib/locacao/valores-imovel-persistencia", () => ({
-  garantirValoresDoProcesso: (...args: unknown[]) => mocks.valores(...args),
+  garantirValoresDoProcesso: async (...args: unknown[]) => {
+    const r = await mocks.valores(...args);
+    if (r && typeof r === "object" && "valores" in r) return r;
+    return { valores: r, divergencias: [] };
+  },
 }));
 
 import { hashCpfDoParticipante } from "@/lib/locacao/cpf";

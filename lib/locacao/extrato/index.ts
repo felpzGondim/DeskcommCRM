@@ -43,9 +43,12 @@ export {
   lerSeguroIncendioNoTexto,
   montarPacote,
   textoDoPacote,
+  avisoDoCampoNasPendencias,
+  PREFIXO_DIVERGENCIA,
   type LeitorDePacoteSuperlogica,
   type LeituraDePacoteSuperlogica,
   type PacoteDoImovel,
+  type DivergenciaDoPacote,
 } from "./pacote";
 export {
   AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,

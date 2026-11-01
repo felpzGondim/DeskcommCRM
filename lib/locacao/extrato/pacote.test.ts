@@ -40,14 +40,45 @@ describe("pacote 3x da locação", () => {
     expect(textoDoPacote(p)).toContain(FRASE_PACOTE_AUSENTE);
   });
 
-  it("Superlógica prevalece sobre a conversa quando o leitor devolve valor", () => {
+  it("ficha preenchida permanece; Superlógica só preenche vazio e avisa divergência", () => {
     const p = montarPacote({
-      superlogica: { aluguelCentavos: 300_000, iptuCentavos: 15_000 },
-      conversa: { aluguelCentavos: 200_000, condominioCentavos: 40_000, iptuCentavos: 10_000 },
+      superlogica: {
+        aluguelCentavos: 300_000,
+        iptuCentavos: 15_000,
+        seguroIncendioCentavos: 8_000,
+        endereco: "Rua B, 20",
+        cep: "01310-200",
+      },
+      conversa: {
+        aluguelCentavos: 200_000,
+        condominioCentavos: 40_000,
+        iptuCentavos: 10_000,
+        endereco: "Rua A, 10",
+        cep: "01310-100",
+      },
+    });
+    expect(p.aluguel).toEqual({ valorCentavos: 200_000, origem: "conversa" });
+    expect(p.condominio).toEqual({ valorCentavos: 40_000, origem: "conversa" });
+    expect(p.iptu).toEqual({ valorCentavos: 10_000, origem: "conversa" });
+    expect(p.seguroIncendio).toEqual({ valorCentavos: 8_000, origem: "superlogica" });
+    expect(p.divergencias.map((d) => d.campo)).toEqual([
+      "aluguel",
+      "iptu",
+      "endereco",
+      "cep",
+    ]);
+    expect(p.divergencias[0]?.aviso).toMatch(/ficha/);
+    expect(p.divergencias[0]?.aviso).toMatch(/Superlógica/);
+    expect(textoDoPacote(p)).toMatch(/Aluguel diverge/);
+  });
+
+  it("sem valor na ficha usa Superlógica com origem superlogica e sem divergência", () => {
+    const p = montarPacote({
+      superlogica: { aluguelCentavos: 300_000 },
+      conversa: {},
     });
     expect(p.aluguel).toEqual({ valorCentavos: 300_000, origem: "superlogica" });
-    expect(p.condominio).toEqual({ valorCentavos: 40_000, origem: "conversa" });
-    expect(p.iptu).toEqual({ valorCentavos: 15_000, origem: "superlogica" });
+    expect(p.divergencias).toEqual([]);
   });
 
   it("leitor desligado não inventa endpoint nem credencial", async () => {

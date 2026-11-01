@@ -211,7 +211,7 @@ export async function analisarSeguroDoPainel(
   }
   const ficha = completarFicha(atual.ficha);
   const telefone = telefoneDoInquilinoPrincipal(ficha);
-  const valores = await garantirValoresDoProcesso(ctx.admin, {
+  const { valores } = await garantirValoresDoProcesso(ctx.admin, {
     orgId: ctx.orgId,
     processoId: alvo.id,
     settings: ctx.settings,

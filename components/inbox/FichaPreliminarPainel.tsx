@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
+import { avisoDoCampoNasPendencias } from "@/lib/locacao/extrato/divergencia-superlogica";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
@@ -44,6 +45,15 @@ function numero(valor: string): NumeroFicha {
     valor: Number.isFinite(n) && valor.trim() !== "" ? n : null,
     fonte: "atendente", trecho: null, confianca: 1, message_id: null,
   };
+}
+
+function AvisoDeDivergencia({ texto }: { texto?: string }) {
+  if (!texto) return null;
+  return (
+    <span role="status" className="block text-[10px] text-amber-700 dark:text-amber-400">
+      {texto}
+    </span>
+  );
 }
 
 function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
@@ -174,6 +184,7 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
             <label className="block text-[11px]">{t("Endereço do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
+              <AvisoDeDivergencia texto={avisoDoCampoNasPendencias(ficha.pendencias, "endereco")} />
             </label>
             <label className="block text-[11px]">{t("Número do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
@@ -183,12 +194,16 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <label key={chave} className="block text-[11px]">{t(chave === "aluguel" ? "Aluguel (R$)" : chave === "condominio" ? "Condomínio / rateio (R$)" : chave === "iptu" ? "IPTU mensal (R$)" : "Seguro-incêndio mensal (R$)")}
                 <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
                   onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
+                <AvisoDeDivergencia texto={avisoDoCampoNasPendencias(ficha.pendencias, chave)} />
               </label>
             ))}
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
               <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
                   onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
+                {chave === "cep" && (
+                  <AvisoDeDivergencia texto={avisoDoCampoNasPendencias(ficha.pendencias, "cep")} />
+                )}
               </label>
             ))}
             <label className="block text-[11px]">{t("Tipo de imóvel")}

@@ -6,6 +6,13 @@
  */
 import type { FichaPreliminar } from "@/lib/locacao/ficha-schema";
 import { ORIGENS_DO_VALOR_DO_IMOVEL } from "@/lib/locacao/vocabulario";
+import {
+  divergenciaDeCentavos,
+  divergenciaDeCep,
+  divergenciaDeEndereco,
+  textoEnderecoParaConfronto,
+  type DivergenciaDoPacote,
+} from "@/lib/locacao/extrato/divergencia-superlogica";
 import { lerSeguroIncendioNoTexto } from "@/lib/locacao/extrato/pacote";
 
 export { ORIGENS_DO_VALOR_DO_IMOVEL };
@@ -60,8 +67,8 @@ const ROTULO_ORIGEM: Record<OrigemDoValorDoImovel, string> = {
 
 function prioridade(origem: OrigemDoValorDoImovel | null): number {
   if (origem === "manual") return 3;
-  if (origem === "superlogica") return 2;
-  if (origem === "conversa") return 1;
+  if (origem === "conversa") return 2;
+  if (origem === "superlogica") return 1;
   return 0;
 }
 
@@ -153,16 +160,31 @@ export function extrairValoresDaConversa(input: {
   };
 }
 
+export type EnderecoParaConfronto = {
+  endereco?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  cep?: string | null;
+};
+
 /**
- * Manual vence. Superlógica vence conversa. Pré-preenchimento posterior
- * nunca sobrescreve origem manual.
+ * Valor já preenchido (manual ou conversa) permanece. Superlógica só
+ * preenche campo vazio, com origem "superlogica", e só sinaliza
+ * divergência quando os dois lados têm valor e diferem.
+ * Endereço/CEP nunca são gravados da Superlógica.
  */
 export function preencherValores(input: {
   atuais: ValoresDoImovel;
   superlogica?: FonteNumerica | null;
   conversa?: FonteNumerica | null;
+  enderecoFicha?: EnderecoParaConfronto | null;
+  enderecoSuperlogica?: EnderecoParaConfronto | null;
   agora?: string;
-}): { valores: ValoresDoImovel; campos: CampoDoValorDoImovel[] } {
+}): {
+  valores: ValoresDoImovel;
+  campos: CampoDoValorDoImovel[];
+  divergencias: DivergenciaDoPacote[];
+} {
   const agora = input.agora ?? new Date().toISOString();
   const saida: ValoresDoImovel = {
     aluguel: { ...input.atuais.aluguel },
@@ -172,13 +194,23 @@ export function preencherValores(input: {
     seguro_fianca: { ...input.atuais.seguro_fianca },
   };
   const campos: CampoDoValorDoImovel[] = [];
+  const divergencias: DivergenciaDoPacote[] = [];
   for (const campo of CAMPOS_DO_VALOR_DO_IMOVEL) {
     const atual = saida[campo];
-    const candidatos: Array<{ valor: number; origem: OrigemDoValorDoImovel }> = [];
     const sl = parseNumeroReais(input.superlogica?.[campo]);
-    if (sl != null) candidatos.push({ valor: sl, origem: "superlogica" });
     const cv = parseNumeroReais(input.conversa?.[campo]);
+    const fichaParaConfronto = atual.valor ?? cv;
+    if (campo !== "seguro_fianca") {
+      const d = divergenciaDeCentavos(
+        campo,
+        fichaParaConfronto == null ? null : Math.round(fichaParaConfronto * 100),
+        sl == null ? null : Math.round(sl * 100),
+      );
+      if (d) divergencias.push(d);
+    }
+    const candidatos: Array<{ valor: number; origem: OrigemDoValorDoImovel }> = [];
     if (cv != null) candidatos.push({ valor: cv, origem: "conversa" });
+    if (sl != null) candidatos.push({ valor: sl, origem: "superlogica" });
     let melhor: { valor: number; origem: OrigemDoValorDoImovel } | null = null;
     for (const c of candidatos) {
       if (!melhor || prioridade(c.origem) > prioridade(melhor.origem)) melhor = c;
@@ -193,7 +225,13 @@ export function preencherValores(input: {
     };
     campos.push(campo);
   }
-  return { valores: saida, campos };
+  const endFicha = textoEnderecoParaConfronto(input.enderecoFicha ?? {});
+  const endSl = textoEnderecoParaConfronto(input.enderecoSuperlogica ?? {});
+  const dEnd = divergenciaDeEndereco(endFicha, endSl);
+  if (dEnd) divergencias.push(dEnd);
+  const dCep = divergenciaDeCep(input.enderecoFicha?.cep, input.enderecoSuperlogica?.cep);
+  if (dCep) divergencias.push(dCep);
+  return { valores: saida, campos, divergencias };
 }
 
 export function aplicarEdicaoManual(

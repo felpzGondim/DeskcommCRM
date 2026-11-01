@@ -261,6 +261,11 @@ export async function processarAnaliseDeRenda(
         condominioCentavos: reaisParaCentavos(fichaBase.imovel.condominio.valor),
         iptuCentavos: reaisParaCentavos(fichaBase.imovel.iptu.valor),
         seguroIncendioCentavos: reaisParaCentavos(fichaBase.imovel.seguro_incendio.valor) ?? incendio,
+        endereco: [fichaBase.imovel.logradouro.valor, fichaBase.imovel.numero.valor]
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .join(", ") || null,
+        cep: fichaBase.imovel.cep.valor,
       },
     });
     const declaradaCentavos = rendaDeclaradaNasFontes(fontes);
@@ -274,6 +279,7 @@ export async function processarAnaliseDeRenda(
         ...avisos,
         ...checklist,
         ...(sl?.aviso ? [sl.aviso] : []),
+        ...pacote.divergencias.map((d) => d.aviso),
       ],
     });
     const regra = avaliarRegra3x({

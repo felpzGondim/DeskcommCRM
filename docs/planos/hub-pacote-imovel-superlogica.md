@@ -9,7 +9,14 @@ Ligada, o CRM lê aluguel, condomínio, IPTU e seguro-incêndio por este
 endpoint. Seguro-fiança **não entra** no 3× e **não** deve vir na resposta.
 Falhas caem nos valores da conversa com aviso; o fluxo não quebra.
 
-Precedência no CRM (já existente): **manual > Superlógica > conversa**.
+**Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36):**
+a Superlógica **confronta** a ficha e **só sinaliza** divergência. Não
+sobrescreve. Valores já preenchidos (conversa ou edição manual) continuam
+valendo. O leitor compara aluguel, condomínio, IPTU, seguro-incêndio e, se
+vierem, endereço/CEP. Quando diferirem, o modal e a ficha mostram um aviso
+por campo (`ficha … × Superlógica …`). **Só o campo vazio da ficha** pode
+receber o valor da Superlógica, com origem `"superlogica"`. Endereço/CEP
+nunca são gravados da Superlógica — só o aviso.
 
 ---
 
@@ -52,7 +59,9 @@ Formato alinhado a `consultar_contrato_inquilino` / `buscar_pessoas_superlogica`
     "iptu_centavos": 12000,
     "seguro_incendio_centavos": 8000,
     "id_imovel": 77,
-    "id_contrato": 358
+    "id_contrato": 358,
+    "endereco": "Rua Exemplo, 100",
+    "cep": "01310-100"
   }
 }
 ```
@@ -63,10 +72,12 @@ Formato alinhado a `consultar_contrato_inquilino` / `buscar_pessoas_superlogica`
 | `encontrado` | `true` só com `status=ok` e pelo menos um dos quatro valores |
 | `*_centavos` | inteiro ≥ 0, **mensal**. Ausente ou `null` = o Hub não achou aquele componente |
 | `id_imovel` / `id_contrato` | opcionais, só o id numérico |
+| `endereco` / `cep` | opcionais, só para o CRM **confrontar**. Texto curto; CEP com 8 dígitos ou `00000-000`. Sem nome de pessoa. O CRM **não grava** esses campos na ficha |
 | seguro-fiança | **omitir**. Se a Superlógica trouxer, o Hub descarta |
 
-`status=ok` com um componente só é válido: o CRM completa o resto pela
-conversa.
+`status=ok` com um componente só é válido: o CRM só usa Superlógica no
+campo que a ficha deixou vazio; o resto fica na conversa/manual e, se
+diferir, vira aviso.
 
 ---
 
@@ -113,7 +124,8 @@ Se houver mais de um contrato ativo: `status=multiplos_contratos` e
 ## 4. O que o Hub não faz
 
 - Não grava na Superlógica.
-- Não devolve nome, CPF, telefone, endereço completo nem texto livre.
+- Não devolve nome, CPF, telefone nem texto livre. `endereco`/`cep` no
+  pacote são opcionais e só para confronto.
 - Não devolve seguro-fiança.
 - Não exige o CRM mandar `organization_id` no body — a chave Bearer já
   identifica a instalação.
