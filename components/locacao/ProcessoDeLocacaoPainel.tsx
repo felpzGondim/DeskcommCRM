@@ -69,6 +69,21 @@ type ProcessoResumo = {
 };
 
 type AvisoSenha = { tipo?: string; nome: string; tentativas?: number };
+type ExecucaoRenda = {
+  execucao_id?: string;
+  estado?: string;
+  etapa_texto?: string | null;
+  progresso_atual?: number;
+  progresso_total?: number;
+  motivo?: string | null;
+  resumo?: string;
+  renda_comprovada?: number | null;
+  renda_proposta_fc?: number | null;
+  alertas?: string[];
+  checklist?: string[];
+  avisos?: AvisoSenha[];
+  regra_3x?: { frase?: string; exclusoes?: Array<{ rotulo: string; volume: number }> };
+};
 
 function rotuloEstadoSeguro(estado: string): string {
   if (estado === "solicitada" || estado === "cotando") return "Cotação em andamento";
@@ -104,11 +119,13 @@ export function ProcessoDeLocacaoPainel({
   desabilitado = false,
   secoes,
   atualizacao = 0,
+  esconderBotoesPrincipais = false,
 }: {
   conversationId: string;
   desabilitado?: boolean;
   secoes?: readonly SecaoDoProcessoPainel[];
   atualizacao?: number;
+  esconderBotoesPrincipais?: boolean;
 }) {
   const t = useT();
   const [habilitado, setHabilitado] = useState(false);
@@ -121,6 +138,7 @@ export function ProcessoDeLocacaoPainel({
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
+  const [execucaoRenda, setExecucaoRenda] = useState<ExecucaoRenda | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [cotando, setCotando] = useState(false);
   const [salvandoFc, setSalvandoFc] = useState(false);
@@ -181,6 +199,52 @@ export function ProcessoDeLocacaoPainel({
   }, [conversationId, atualizacao]);
 
   const processoAtivo = processos[0];
+  const rendaEmCurso =
+    execucaoRenda?.estado === "na_fila" || execucaoRenda?.estado === "processando";
+
+  useEffect(() => {
+    if (!rendaEmCurso || !execucaoRenda?.execucao_id) return;
+    const processoId = processoAtivo?.id;
+    const execucaoId = execucaoRenda.execucao_id;
+    const tick = window.setInterval(() => {
+      void (async () => {
+        try {
+          const r = await apiClient.get<{ data: ExecucaoRenda }>(
+            `/api/v1/conversations/${conversationId}/painel-agente/renda?execucao_id=${execucaoId}`,
+          );
+          const data = r.data;
+          if (!data) return;
+          setExecucaoRenda(data);
+          if (data.estado === "erro" && data.motivo) setErro(data.motivo);
+          if (Array.isArray(data.avisos)) {
+            setAvisos(data.avisos.filter((a) => a.tipo === "pdf_protegido" || a.nome));
+          }
+          if (data.estado === "concluido") {
+            window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
+            setResumo(typeof data.resumo === "string" ? data.resumo : null);
+            setProcessos((atual) =>
+              atual.map((p) =>
+                p.id === processoId
+                  ? {
+                      ...p,
+                      renda_mensal: data.renda_comprovada ?? p.renda_mensal,
+                      renda_proposta_fc: data.renda_proposta_fc ?? p.renda_proposta_fc,
+                      alertas: data.alertas ?? p.alertas,
+                    }
+                  : p,
+              ),
+            );
+          }
+          if (data.estado === "concluido" || data.estado === "erro") {
+            setAnalisando(false);
+          }
+        } catch {
+          /* o próximo tick tenta de novo; o erro pontual não tapa a tela */
+        }
+      })();
+    }, 2_000);
+    return () => window.clearInterval(tick);
+  }, [conversationId, rendaEmCurso, execucaoRenda?.execucao_id, processoAtivo?.id]);
   const seguroEmCurso =
     analiseSeguro
     && (processoAtivo?.seguro_estado === "solicitada" || processoAtivo?.seguro_estado === "cotando");
@@ -335,6 +399,26 @@ export function ProcessoDeLocacaoPainel({
     }
   }
 
+  function aplicarExecucaoRenda(data: ExecucaoRenda, processoId: string) {
+    setExecucaoRenda(data);
+    if (data.estado === "erro" && data.motivo) setErro(data.motivo);
+    if (data.estado !== "concluido") return;
+    window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
+    setResumo(typeof data.resumo === "string" ? data.resumo : null);
+    setProcessos((atual) =>
+      atual.map((p) =>
+        p.id === processoId
+          ? {
+              ...p,
+              renda_mensal: data.renda_comprovada ?? p.renda_mensal,
+              renda_proposta_fc: data.renda_proposta_fc ?? p.renda_proposta_fc,
+              alertas: data.alertas ?? p.alertas,
+            }
+          : p,
+      ),
+    );
+  }
+
   async function analisar() {
     if (analisando || desabilitado || !processo) return;
     setErro(null);
@@ -343,37 +427,27 @@ export function ProcessoDeLocacaoPainel({
       const senhasPdf = Object.entries(senhas)
         .filter(([, senha]) => senha)
         .map(([nome, senha]) => ({ nome, senha }));
-      const r = await apiClient.post<{
-        data: {
-          resumo?: string;
-          avisos?: AvisoSenha[];
-          renda_comprovada?: number | null;
-          renda_proposta_fc?: number | null;
-          alertas?: string[];
-        };
-      }>(`/api/v1/conversations/${conversationId}/painel-agente/renda`, {
-        etapa: "analisar",
-        processo_id: processo.id,
-        senhasPdf: senhasPdf.length ? senhasPdf : undefined,
-      });
-      window.dispatchEvent(new CustomEvent("locacao:atualizada", {detail: {conversationId}}));
-      setResumo(r.data?.resumo ?? null);
-      setAvisos((r.data?.avisos ?? []).filter((a) => a.tipo === "pdf_protegido" || a.nome));
-      setProcessos((atual) =>
-        atual.map((p) =>
-          p.id === processo.id
-            ? {
-                ...p,
-                renda_mensal: r.data?.renda_comprovada ?? p.renda_mensal,
-                renda_proposta_fc: r.data?.renda_proposta_fc ?? p.renda_proposta_fc,
-                alertas: r.data?.alertas ?? p.alertas,
-              }
-            : p,
-        ),
+      const r = await apiClient.post<{ data: ExecucaoRenda }>(
+        `/api/v1/conversations/${conversationId}/painel-agente/renda`,
+        {
+          etapa: "analisar",
+          processo_id: processo.id,
+          senhasPdf: senhasPdf.length ? senhasPdf : undefined,
+        },
       );
+      aplicarExecucaoRenda(r.data ?? {}, processo.id);
+      if (Array.isArray(r.data?.avisos)) {
+        setAvisos(r.data.avisos.filter((a) => a.tipo === "pdf_protegido" || a.nome));
+      }
+      if (
+        !r.data?.execucao_id
+        || r.data.estado === "concluido"
+        || r.data.estado === "erro"
+      ) {
+        setAnalisando(false);
+      }
     } catch (e) {
       setErro(e instanceof Error && e.message ? e.message : t("Não foi possível analisar a renda."));
-    } finally {
       setAnalisando(false);
     }
   }
@@ -789,7 +863,28 @@ export function ProcessoDeLocacaoPainel({
               {typeof processo.renda_mensal === "number" ? (
                 <p className="text-xs">{t("RENDA")}: R$ {processo.renda_mensal.toFixed(2)}</p>
               ) : null}
+              {execucaoRenda?.etapa_texto && rendaEmCurso ? (
+                <p className="text-xs text-text-muted" role="status" data-testid="renda-etapa">
+                  {execucaoRenda.etapa_texto}
+                </p>
+              ) : null}
+              {execucaoRenda?.estado === "erro" && execucaoRenda.motivo ? (
+                <p className="text-xs text-destructive" role="alert" data-testid="renda-erro">
+                  {execucaoRenda.motivo}
+                </p>
+              ) : null}
               {resumo ? <p className="text-xs whitespace-pre-wrap">{resumo}</p> : null}
+              {execucaoRenda?.regra_3x?.frase ? (
+                <p className="text-xs" data-testid="renda-3x">{execucaoRenda.regra_3x.frase}</p>
+              ) : null}
+              {(execucaoRenda?.regra_3x?.exclusoes ?? []).map((e) => (
+                <p key={e.rotulo} className="text-[11px] text-text-muted">
+                  {e.rotulo}: R$ {e.volume.toFixed(2)}
+                </p>
+              ))}
+              {(execucaoRenda?.checklist ?? []).slice(0, 5).map((c) => (
+                <p key={c} className="text-[11px] text-text-muted">{c}</p>
+              ))}
               {(processo.alertas ?? []).slice(0, 5).map((a) => (
                 <p key={a} className="text-[11px] text-text-muted">{a}</p>
               ))}
@@ -814,11 +909,17 @@ export function ProcessoDeLocacaoPainel({
                 </p>
               )}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || analisando || confirmando}
                   onClick={() => void analisar()}>
-                  {analisando ? t("Analisando renda…") : t("Analisar renda")}
+                  {analisando || rendaEmCurso
+                    ? (execucaoRenda?.etapa_texto || t("Analisando renda…"))
+                    : execucaoRenda?.estado === "erro"
+                      ? t("Tentar de novo")
+                      : t("Analisar renda")}
                 </Button>
+                )}
                 <Button size="sm" className="h-7 px-2 text-xs"
                   disabled={
                     desabilitado || analisando || confirmando
@@ -862,11 +963,13 @@ export function ProcessoDeLocacaoPainel({
                 <p className="text-xs text-text-muted">{t("Print da cotação guardado.")}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || cotando}
                   onClick={() => void cotar()}>
                   {cotando ? t("Cotando seguro-fiança…") : t("Analisar seguro-fiança")}
                 </Button>
+                )}
                 {processo.seguro_pedido_id ? (
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
                     disabled={desabilitado || cotando}
@@ -915,11 +1018,13 @@ export function ProcessoDeLocacaoPainel({
                 <p className="text-xs text-text-muted">{t("Laudo da FC guardado.")}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || salvandoFc || confirmandoFc}
                   onClick={() => void salvarFc()}>
                   {salvandoFc ? t("Salvando FC Score+…") : t("Analisar FC")}
                 </Button>
+                )}
                 {processo.fc_estado === "aguardando_cobranca" || processo.fc_estado === "login_necessario" || processo.fc_cobranca === "incerta" ? (
                   <Button size="sm" className="h-7 px-2 text-xs"
                     disabled={desabilitado || salvandoFc || confirmandoFc}
@@ -970,11 +1075,13 @@ export function ProcessoDeLocacaoPainel({
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || gerandoRelatorio || aprovandoRelatorio}
                   onClick={() => void gerarRelatorio()}>
                   {gerandoRelatorio ? t("Gerando relatório…") : t("Gerar relatório")}
                 </Button>
+                )}
                 <Button size="sm" className="h-7 px-2 text-xs"
                   disabled={
                     desabilitado || gerandoRelatorio || aprovandoRelatorio

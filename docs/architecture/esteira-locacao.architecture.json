@@ -32,7 +32,7 @@
       "lane": "interface",
       "col": 1,
       "type": "frontend",
-      "label": "Cadastro e locação: seis etapas"
+      "label": "Cadastro e locação: sete abas com status de execução"
     },
     {
       "id": "docs",
@@ -68,6 +68,20 @@
       "col": 3,
       "type": "database",
       "label": "Arquivos existentes no Storage privado"
+    },
+    {
+      "id": "execucoes",
+      "lane": "dados",
+      "col": 3,
+      "type": "database",
+      "label": "locacao_execucoes: fila, etapa, hash, desatualizado"
+    },
+    {
+      "id": "casca",
+      "lane": "interface",
+      "col": 1,
+      "type": "frontend",
+      "label": "AbaComExecucao: checklist, status, Tentar de novo"
     }
   ],
   "edges": [
@@ -105,13 +119,37 @@
       "id": "e6",
       "from": "rota",
       "to": "storage",
-      "label": "URL temporária"
+      "label": "URL assinada (5 min), só da organização"
     },
     {
       "id": "e7",
       "from": "storage",
       "to": "docs",
-      "label": "visualização e download"
+      "label": "abrir em nova aba / baixar"
+    },
+    {
+      "id": "e8",
+      "from": "modal",
+      "to": "casca",
+      "label": "uma casca por aba, Documentos por último"
+    },
+    {
+      "id": "e9",
+      "from": "casca",
+      "to": "execucoes",
+      "label": "lê fila, etapa e hash"
+    },
+    {
+      "id": "e10",
+      "from": "execucoes",
+      "to": "casca",
+      "label": "polling a cada 2s se em andamento"
+    },
+    {
+      "id": "e11",
+      "from": "ficha",
+      "to": "execucoes",
+      "label": "salvar campo marca desatualizado"
     }
   ]
 }

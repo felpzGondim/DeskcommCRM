@@ -97,6 +97,86 @@ export type Database = {
           },
         ];
       };
+      locacao_execucoes: {
+        Row: {
+          id: string;
+          organization_id: string;
+          processo_id: string;
+          participante_id: string | null;
+          aba: string;
+          estado: string;
+          etapa_texto: string | null;
+          progresso_atual: number;
+          progresso_total: number;
+          erro_codigo: string | null;
+          erro_motivo: string | null;
+          entrada_hash: string | null;
+          ficha_versao: number | null;
+          origem: string;
+          ator_user_id: string | null;
+          resultado: Json | null;
+          iniciado_em: string | null;
+          terminado_em: string | null;
+          call_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          processo_id: string;
+          participante_id?: string | null;
+          aba: string;
+          estado?: string;
+          etapa_texto?: string | null;
+          progresso_atual?: number;
+          progresso_total?: number;
+          erro_codigo?: string | null;
+          erro_motivo?: string | null;
+          entrada_hash?: string | null;
+          ficha_versao?: number | null;
+          origem: string;
+          ator_user_id?: string | null;
+          resultado?: Json | null;
+          iniciado_em?: string | null;
+          terminado_em?: string | null;
+          call_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          processo_id?: string;
+          participante_id?: string | null;
+          aba?: string;
+          estado?: string;
+          etapa_texto?: string | null;
+          progresso_atual?: number;
+          progresso_total?: number;
+          erro_codigo?: string | null;
+          erro_motivo?: string | null;
+          entrada_hash?: string | null;
+          ficha_versao?: number | null;
+          origem?: string;
+          ator_user_id?: string | null;
+          resultado?: Json | null;
+          iniciado_em?: string | null;
+          terminado_em?: string | null;
+          call_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "locacao_execucoes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       locacao_analises_seguro: {
         Row: {
           id: string;

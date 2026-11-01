@@ -15,6 +15,7 @@ import {
   editarValoresDoProcesso,
   garantirValoresDoProcesso,
 } from "@/lib/locacao/valores-imovel-persistencia";
+import { marcarExecucoesDesatualizadasAposEdicao } from "@/lib/locacao/marcar-desatualizado";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
@@ -72,6 +73,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         actorUserId: g.gate.user.id,
         requestId,
         metadata: { processo_id: id, campos: Object.keys(patch) },
+      });
+      void marcarExecucoesDesatualizadasAposEdicao(g.gate.admin, {
+        orgId: g.gate.orgId,
+        processoId: id,
+        fichaVersao: Number(processo.ficha_versao_atual ?? 0),
+        valoresImovel: patch,
       });
     }
     return ok({ valores: valoresParaJson(valores) }, { requestId });

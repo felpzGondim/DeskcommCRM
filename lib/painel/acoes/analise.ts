@@ -3,46 +3,22 @@
  * Reabre os PDFs originais (o texto derivado corta em 8 mil caracteres).
  * Não chama Hub, FC, Migra nem Superlógica. Nada vai ao cliente.
  */
-import { limitesDaAnalise } from "@/lib/agent-engine/agent/painel-anexos-limites";
-import {
-  enriquecerAnexosDaAnalise,
-  frasesDosAvisos,
-} from "@/lib/agent-engine/agent/painel-leitura-anexos";
-import {
-  blocoDasFontesDaFicha,
-  familiaresDaFicha,
-  fontesDaFicha,
-  prepararFontesDoRelatorio,
-  rendaDeclaradaNasFontes,
-} from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
-import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
-import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
-import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
-import { montarRelatorioDeRenda } from "@/lib/locacao/analise/relatorio-renda";
-import { aplicarRendaNaFicha, textoDoResumo } from "@/lib/locacao/analise/renda";
-import { analiseLigada, pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
-import {
-  criarExtratorComModelo,
-  leitorSuperlogicaDesligado,
-  lerSeguroIncendioNoTexto,
-  montarPacote,
-} from "@/lib/locacao/extrato";
+import { iniciarAnaliseDeRenda } from "@/lib/locacao/analise/iniciar-renda";
+import { analiseLigada } from "@/lib/locacao/chaves";
 import {
   FichaConflitoDeVersao,
   gravarVersaoDaFicha,
   lerFichaAtual,
 } from "@/lib/locacao/ficha-repositorio";
-import { completarFicha, fichaVazia, type FichaPreliminar } from "@/lib/locacao/ficha-schema";
+import { completarFicha, type FichaPreliminar } from "@/lib/locacao/ficha-schema";
 import {
   confirmarRendaDoProcesso,
-  gravarEvento,
   gravarFichaDoProcesso,
   lerFichaAtualDoProcesso,
   lerProcesso,
   listarProcessosDaConversa,
   LocacaoErro,
 } from "@/lib/locacao/repositorio";
-import { mascararPessoaNoTexto } from "@/lib/painel/mascarar";
 import type { ContextoDaFerramenta, ResultadoDaFerramenta } from "@/lib/painel/ferramentas/tipos";
 
 export const TEXTO_ANALISE_DESLIGADA = "Esta análise não está ligada nesta organização.";
@@ -70,30 +46,6 @@ async function processoDaConversa(
   return { id };
 }
 
-async function fichaBase(
-  ctx: ContextoDaFerramenta,
-  processoId: string,
-): Promise<{
-  processoVersao: number;
-  conversaVersao: number;
-  ficha: FichaPreliminar;
-  relatorio: string;
-}> {
-  const [doProcesso, daConversa] = await Promise.all([
-    lerFichaAtualDoProcesso(ctx.admin, ctx.orgId, processoId),
-    lerFichaAtual(ctx.admin, ctx.orgId, ctx.conversationId),
-  ]);
-  const ficha = doProcesso?.ficha
-    ? completarFicha(doProcesso.ficha)
-    : (daConversa?.ficha ?? fichaVazia());
-  return {
-    processoVersao: doProcesso?.versao ?? 0,
-    conversaVersao: daConversa?.versao ?? 0,
-    ficha,
-    relatorio: daConversa?.relatorio ?? "",
-  };
-}
-
 function extraDaRenda(ficha: FichaPreliminar, versao: number, origem: string) {
   return {
     versao,
@@ -109,152 +61,12 @@ function extraDaRenda(ficha: FichaPreliminar, versao: number, origem: string) {
   };
 }
 
+/** Mesma função do botão e do chat: só enfileira. O worker processa. */
 export async function analisarRendaDoPainel(
   ctx: ContextoDaFerramenta,
   args: { processo_id?: string; participante_id?: string; senhas?: Record<string, string> } = {},
 ): Promise<ResultadoDaFerramenta> {
-  if (!analiseLigada(ctx.settings, "renda")) return recusaDesligada();
-  const alvo = await processoDaConversa(ctx, args.processo_id);
-  if ("ok" in alvo) return alvo;
-  const limites = limitesDaAnalise(ctx.settings);
-  const { data: linhas, error: erroFontes } = await ctx.dbSessao
-    .from("messages")
-    .select(
-      "id,direction,type,body,media_derived_text,media_derived_status,media_mime,media_storage_path,media_size_bytes,metadata,revoked_at",
-    )
-    .eq("organization_id", ctx.orgId)
-    .eq("conversation_id", ctx.conversationId)
-    .order("sent_at", { ascending: false })
-    .limit(limites.mensagens_brutas);
-  if (erroFontes) {
-    return {
-      ok: false,
-      texto: "Não foi possível ler a conversa para analisar a renda.",
-      codigo: "internal_error",
-    };
-  }
-  const janela = (linhas ?? []).slice(0, 200) as Record<string, unknown>[];
-  const deps = requestTurnDeps();
-  try {
-    const enriquecido = await enriquecerAnexosDaAnalise(janela, ctx.orgId, ctx.conversationId, {
-      limites,
-      senhas: args.senhas ?? {},
-      lerDocumento: (e) => lerDocumentoPorVisao({ ...e, llmCfg: deps.llmCfg }),
-    });
-    const fontes = fontesDaFicha(enriquecido.linhas, {
-      charsPorAnexo: limites.chars_por_arquivo,
-    });
-    const base = await fichaBase(ctx, alvo.id);
-    const familiares = familiaresDaFicha(base.ficha);
-    const pool = getRequestPool();
-    const preparado = await prepararFontesDoRelatorio(fontes, {
-      familiares,
-      extrator: criarExtratorComModelo(
-        pool,
-        deps.llmCfg,
-        { tenantId: ctx.orgId, contactId: ctx.contactId },
-        { registry: deps.registry, log: deps.log },
-        {
-          purpose: "painel_analise",
-        },
-      ),
-    });
-    const bloco = blocoDasFontesDaFicha(preparado.fontes);
-    if (bloco.length > limites.chars_conjunto) {
-      return {
-        ok: false,
-        texto: "Há documentos demais para conferir de uma vez. Revise os anexos desta conversa.",
-        codigo: "validation_error",
-      };
-    }
-    const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
-    const incendio =
-      fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
-    const sl = pacoteSuperlogicaLigado(ctx.settings)
-      ? await leitorSuperlogicaDesligado().ler({ orgId: ctx.orgId, contactId: ctx.contactId })
-      : null;
-    const reaisParaCentavos = (v: number | null) => (v == null ? null : Math.round(v * 100));
-    const pacote = montarPacote({
-      superlogica: sl,
-      conversa: {
-        aluguelCentavos: reaisParaCentavos(base.ficha.imovel.aluguel.valor),
-        condominioCentavos: reaisParaCentavos(base.ficha.imovel.condominio.valor),
-        iptuCentavos: reaisParaCentavos(base.ficha.imovel.iptu.valor),
-        seguroIncendioCentavos: reaisParaCentavos(base.ficha.imovel.seguro_incendio.valor) ?? incendio,
-      },
-    });
-    const declaradaCentavos = rendaDeclaradaNasFontes(fontes);
-    const ficha = aplicarRendaNaFicha(base.ficha, {
-      analises: preparado.analises,
-      holeriteCentavos: preparado.holeriteCentavos,
-      declarada: declaradaCentavos == null ? null : declaradaCentavos / 100,
-      pacote,
-      pendencias: [...preparado.pendencias, ...avisos],
-    });
-    const versao = await gravarFichaDoProcesso(ctx.admin, {
-      orgId: ctx.orgId,
-      processoId: alvo.id,
-      userId: ctx.userId,
-      ficha,
-      origem: "preliminar_ia",
-      baseVersao: base.processoVersao,
-      camposAlterados: ["renda"],
-    });
-    await gravarEvento(ctx.admin, {
-      orgId: ctx.orgId,
-      processoId: alvo.id,
-      tipo: "renda",
-      atorTipo: "usuario",
-      atorId: ctx.userId,
-      detalhe: {
-        ficha_versao: versao,
-        confirmada: false,
-        participante_id: args.participante_id ?? null,
-        call_id: null,
-      },
-    });
-    const resumo = textoDoResumo(ficha);
-    try {
-      await gravarVersaoDaFicha(ctx.admin, {
-        organizationId: ctx.orgId,
-        conversationId: ctx.conversationId,
-        ficha,
-        relatorio: montarRelatorioDeRenda(ficha, preparado.analises, [...preparado.pendencias, ...avisos]),
-        origem: "preliminar_ia",
-        baseVersao: base.conversaVersao,
-        alteradoPor: ctx.userId,
-        processoId: alvo.id,
-      });
-    } catch (err) {
-      if (!(err instanceof FichaConflitoDeVersao)) throw err;
-    }
-    return {
-      ok: true,
-      texto: mascararPessoaNoTexto(resumo),
-      avisos: enriquecido.avisos,
-      extra: extraDaRenda(ficha, versao, "preliminar_ia"),
-    };
-  } catch (err) {
-    if (err instanceof LocacaoErro && err.codigo === "ficha_conflito_de_versao") {
-      return {
-        ok: false,
-        texto: "Outra pessoa alterou a ficha. Recarregue e analise de novo.",
-        codigo: "idempotency_conflict",
-      };
-    }
-    if (err instanceof LocacaoErro) {
-      return {
-        ok: false,
-        texto: "Não foi possível gravar a análise de renda.",
-        codigo: "internal_error",
-      };
-    }
-    return {
-      ok: false,
-      texto: "Não foi possível analisar a renda. Confira os documentos e tente novamente.",
-      codigo: "hub_contract_error",
-    };
-  }
+  return iniciarAnaliseDeRenda(ctx, args);
 }
 
 export async function confirmarRendaDoPainel(

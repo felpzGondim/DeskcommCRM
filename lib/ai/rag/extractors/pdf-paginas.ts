@@ -32,9 +32,34 @@ async function carregarCanvasNativo(): Promise<CanvasNativo | null> {
   }
 }
 
+export async function contarPaginasPdf(
+  buffer: Buffer,
+  opcoes: { password?: string } = {},
+): Promise<number> {
+  try {
+    const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof PdfjsDist;
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      ...(opcoes.password ? { password: opcoes.password } : {}),
+    });
+    const doc = await loadingTask.promise;
+    return doc.numPages;
+  } catch (err) {
+    if (ehErroDeSenhaDePdf(err)) {
+      throw new PdfExtractError("pdfjs-dist needs a password to open this PDF", err, "protegido");
+    }
+    throw new PdfExtractError("pdfjs-dist failed to count PDF pages", err);
+  }
+}
+
 export async function rasterizarPaginasPdf(
   buffer: Buffer,
-  opcoes: { maxPaginas: number; password?: string } = { maxPaginas: 8 },
+  opcoes: {
+    maxPaginas?: number;
+    paginaInicial?: number;
+    paginaFinal?: number;
+    password?: string;
+  } = { maxPaginas: 8 },
 ): Promise<PaginaRasterizada[]> {
   try {
     const pdfjsLib = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof PdfjsDist;
@@ -43,11 +68,13 @@ export async function rasterizarPaginasPdf(
       ...(opcoes.password ? { password: opcoes.password } : {}),
     });
     const doc = await loadingTask.promise;
-    const teto = Math.min(doc.numPages, Math.max(1, opcoes.maxPaginas));
+    const inicio = Math.max(1, opcoes.paginaInicial ?? 1);
+    const fimPedido = opcoes.paginaFinal ?? (opcoes.maxPaginas != null ? inicio + Math.max(1, opcoes.maxPaginas) - 1 : doc.numPages);
+    const fim = Math.min(doc.numPages, fimPedido);
     const canvasMod = await carregarCanvasNativo();
     if (!canvasMod?.createCanvas) return [];
     const saida: PaginaRasterizada[] = [];
-    for (let n = 1; n <= teto; n++) {
+    for (let n = inicio; n <= fim; n++) {
       const page = await doc.getPage(n);
       const base = page.getViewport({ scale: 1 });
       const escala = Math.min(1.6, 1600 / Math.max(base.width, base.height));

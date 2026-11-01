@@ -5,7 +5,8 @@
  */
 import { z } from "zod";
 
-import { analisarRendaDoPainel, confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
+import { confirmarRendaDoPainel } from "@/lib/painel/acoes/analise";
+import { iniciarAnaliseDeRenda } from "@/lib/locacao/analise/iniciar-renda";
 import { consultarLeituraHub, executarConsultaHub, NOMES_HUB_IMOVEL, NOMES_HUB_PESSOAS, confirmarAnaliseHub, prepararAnaliseHub } from "@/lib/painel/acoes/hub";
 import { analisarFcDoPainel, confirmarCobrancaFcDoPainel, statusFcDoPainel } from "@/lib/painel/acoes/fc";
 import {
@@ -245,7 +246,7 @@ export const FERRAMENTAS_DO_PAINEL: readonly DefinicaoDaFerramenta[] = [
     padraoLigada: true,
     exigeChaveAnalise: "renda",
     executar: (ctx, args) =>
-      analisarRendaDoPainel(ctx, (args ?? {}) as {
+      iniciarAnaliseDeRenda(ctx, (args ?? {}) as {
         processo_id?: string;
         participante_id?: string;
         senhas?: Record<string, string>;
