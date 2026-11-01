@@ -19,6 +19,7 @@ import {
 } from "@/lib/locacao/ficha-repositorio";
 import { textoDaFalhaDoRelatorio } from "@/lib/painel/relatorio-preliminar-motivo";
 import { enfileirarRelatorioPreliminar, lerGeracaoDaFicha } from "@/lib/painel/relatorio-preliminar-fila";
+import { marcarExecucoesDesatualizadasAposEdicao } from "@/lib/locacao/marcar-desatualizado";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -148,6 +149,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         criarProcesso: processosLigados(orgSettings?.settings),
       });
       registrar(true, { versao: linha.versao, campos: linha.campos_alterados });
+      void marcarExecucoesDesatualizadasAposEdicao(admin, {
+        orgId: orgId!,
+        conversationId: id,
+        processoId: linha.processo_id ?? null,
+        fichaVersao: linha.versao,
+        ficha: linha.ficha,
+      });
       const historico = await listarHistoricoDaFicha(admin, orgId!, id);
       return ok({
         processo_versao: (await lerFichaAtual(admin, orgId!, id))?.processo_versao ?? 0,

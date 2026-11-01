@@ -8,19 +8,21 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
-### Adicionado
-
-- **Fila de execução por aba da locação (ainda sem tela)** Cada aba do modal (Dados, Renda, FC, Migra, Relatório, Contrato, Documentos) passa a ter um registro de execução: na fila, processando, concluído, erro ou desatualizado, com etapa, progresso, quem pediu (botão ou chat) e o hash da entrada usada. Nada muda na tela neste passo — o registro só existe no banco. Quem já instalou não precisa editar arquivo.
-
-- **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
-
 ### Alterado
+
+- **Modal de locação mostra o andamento de cada aba** As abas passam a ser Dados, Renda, FC, Migra, Relatório, Contrato e Documentos (por último). Cada uma mostra o que falta para rodar, o status (na fila, processando com a etapa atual, concluído, erro com Tentar de novo, ou desatualizado) e a hora da última execução. Se um campo da entrada muda depois de uma execução concluída, o resultado aparece como desatualizado — rode de novo. O vínculo Superlógica fica em Dados. Não há botão Analisar tudo. O modal só mostra a etapa do card do quadro, sem movê-lo. A renda ainda roda no POST de hoje; o ponto de ligação da fila assíncrona fica marcado. Quem já instalou não precisa fazer nada.
 
 - **Documentos agrupados por origem, aba por último.** Inquilino, ficha cadastral impressa, laudo da FC, Migra e contrato. Grupo sem arquivo mostra "nenhum arquivo ainda". Superlógica fica antes de Documentos.
 
 ### Corrigido
 
 - **A aba Documentos abre e baixa os arquivos que já estão no Storage.** Cada arquivo tem Abrir (nova aba) e Baixar. A URL é assinada no servidor depois de conferir a organização da sessão; o clique não depende mais de prévia no modal (imagem/iframe), que falhava em PDF e em bucket privado.
+
+### Adicionado
+
+- **Fila de execução por aba da locação (ainda sem tela)** Cada aba do modal (Dados, Renda, FC, Migra, Relatório, Contrato, Documentos) passa a ter um registro de execução: na fila, processando, concluído, erro ou desatualizado, com etapa, progresso, quem pediu (botão ou chat) e o hash da entrada usada. Nada muda na tela neste passo — o registro só existe no banco. Quem já instalou não precisa editar arquivo.
+
+- **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
 ## [1.88.0-felpz.14] — 2026-10-29
 

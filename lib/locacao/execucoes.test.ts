@@ -15,6 +15,8 @@ import {
   atualizarExecucao,
   caminhoDeDocumentoDoProcesso,
   lerUltimaExecucaoPorAba,
+  lerUltimasExecucoesDoProcesso,
+  marcarDesatualizadasSeEntradaMudou,
   PASTA_FICHA_CADASTRAL,
 } from "@/lib/locacao/execucoes";
 import {
@@ -38,10 +40,14 @@ function cadeia(resposta: { data?: unknown; error?: { code?: string } | null } =
   api.in = self;
   api.order = self;
   api.limit = self;
+  api.not = self;
+  api.neq = self;
   api.insert = vi.fn(() => api);
   api.update = vi.fn(() => api);
   api.is = self;
   api.maybeSingle = vi.fn(async () => ({ data: resposta.data ?? null, error: resposta.error ?? null }));
+  api.then = (ok: (v: { data: unknown; error: unknown }) => unknown, err?: (e: unknown) => unknown) =>
+    Promise.resolve({ data: resposta.data ?? null, error: resposta.error ?? null }).then(ok, err);
   return api;
 }
 
@@ -112,6 +118,30 @@ describe("helper de locacao_execucoes", () => {
     const linha = await lerUltimaExecucaoPorAba(admin, ORG, PROCESSO, "fc");
     expect(linha?.id).toBe(EXEC);
     expect(api.order).toBeDefined();
+  });
+
+  it("lê a última de cada aba e marca concluídas com hash diferente como desatualizado", async () => {
+    const listApi = cadeia({
+      data: [
+        { id: EXEC, aba: "renda", estado: "concluido", created_at: "2026-11-01T12:00:00.000Z" },
+        { id: "old", aba: "renda", estado: "erro", created_at: "2026-10-01T12:00:00.000Z" },
+        { id: "fc1", aba: "fc", estado: "na_fila", created_at: "2026-11-01T11:00:00.000Z" },
+      ],
+    });
+    mocks.tabela.mockReturnValueOnce(listApi);
+    const ultimas = await lerUltimasExecucoesDoProcesso(admin, ORG, PROCESSO);
+    expect(ultimas.map((l) => l.aba)).toEqual(["renda", "fc"]);
+    expect(ultimas[0]?.id).toBe(EXEC);
+
+    const updateApi = cadeia();
+    mocks.tabela.mockReturnValueOnce(updateApi);
+    await marcarDesatualizadasSeEntradaMudou(admin, {
+      orgId: ORG,
+      processoId: PROCESSO,
+      hashAtual: "novo",
+      abas: ["renda", "fc"],
+    });
+    expect(updateApi.update).toHaveBeenCalledWith({ estado: "desatualizado" });
   });
 
   it("ao concluir, grava terminado_em; ao processar, só carimba iniciado_em vazio", async () => {
