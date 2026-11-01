@@ -8,6 +8,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Fila de execução por aba da locação (ainda sem tela)** Cada aba do modal (Dados, Renda, FC, Migra, Relatório, Contrato, Documentos) passa a ter um registro de execução: na fila, processando, concluído, erro ou desatualizado, com etapa, progresso, quem pediu (botão ou chat) e o hash da entrada usada. Nada muda na tela neste passo — o registro só existe no banco. Quem já instalou não precisa editar arquivo.
+
+- **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado

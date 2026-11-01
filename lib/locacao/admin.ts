@@ -1,7 +1,7 @@
 /**
  * Acesso às tabelas de locação. A maior parte não está no `database.types`
- * gerado do upstream; `locacao_analises_seguro` (0770) entra à mão. Service
- * role + filtro de organization_id da sessão.
+ * gerado do upstream; `locacao_analises_seguro` (0770) e `locacao_execucoes`
+ * (0772) entram à mão. Service role + filtro de organization_id da sessão.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 

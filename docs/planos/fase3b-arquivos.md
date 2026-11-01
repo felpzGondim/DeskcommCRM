@@ -34,7 +34,9 @@ Sem dado pessoal neste arquivo.
 - Limite de 20 MB por arquivo.
 - Tipos aceitos: PDF, JPEG, PNG, WEBP e HEIC.
 - Caminho (o mesmo da Fase 3): `{org_id}/processos/{processo_id}/{categoria}/{documento_id}.{ext}`.
-  - Categorias: `documento_pessoal`, `comprovante_renda`, `laudo_fc`, `cotacao_seguro`, `relatorio`, `contrato`, `outro`.
+  - Categorias: `documento_pessoal`, `comprovante_renda`, `laudo_fc`, `cotacao_seguro`, `relatorio`, `contrato`, `outro`, `ficha_cadastral`, `ficha_migra`.
+  - Ficha cadastral impressa (grupo da aba Documentos): `{org_id}/processos/{processo_id}/ficha_cadastral/{documento_id}.{ext}`.
+  - Laudo da FC: pasta `laudo_fc/` (origem `hub_fc`). Consulta/print da Migra: pasta `cotacao_seguro/` (origem `hub_migra`). Ficha da Migra: pasta `ficha_migra/` (origem `hub_migra`). Contrato gerado: pasta `contrato/` (origem `contrato`).
   - **O caminho não leva nome, CPF nem telefone.**
 
 ### 3.2 Regras de acesso (RLS no `storage.objects`)
