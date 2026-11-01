@@ -8,15 +8,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
-import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
   PAPEIS_DA_FICHA,
+  fichaVazia,
   pessoaVazia,
   type CampoFicha,
   type FichaPreliminar,
   type NumeroFicha,
   type PapelDaFicha,
 } from "@/lib/locacao/ficha-schema";
+import {
+  camposFaltantesDoPacote,
+  valoresDoPacoteDaFicha,
+  type CampoObrigatorioDoPacote,
+} from "@/lib/locacao/valores-imovel";
+
+const ROTULO_FALTANTE_PACOTE: Record<CampoObrigatorioDoPacote, string> = {
+  aluguel: "aluguel",
+  condominio: "condomínio (inclui rateio)",
+  iptu: "IPTU",
+  seguro_incendio: "seguro-incêndio",
+};
 
 interface Props {
   atualizacao?: number;
@@ -73,6 +85,13 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
   }
 
   const bloqueado = desabilitado || carregando !== null || gerando;
+  const faltantesPacote = ficha ? camposFaltantesDoPacote(valoresDoPacoteDaFicha(ficha)) : [];
+  const avisoPacote = faltantesPacote.length
+    ? t("Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.").replace(
+      "{campos}",
+      faltantesPacote.map((c) => t(ROTULO_FALTANTE_PACOTE[c])).join(", "),
+    )
+    : null;
 
   return (
     <div className="space-y-2" data-testid="ficha-preliminar">
@@ -171,6 +190,11 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           </div>
           <div className="space-y-1">
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>
+            {avisoPacote && (
+              <p role="status" data-testid="aviso-pacote-incompleto" className="text-[11px] font-medium text-destructive">
+                {avisoPacote}
+              </p>
+            )}
             <label className="block text-[11px]">{t("Endereço do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />

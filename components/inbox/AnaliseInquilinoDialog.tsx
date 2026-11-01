@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FormularioGerarContrato } from "@/components/inbox/GerarContratoDialog";
 import { FichaPreliminarPainel } from "@/components/inbox/FichaPreliminarPainel";
 import { AbaComExecucao } from "@/components/locacao/AbaComExecucao";
+import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
 import { DocumentosLocacaoPainel } from "@/components/locacao/DocumentosLocacaoPainel";
 import { ProcessoDeLocacaoPainel, type SecaoDoProcessoPainel } from "@/components/locacao/ProcessoDeLocacaoPainel";
 import { VinculoSuperlogica } from "@/components/locacao/VinculoSuperlogica";
@@ -221,6 +222,10 @@ export function AnaliseInquilinoDialog({
               senhasPdf={senhasPdf}
               onEntradaEditada={() => setEntradaSuja(true)}
               onSalvo={recarregarContato}
+            />
+            <CamposImovelProcessoNaFicha
+              conversationId={conversationId}
+              desabilitado={desabilitado}
             />
             <VinculoSuperlogica
               conversationId={conversationId}

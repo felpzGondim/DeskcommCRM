@@ -8,7 +8,14 @@ import {
   gravarFichaDoProcesso, lerFichaAtualDoProcesso, listarParticipantesParaFc, listarProcessosDaConversa, LocacaoErro,
 } from "@/lib/locacao/repositorio";
 import { ehStatusFinal, type StatusDoProcesso } from "@/lib/locacao/status";
-import { aplicarEdicaoManual, extrairValoresDaConversa, lerValoresDaLinha, patchSqlDosValores } from "@/lib/locacao/valores-imovel";
+import {
+  aplicarEdicaoManual,
+  extrairValoresDaConversa,
+  lerValoresDaLinha,
+  patchSqlDosValores,
+  preencherValores,
+  type CampoDoValorDoImovel,
+} from "@/lib/locacao/valores-imovel";
 
 export async function processoAtivoDaConversa(admin: SupabaseClient, orgId: string, conversaId: string) {
   const lista = await listarProcessosDaConversa(admin, orgId, conversaId);
@@ -45,6 +52,27 @@ export async function sincronizarFichaCompartilhada(admin: SupabaseClient, input
     orgId: input.orgId, processoId: id, userId: input.userId, ficha: input.ficha,
     origem: input.origem, baseVersao: atual?.versao ?? 0, camposAlterados: campos,
   }) : atual!.versao;
+
+  const fonte = extrairValoresDaConversa({ficha: input.ficha});
+  const { data: linha, error: erroLinha } = await tabelaLocacao(admin, "locacao_processos").select("*")
+    .eq("organization_id", input.orgId).eq("id", id).single();
+  if (erroLinha || !linha) throw new LocacaoErro("processo_leitura", "processo");
+  const atuais = lerValoresDaLinha(linha as Record<string, unknown>);
+  const aplicados = input.origem === "atendente"
+    ? aplicarEdicaoManual(
+      atuais,
+      Object.fromEntries(
+        Object.entries(fonte).filter(([, v]) => typeof v === "number"),
+      ) as Partial<Record<CampoDoValorDoImovel, number>>,
+      input.userId,
+    )
+    : preencherValores({ atuais, conversa: fonte });
+  if (aplicados.campos.length) {
+    const { error: erroValores } = await tabelaLocacao(admin, "locacao_processos")
+      .update(patchSqlDosValores(aplicados.valores, aplicados.campos))
+      .eq("organization_id", input.orgId).eq("id", id);
+    if (erroValores) throw new LocacaoErro("valores_imovel_gravacao", "valores");
+  }
   if (input.origem !== "atendente") return;
 
   // Mantém a pessoa que só conversa separada dos candidatos identificados.
@@ -77,15 +105,6 @@ export async function sincronizarFichaCompartilhada(admin: SupabaseClient, input
     });
     }
   }
-  const fonte = extrairValoresDaConversa({ficha: input.ficha});
-  const patch = Object.fromEntries(Object.entries(fonte).filter(([, v]) => typeof v === "number"));
-  const { data: linha, error: erroLinha } = await tabelaLocacao(admin, "locacao_processos").select("*")
-    .eq("organization_id", input.orgId).eq("id", id).single();
-  if (erroLinha || !linha) throw new LocacaoErro("processo_leitura", "processo");
-  const valores = aplicarEdicaoManual(lerValoresDaLinha(linha as Record<string, unknown>), patch, input.userId);
-  const { error: erroValores } = await tabelaLocacao(admin, "locacao_processos").update(patchSqlDosValores(valores.valores, valores.campos))
-    .eq("organization_id", input.orgId).eq("id", id);
-  if (erroValores) throw new LocacaoErro("valores_imovel_gravacao", "valores");
   if (input.ficha.renda.mensal.valor != null && input.ficha.renda.mensal.valor > 0) {
     await confirmarRendaDoProcesso(admin, {orgId: input.orgId, processoId: id, userId: input.userId, fichaVersao: versao});
   } else {

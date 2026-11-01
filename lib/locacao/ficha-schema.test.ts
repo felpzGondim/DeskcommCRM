@@ -61,4 +61,37 @@ describe("ficha preliminar — schema", () => {
     expect(fiador.principal).toBe(false);
     expect(fiador.cpf.valor).toBeNull();
   });
+
+  it("bloco do imóvel aceita número nu, string BR e preenche origem conversa", () => {
+    const ficha = completarFicha({
+      imovel: {
+        aluguel: 2100,
+        condominio: "350,50",
+        iptu: { valor: "1.200,00" },
+        seguro_incendio: { valor: 85, fonte: "M3", trecho: "seguro 85" },
+        logradouro: "Rua das Flores",
+        numero: { valor: "100" },
+      },
+      contrato: { iptu_mensal: 10 },
+      garantia: { tipo: "seguro_fianca", valor_mensal: 99 },
+      vigencia: { inicio: "2026-11-10", prazo_meses: 30 },
+    });
+    expect(ficha.imovel.aluguel).toMatchObject({ valor: 2100, fonte: "conversa" });
+    expect(ficha.imovel.condominio).toMatchObject({ valor: 350.5, fonte: "conversa" });
+    expect(ficha.imovel.iptu).toMatchObject({ valor: 1200, fonte: "conversa" });
+    expect(ficha.imovel.seguro_incendio).toMatchObject({ valor: 85, fonte: "M3" });
+    expect(ficha.imovel.logradouro).toMatchObject({ valor: "Rua das Flores", fonte: "conversa" });
+    expect(ficha.imovel.numero.valor).toBe("100");
+    expect(ficha.contrato.iptu_mensal).toMatchObject({ valor: 10, fonte: "conversa" });
+    expect(ficha.garantia.tipo).toBe("seguro_fianca");
+    expect(ficha.garantia.valor_mensal).toMatchObject({ valor: 99, fonte: "conversa" });
+    expect(ficha.vigencia.inicio).toMatchObject({ valor: "2026-11-10", fonte: "conversa" });
+    expect(ficha.vigencia.prazo_meses.valor).toBe(30);
+  });
+
+  it("não inventa zero nem origem quando o bloco do imóvel veio vazio", () => {
+    const ficha = completarFicha({ imovel: { aluguel: {}, condominio: null } });
+    expect(ficha.imovel.aluguel).toMatchObject({ valor: null, fonte: null });
+    expect(ficha.imovel.condominio).toMatchObject({ valor: null, fonte: null });
+  });
 });

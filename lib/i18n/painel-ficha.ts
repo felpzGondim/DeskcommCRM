@@ -110,4 +110,12 @@ export const TEXTOS_PAINEL_FICHA = {
   "conversa/ficha": { es: "conversación/ficha" },
   editado: { es: "editado" },
   ausente: { es: "ausente" },
+  aluguel: { es: "alquiler" },
+  "condomínio (inclui rateio)": { es: "condominio (incluye prorrateo)" },
+  IPTU: { es: "IPTU" },
+  "seguro-incêndio": { es: "seguro de incendio" },
+  "seguro-fiança": { es: "seguro fianza" },
+  "Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.": {
+    es: "Falta en el paquete: {campos}. Escriba el valor en Inmueble y ejecute Renta de nuevo.",
+  },
 };

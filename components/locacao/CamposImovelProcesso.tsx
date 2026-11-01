@@ -9,12 +9,21 @@ import { apiClient } from "@/lib/api/client";
 import {
   CAMPOS_DO_VALOR_DO_IMOVEL,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
+  camposFaltantesDoPacote,
   rotuloDaOrigemDoValor,
   valoresVazios,
   type CampoDoValorDoImovel,
+  type CampoObrigatorioDoPacote,
   type OrigemDoValorDoImovel,
   type ValoresDoImovel,
 } from "@/lib/locacao/valores-imovel";
+
+const ROTULO_FALTANTE_PACOTE: Record<CampoObrigatorioDoPacote, string> = {
+  aluguel: "aluguel",
+  condominio: "condomínio (inclui rateio)",
+  iptu: "IPTU",
+  seguro_incendio: "seguro-incêndio",
+};
 
 const ROTULO_CAMPO_TELA: Record<CampoDoValorDoImovel, string> = {
   aluguel: "Aluguel (R$/mês)",
@@ -36,6 +45,13 @@ export function CamposImovelProcesso({
   aviso?: string | null;
 }) {
   const t = useT();
+  const faltantes = camposFaltantesDoPacote(valores);
+  const avisoPacote = faltantes.length
+    ? t("Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.").replace(
+      "{campos}",
+      faltantes.map((c) => t(ROTULO_FALTANTE_PACOTE[c])).join(", "),
+    )
+    : null;
   const [rascunho, setRascunho] = useState<Record<CampoDoValorDoImovel, string>>(() => textosDe(valores));
   const [valoresVistos, setValoresVistos] = useState(valores);
   const [salvando, setSalvando] = useState(false);
@@ -77,6 +93,11 @@ export function CamposImovelProcesso({
         {t("3× usa aluguel + condomínio + IPTU + seguro-incêndio. O seguro-fiança é informativo.")}
       </p>
       {aviso && <p className="text-[11px] text-muted-foreground">{aviso}</p>}
+      {avisoPacote && (
+        <p role="status" data-testid="aviso-pacote-incompleto" className="text-[11px] font-medium text-destructive">
+          {avisoPacote}
+        </p>
+      )}
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
       {CAMPOS_DO_VALOR_DO_IMOVEL.map((campo) => {
         const obrigatorio = (CAMPOS_OBRIGATORIOS_DO_PACOTE as readonly string[]).includes(campo);

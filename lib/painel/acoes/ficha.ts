@@ -139,9 +139,18 @@ export async function gerarRelatorioPreliminarDoPainel(
     const sl = pacoteSuperlogicaLigado(ctx.settings)
       ? await leitorSuperlogicaDesligado().ler({ orgId: ctx.orgId, contactId: ctx.contactId })
       : null;
+    const reaisParaCentavos = (v: number | null | undefined) =>
+      v == null || !Number.isFinite(v) ? null : Math.round(v * 100);
+    const imovelPrevio = fichaPrevia?.imovel;
     const pacote = montarPacote({
       superlogica: sl,
-      conversa: { seguroIncendioCentavos: incendio },
+      conversa: {
+        aluguelCentavos: reaisParaCentavos(imovelPrevio?.aluguel.valor),
+        condominioCentavos: reaisParaCentavos(imovelPrevio?.condominio.valor),
+        iptuCentavos: reaisParaCentavos(imovelPrevio?.iptu.valor),
+        seguroIncendioCentavos:
+          reaisParaCentavos(imovelPrevio?.seguro_incendio.valor) ?? incendio,
+      },
     });
     etapa = "relatorio";
     const { saida } = await gerarRelatorioPreliminarNoPainel(
