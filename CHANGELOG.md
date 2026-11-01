@@ -10,6 +10,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Alterado
 
+- **Análise de renda em segundo plano, sem teto de páginas** O clique (e a mesma função do chat) só enfileira a execução e devolve o id. Um cron lê o extrato inteiro em blocos, grava “lendo extrato pág. X de N” e aplica a regra 3× (aluguel+condomínio+IPTU+seguro-incêndio, sem fiança) com as exclusões à parte. Falha de leitura vira motivo em português e item de checklist. Quem já instalou não precisa editar arquivo; a chave `locacao.analise.renda` continua desligada por padrão.
 - **Modal de locação mostra o andamento de cada aba** As abas passam a ser Dados, Renda, FC, Migra, Relatório, Contrato e Documentos (por último). Cada uma mostra o que falta para rodar, o status (na fila, processando com a etapa atual, concluído, erro com Tentar de novo, ou desatualizado) e a hora da última execução. Se um campo da entrada muda depois de uma execução concluída, o resultado aparece como desatualizado — rode de novo. O vínculo Superlógica fica em Dados. Não há botão Analisar tudo. O modal só mostra a etapa do card do quadro, sem movê-lo. A renda ainda roda no POST de hoje; o ponto de ligação da fila assíncrona fica marcado. Quem já instalou não precisa fazer nada.
 
 - **Documentos agrupados por origem, aba por último.** Inquilino, ficha cadastral impressa, laudo da FC, Migra e contrato. Grupo sem arquivo mostra "nenhum arquivo ainda". Superlógica fica antes de Documentos.

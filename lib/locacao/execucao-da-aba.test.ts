@@ -54,9 +54,9 @@ describe("ordem e ponto de ligação das abas", () => {
     ]);
   });
 
-  it("a renda assíncrona ainda aponta para o POST síncrono existente", () => {
+  it("a renda assíncrona aponta para o POST que só enfileira", () => {
     expect(PONTO_RENDA_ASSINCRONA.rota).toBe("/api/v1/conversations/:id/painel-agente/renda");
-    expect(PONTO_RENDA_ASSINCRONA.estado).toBe("sincrono");
+    expect(PONTO_RENDA_ASSINCRONA.estado).toBe("assincrono");
   });
 });
 

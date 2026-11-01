@@ -31,14 +31,13 @@ export const ROTULO_DO_BOTAO_DA_ABA: Partial<Record<AbaDaExecucao, string>> = {
 };
 
 /**
- * PONTO DE LIGAÇÃO — renda assíncrona (PR 2, ainda não neste PR).
- * Hoje o botão da aba renda chama o POST síncrono existente.
- * Quando o runner existir, `rodarAbaDoModal("renda")` deve devolver
- * `{ execucao_id }` (202) e a casca passa a ler só `locacao_execucoes`.
+ * PONTO DE LIGAÇÃO — renda assíncrona.
+ * O botão da aba renda chama o POST que só enfileira (202 + execucao_id).
+ * A casca lê o andamento em `locacao_execucoes`.
  */
 export const PONTO_RENDA_ASSINCRONA = {
   rota: "/api/v1/conversations/:id/painel-agente/renda",
-  estado: "sincrono",
+  estado: "assincrono",
 } as const;
 
 export const MS_POLLING_DA_EXECUCAO = 2000;

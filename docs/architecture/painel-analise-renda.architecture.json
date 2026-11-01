@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Análise de renda no Painel (PR 4.1)",
-    "subtitle": "Botão e /pergunta compartilham executarFerramenta; PDFs originais; confirmação humana",
+    "subtitle": "Botão e chat compartilham iniciarAnaliseDeRenda; fila locacao_execucoes; extrato sem teto de páginas",
     "output": "painel-analise-renda.html",
     "quality_profile": "standard"
   },
@@ -13,7 +13,7 @@
     { "id": "modelo", "label": "Modelo" },
     { "id": "registro", "label": "Registro" }
   ],
-  "mainPath": ["botao", "chave", "executar", "pdfs", "modelo", "ficha"],
+  "mainPath": ["botao", "chave", "executar", "fila", "cron", "pdfs", "modelo", "ficha"],
   "nodes": [
     {
       "id": "botao",
@@ -55,14 +55,28 @@
       "lane": "servidor",
       "col": 2,
       "type": "process",
-      "label": "executarFerramenta: mesmo caminho do botão e do loop"
+      "label": "iniciarAnaliseDeRenda: só enfileira; 202 + execucao_id"
+    },
+    {
+      "id": "fila",
+      "lane": "registro",
+      "col": 4,
+      "type": "database",
+      "label": "locacao_execucoes renda: na_fila, hash, senhas só no jsonb"
+    },
+    {
+      "id": "cron",
+      "lane": "servidor",
+      "col": 2,
+      "type": "process",
+      "label": "cron locacao-execucoes: reivindica e processa em blocos"
     },
     {
       "id": "pdfs",
       "lane": "servidor",
       "col": 2,
       "type": "process",
-      "label": "enriquecerAnexosDaAnalise / lerPdfsOriginais (não o corte de 8 mil)"
+      "label": "extrato inteiro em lotes; progresso 'lendo extrato pág. X de N'"
     },
     {
       "id": "modelo",
@@ -76,7 +90,7 @@
       "lane": "servidor",
       "col": 2,
       "type": "process",
-      "label": "Motor extrato: PIX/TED terceiros entram; próprias e familiares saem"
+      "label": "Regra 3×: aluguel+condomínio+IPTU+incêndio; exclusões à parte"
     },
     {
       "id": "ficha",
@@ -113,13 +127,10 @@
     { "id": "e3", "from": "chave", "to": "pergunta", "label": "off: some do ToolSet" },
     { "id": "e4", "from": "botao", "to": "rota", "label": "clique do atendente" },
     { "id": "e5", "from": "pergunta", "to": "executar", "label": "L chama; S só propõe" },
-    { "id": "e6", "from": "rota", "to": "executar", "label": "origem botao" },
-    {
-      "id": "e7",
-      "from": "executar",
-      "to": "pdfs",
-      "label": "200 mensagens; PDF com senha vira pendência"
-    },
+    { "id": "e6", "from": "rota", "to": "executar", "label": "origem botao; GET consulta a execução" },
+    { "id": "e7", "from": "executar", "to": "fila", "label": "abre na_fila; não roda OCR no POST" },
+    { "id": "e16", "from": "fila", "to": "cron", "label": "reivindica na_fila → processando" },
+    { "id": "e17", "from": "cron", "to": "pdfs", "label": "sem teto de páginas; motivo visível" },
     {
       "id": "e8",
       "from": "pdfs",

@@ -13,9 +13,12 @@ describe("botões do modal chamam as rotas que já existem", () => {
     post.mockResolvedValue({ data: {} });
   });
 
-  it("renda ainda é o POST síncrono — ponto de ligação da fila assíncrona", async () => {
-    expect(PONTO_RENDA_ASSINCRONA.estado).toBe("sincrono");
-    await rodarAbaDoModal({ conversationId: "c1", aba: "renda", processoId: "p1" });
+  it("renda enfileira no ponto assíncrono e devolve o id da execução", async () => {
+    expect(PONTO_RENDA_ASSINCRONA.estado).toBe("assincrono");
+    expect(PONTO_RENDA_ASSINCRONA.rota).toBe("/api/v1/conversations/:id/painel-agente/renda");
+    post.mockResolvedValue({ data: { execucao_id: "e-renda" } });
+    const r = await rodarAbaDoModal({ conversationId: "c1", aba: "renda", processoId: "p1" });
+    expect(r.execucao_id).toBe("e-renda");
     expect(post).toHaveBeenCalledWith("/api/v1/conversations/c1/painel-agente/renda", {
       etapa: "analisar",
       processo_id: "p1",

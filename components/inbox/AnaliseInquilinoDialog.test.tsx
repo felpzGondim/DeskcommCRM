@@ -77,6 +77,62 @@ describe("casca do modal de locação", () => {
     expect(await screen.findByTestId("documentos-locacao")).toBeVisible();
   });
 
+  it("o botão da aba Renda enfileira e a casca mostra o andamento", async () => {
+    const execucaoNaFila = {
+      id: "e-renda",
+      aba: "renda",
+      estado: "na_fila",
+      etapa_texto: "na fila",
+      progresso_atual: 0,
+      progresso_total: 0,
+      erro_motivo: null,
+      entrada_hash: "aaa",
+      ficha_versao: 1,
+      origem: "botao",
+      iniciado_em: null,
+      terminado_em: null,
+      created_at: "2026-11-01T12:00:00.000Z",
+      updated_at: "2026-11-01T12:00:00.000Z",
+    };
+    post.mockResolvedValue({ data: { execucao_id: "e-renda" } });
+    get.mockImplementation(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/locacao/documentos")) {
+        return { data: { recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false } };
+      }
+      if (u.includes("/ficha")) return { data: { atual: null, historico: [] } };
+      if (u.endsWith("/locacao")) {
+        return post.mock.calls.length > 0
+          ? { data: { ...locacaoOk.data, execucoes: { renda: execucaoNaFila } } }
+          : locacaoOk;
+      }
+      return { data: {} };
+    });
+    render(
+      <AnaliseInquilinoDialog
+        aberto
+        onAbertoChange={vi.fn()}
+        conversationId="conv-1"
+        senhasPdf={[]}
+      />,
+    );
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("tab", { name: "Renda" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Analisar renda" }));
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith("/api/v1/conversations/conv-1/painel-agente/renda", {
+        etapa: "analisar",
+        processo_id: "proc-1",
+        senhasPdf: undefined,
+      });
+    });
+    await waitFor(() => {
+      const paineis = screen.getAllByTestId("aba-com-execucao");
+      expect(paineis.some((el) => el.getAttribute("data-estado") === "na_fila")).toBe(true);
+    });
+    expect(screen.getAllByTestId("rotulo-da-execucao").some((el) => el.textContent === "Na fila")).toBe(true);
+  });
+
   it("não puxa o cliente MCP do Hub para o bundle do inbox", () => {
     const arquivos = [
       "components/inbox/AnaliseInquilinoDialog.tsx",

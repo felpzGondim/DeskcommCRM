@@ -4,7 +4,7 @@
  * Nada disto é gravado — só vive na prévia efêmera até a Fase 3.
  */
 import { extractPdfDocument, PdfExtractError } from "@/lib/ai/rag/extractors/pdf";
-import { rasterizarPaginasPdf } from "@/lib/ai/rag/extractors/pdf-paginas";
+import { contarPaginasPdf, rasterizarPaginasPdf } from "@/lib/ai/rag/extractors/pdf-paginas";
 import { ehErroDeSenhaDePdf } from "@/lib/ai/rag/extractors/pdf-senha";
 import type { LerDocumentoFn } from "@/lib/ai/visao/ler-documento";
 import {
@@ -12,6 +12,11 @@ import {
   type LimitesAnexos,
   ehDescricaoGenericaDeMidia,
 } from "@/lib/agent-engine/agent/painel-anexos-limites";
+import {
+  fraseDoMotivoDeLeitura,
+  type MotivoLeituraDocumental,
+} from "@/lib/locacao/analise/motivos-renda";
+import { lerExtratoEmBlocos, textoDoProgressoDeExtrato } from "@/lib/locacao/analise/progresso-extrato";
 import { isMediaPathOwnedBy } from "@/lib/messaging/media/upload-validation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -19,6 +24,25 @@ export type AvisoAnexo = {
   tipo: "pdf_protegido" | "pdf_escaneado" | "imagem_sem_leitura" | "arquivo_extenso" | "limite";
   nome: string;
   tentativas?: number;
+  motivo?: string;
+};
+
+export type ProgressoDaLeitura = {
+  atual: number;
+  total: number;
+  etapa: string;
+  nome: string;
+};
+
+export type OpcoesDaLeituraDeAnexos = {
+  limites?: LimitesAnexos;
+  senhas?: Record<string, string>;
+  lerDocumento?: LerDocumentoFn;
+  /** Renda: lê o extrato inteiro, sem teto de páginas. */
+  semTetoPaginas?: boolean;
+  /** Renda: não descarta o extrato por chars_conjunto. */
+  semTetoTexto?: boolean;
+  onProgresso?: (p: ProgressoDaLeitura) => void | Promise<void>;
 };
 
 export function nomeDoAnexo(linha: Record<string, unknown>): string {
@@ -55,19 +79,32 @@ async function ocrDePdf(
   limites: LimitesAnexos,
   lerDocumento: LerDocumentoFn,
   organizationId: string,
-): Promise<string | null> {
-  // Caminho feliz: uma chamada com o PDF inteiro (Gemini lê até 30 páginas).
+  opcoes: {
+    semTetoPaginas?: boolean;
+    nome?: string;
+    onProgresso?: (p: ProgressoDaLeitura) => void | Promise<void>;
+  } = {},
+): Promise<{ texto: string | null; motivo?: MotivoLeituraDocumental }> {
   const direto = await lerDocumento({ organizationId, buffer, mime: "application/pdf" });
-  if (direto.ok && direto.texto.trim()) return direto.texto.trim();
-  const paginas = await rasterizarPaginasPdf(buffer, {
-    maxPaginas: limites.paginas_ocr,
-    password: senha,
-  });
-  if (paginas.length === 0) return null;
+  if (direto.ok && direto.texto.trim()) return { texto: direto.texto.trim() };
+  const total = opcoes.semTetoPaginas
+    ? await contarPaginasPdf(buffer, { password: senha })
+    : Math.min(limites.paginas_ocr, await contarPaginasPdf(buffer, { password: senha }));
+  if (total === 0) return { texto: null, motivo: direto.ok ? "ilegivel" : direto.motivo };
   const lote = Math.max(1, limites.paginas_por_lote_ocr);
-  const partes: string[] = [];
-  for (let i = 0; i < paginas.length; i += lote) {
-    const grupo = paginas.slice(i, i + lote);
+  const lidas: { pagina: number; texto: string }[] = [];
+  let motivo: MotivoLeituraDocumental | undefined = direto.ok ? undefined : direto.motivo;
+  for (let inicio = 1; inicio <= total; inicio += lote) {
+    const fim = Math.min(total, inicio + lote - 1);
+    const grupo = await rasterizarPaginasPdf(buffer, {
+      paginaInicial: inicio,
+      paginaFinal: fim,
+      password: senha,
+    });
+    if (grupo.length === 0) {
+      motivo = motivo ?? "falha";
+      continue;
+    }
     const primeira = grupo[0];
     if (!primeira) continue;
     const lido = await lerDocumento({
@@ -76,10 +113,22 @@ async function ocrDePdf(
       mime: primeira.mime,
       mais: grupo.slice(1).map((p) => ({ buffer: p.bytes, mime: p.mime })),
     });
-    if (lido.ok && lido.texto.trim()) partes.push(lido.texto.trim());
+    const etapa = textoDoProgressoDeExtrato(fim, total);
+    await opcoes.onProgresso?.({
+      atual: fim,
+      total,
+      etapa,
+      nome: opcoes.nome ?? "extrato",
+    });
+    if (lido.ok && lido.texto.trim()) {
+      lidas.push({ pagina: fim, texto: lido.texto.trim() });
+    } else {
+      motivo = lido.ok ? "ilegivel" : lido.motivo;
+    }
   }
-  const texto = partes.join("\n\n").trim();
-  return texto || null;
+  const { texto } = await lerExtratoEmBlocos(lidas, lote);
+  if (texto.trim()) return { texto };
+  return { texto: null, motivo: motivo ?? "ilegivel" };
 }
 
 /** Reabre os PDFs originais do próprio tenant; a derivação comum corta em 8 mil caracteres. */
@@ -88,11 +137,7 @@ export async function lerPdfsOriginais(
   orgId: string,
   conversaId: string,
   admin = createAdminClient(),
-  opcoes: {
-    limites?: LimitesAnexos;
-    senhas?: Record<string, string>;
-    lerDocumento?: LerDocumentoFn;
-  } = {},
+  opcoes: OpcoesDaLeituraDeAnexos = {},
 ): Promise<Record<string, unknown>[]> {
   const limites = opcoes.limites ?? LIMITES_ANEXOS_PADRAO;
   const senhas = opcoes.senhas ?? {};
@@ -146,22 +191,29 @@ export async function lerPdfsOriginais(
             linha.pendencia_anexo = "pdf_escaneado";
             continue;
           }
-          const ocr = await ocrDePdf(buffer, senha, limites, opcoes.lerDocumento, orgId);
-          if (!ocr) {
+          const ocr = await ocrDePdf(buffer, senha, limites, opcoes.lerDocumento, orgId, {
+            semTetoPaginas: opcoes.semTetoPaginas,
+            nome,
+            onProgresso: opcoes.onProgresso,
+          });
+          if (!ocr.texto) {
             linha.pendencia_anexo = "pdf_escaneado";
+            linha.motivo_anexo = ocr.motivo ? fraseDoMotivoDeLeitura(ocr.motivo) : fraseDoMotivoDeLeitura("ilegivel");
             continue;
           }
-          bruto = ocr;
+          bruto = ocr.texto;
           linha.leitura_documental = true;
         } else {
           linha.pendencia_anexo = "pdf_escaneado";
+          linha.motivo_anexo = fraseDoMotivoDeLeitura("falha");
           continue;
         }
       }
       if (
         !bruto ||
-        bruto.length > limites.chars_por_arquivo ||
-        caracteres + bruto.length > limites.chars_conjunto
+        (!opcoes.semTetoTexto &&
+          (bruto.length > limites.chars_por_arquivo ||
+            caracteres + bruto.length > limites.chars_conjunto))
       ) {
         linha.pendencia_anexo = "arquivo_extenso";
         continue;
@@ -170,8 +222,18 @@ export async function lerPdfsOriginais(
       linha.media_derived_text = bruto;
       linha.media_derived_status = "ready";
       linha.original_completo = true;
-    } catch {
+    } catch (err) {
+      if (
+        (err instanceof PdfExtractError && err.motivo === "protegido") ||
+        ehErroDeSenhaDePdf(err)
+      ) {
+        linha.pdf_protegido = true;
+        linha.pendencia_anexo = "pdf_protegido";
+        linha.motivo_anexo = fraseDoMotivoDeLeitura("senha");
+        continue;
+      }
       linha.pendencia_anexo = "pdf_escaneado";
+      linha.motivo_anexo = fraseDoMotivoDeLeitura("falha");
     }
   }
   return saida;
@@ -214,6 +276,9 @@ export async function lerImagensDocumentais(
       const lido = await lerDocumento({ organizationId: orgId, buffer, mime });
       if (!lido.ok || ehDescricaoGenericaDeMidia(lido.texto)) {
         linha.pendencia_anexo = "imagem_sem_leitura";
+        linha.motivo_anexo = lido.ok
+          ? fraseDoMotivoDeLeitura("ilegivel")
+          : fraseDoMotivoDeLeitura(lido.motivo);
         continue;
       }
       if (
@@ -228,8 +293,11 @@ export async function lerImagensDocumentais(
       linha.media_derived_status = "ready";
       linha.leitura_documental = true;
       linha.original_completo = true;
-    } catch {
+    } catch (err) {
       linha.pendencia_anexo = "imagem_sem_leitura";
+      linha.motivo_anexo = fraseDoMotivoDeLeitura(
+        err instanceof Error && /timeout/i.test(err.message) ? "timeout" : "falha",
+      );
     }
   }
   return saida;
@@ -244,9 +312,13 @@ export function frasesDosAvisos(avisos: readonly AvisoAnexo[], tentativasMax = 3
         : `PDF protegido por senha: ${a.nome}. Informe a senha no painel para ler o arquivo.`;
     }
     if (a.tipo === "pdf_escaneado")
-      return `Não consegui ler o PDF escaneado ${a.nome}. Confira o original.`;
+      return a.motivo
+        ? `${a.motivo}: ${a.nome}.`
+        : `Não consegui ler o PDF escaneado ${a.nome}. Confira o original.`;
     if (a.tipo === "imagem_sem_leitura")
-      return `A foto ${a.nome} ainda não tem leitura documental.`;
+      return a.motivo
+        ? `${a.motivo}: ${a.nome}.`
+        : `A foto ${a.nome} ainda não tem leitura documental.`;
     if (a.tipo === "arquivo_extenso")
       return `O arquivo ${a.nome} passou do tamanho ou do limite de texto desta análise.`;
     return `Há anexos demais nesta conversa. ${a.nome} ficou de fora do teto.`;
@@ -265,8 +337,19 @@ export function avisosDosAnexos(linhas: readonly Record<string, unknown>[]): Avi
         nome,
         tentativas: typeof linha.tentativas_senha === "number" ? linha.tentativas_senha : 0,
       });
-    } else if (tipo === "pdf_escaneado") avisos.push({ tipo: "pdf_escaneado", nome });
-    else if (tipo === "imagem_sem_leitura") avisos.push({ tipo: "imagem_sem_leitura", nome });
+    } else if (tipo === "pdf_escaneado") {
+      avisos.push({
+        tipo: "pdf_escaneado",
+        nome,
+        motivo: typeof linha.motivo_anexo === "string" ? linha.motivo_anexo : undefined,
+      });
+    } else if (tipo === "imagem_sem_leitura") {
+      avisos.push({
+        tipo: "imagem_sem_leitura",
+        nome,
+        motivo: typeof linha.motivo_anexo === "string" ? linha.motivo_anexo : fraseDoMotivoDeLeitura("falha"),
+      });
+    }
     else if (tipo === "arquivo_extenso") avisos.push({ tipo: "arquivo_extenso", nome });
     else if (tipo === "limite") avisos.push({ tipo: "limite", nome });
   }
@@ -309,12 +392,7 @@ export async function enriquecerAnexosDaAnalise(
   linhas: readonly Record<string, unknown>[],
   orgId: string,
   conversaId: string,
-  opcoes: {
-    admin?: ReturnType<typeof createAdminClient>;
-    limites?: LimitesAnexos;
-    senhas?: Record<string, string>;
-    lerDocumento?: LerDocumentoFn;
-  } = {},
+  opcoes: OpcoesDaLeituraDeAnexos & { admin?: ReturnType<typeof createAdminClient> } = {},
 ): Promise<{ linhas: Record<string, unknown>[]; avisos: AvisoAnexo[] }> {
   const admin = opcoes.admin ?? createAdminClient();
   const comPdf = await lerPdfsOriginais(linhas, orgId, conversaId, admin, opcoes);

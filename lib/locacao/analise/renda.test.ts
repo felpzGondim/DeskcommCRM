@@ -25,14 +25,18 @@ Titular: TITULAR TESTE ALFA
 
 describe("análise de renda no motor do extrato", () => {
   it("a análise reabre os PDFs originais e prepara as fontes pelo motor do #31", () => {
-    const analise = readFileSync("lib/painel/acoes/analise.ts", "utf8");
-    expect(analise).toContain("enriquecerAnexosDaAnalise");
-    expect(analise).toContain("limitesDaAnalise");
-    expect(analise).toContain("prepararFontesDoRelatorio");
-    expect(analise).toContain("criarExtratorComModelo");
-    expect(analise).toContain("familiaresDaFicha");
-    expect(analise).not.toMatch(/analisarRendaNoModelo/);
-    expect(analise).not.toMatch(/from ["']@\/lib\/locacao\/analise\/regras["']/);
+    const worker = readFileSync("lib/locacao/analise/processar-renda.ts", "utf8");
+    expect(worker).toContain("enriquecerAnexosDaAnalise");
+    expect(worker).toContain("limitesDaAnalise");
+    expect(worker).toContain("prepararFontesDoRelatorio");
+    expect(worker).toContain("criarExtratorComModelo");
+    expect(worker).toContain("familiaresDaFicha");
+    expect(worker).toContain("semTetoPaginas");
+    expect(worker).not.toMatch(/analisarRendaNoModelo/);
+    expect(worker).not.toMatch(/from ["']@\/lib\/locacao\/analise\/regras["']/);
+    const inicio = readFileSync("lib/locacao/analise/iniciar-renda.ts", "utf8");
+    expect(inicio).toContain("export async function iniciarAnaliseDeRenda");
+    expect(inicio).not.toContain("enriquecerAnexosDaAnalise");
     const renda = readFileSync("lib/locacao/analise/renda.ts", "utf8");
     expect(renda).not.toMatch(/from ["']@\/lib\/locacao\/analise\/regras["']/);
     expect(renda).toContain("lib/locacao/extrato");

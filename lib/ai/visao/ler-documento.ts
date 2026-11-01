@@ -11,6 +11,10 @@ import { registrarChamadaDeIa } from "@/lib/ai/usage/registrar-chamada";
 import { resolveOrgLlmConfig, type LlmEdgeConfig } from "@/lib/agent-engine/edge/llm/credentials";
 import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
+import {
+  motivoDeLeituraDoErro,
+  type MotivoLeituraDocumental,
+} from "@/lib/locacao/analise/motivos-renda";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -22,7 +26,7 @@ export const PROMPT_LEITURA_DOCUMENTAL =
 
 export type ResultadoLeituraDocumental =
   | { ok: true; texto: string }
-  | { ok: false; motivo: "sem_provedor" | "falha" };
+  | { ok: false; motivo: MotivoLeituraDocumental };
 
 export type ArquivoDaVisao = { buffer: Buffer; mime: string };
 
@@ -96,14 +100,15 @@ export async function lerDocumentoPorVisao(entrada: {
       latency_ms: Date.now() - inicio,
     });
     const texto = (res.text ?? "").trim();
-    if (!texto || texto === "(sem texto documental)") return { ok: false, motivo: "falha" };
+    if (!texto || texto === "(sem texto documental)") return { ok: false, motivo: "ilegivel" };
     return { ok: true, texto };
   } catch (err) {
+    const motivo = motivoDeLeituraDoErro(err);
     logger.warn("[painel-anexos] leitura documental falhou", {
       organization_id: entrada.organizationId,
       mime,
-      motivo: err instanceof Error ? err.name : "erro",
+      motivo,
     });
-    return { ok: false, motivo: "falha" };
+    return { ok: false, motivo };
   }
 }

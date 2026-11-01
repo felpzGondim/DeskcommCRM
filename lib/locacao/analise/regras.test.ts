@@ -10,9 +10,11 @@ describe("regras.ts aposentada", () => {
   it("renda.ts e analise.ts não importam a classificação por regex", () => {
     const renda = readFileSync("lib/locacao/analise/renda.ts", "utf8");
     const analise = readFileSync("lib/painel/acoes/analise.ts", "utf8");
+    const worker = readFileSync("lib/locacao/analise/processar-renda.ts", "utf8");
     expect(renda).not.toMatch(/analise\/regras/);
     expect(analise).not.toMatch(/analise\/regras/);
+    expect(worker).not.toMatch(/analise\/regras/);
     expect(renda).toContain("lib/locacao/extrato");
-    expect(analise).toContain("prepararFontesDoRelatorio");
+    expect(worker).toContain("prepararFontesDoRelatorio");
   });
 });
