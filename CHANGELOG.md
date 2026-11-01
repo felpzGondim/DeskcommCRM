@@ -8,6 +8,10 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+### Alterado
+
+- **Qualquer atendente da empresa aprova o processo de locação.** Aprovar e reabrir deixam de depender da lista `aprovador_user_ids` (vazia, só o dono da instalação conseguia). Continua pedindo confirmação no clique. Quem já instalou não precisa fazer nada.
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado

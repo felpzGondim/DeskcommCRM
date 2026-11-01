@@ -19,7 +19,7 @@ Tudo nasce **desligado**. Quem administra a organização liga em
 | `locacao.processos_habilitado` | Processo, pessoas, imóvel, etapas, aprovação |
 | `locacao.arquivos_habilitado` | Anexos no bucket `locacao-processos` |
 | `locacao.drive_habilitado` | Fila de cópia para o Drive (ainda precisa da credencial) |
-| `locacao.aprovador_user_ids` | Quem pode aprovar (vazio = só o dono da instalação) |
+| `locacao.aprovador_user_ids` | Sem efeito para aprovar/reabrir o processo (fica no schema por compatibilidade). Ainda vale para vínculo Superlógica e para apagar documento. |
 | `superlogica_vinculo.habilitado` | Casamento de telefone (simulação e execução) |
 | `superlogica_vinculo.ligar_unico_exato` | Só únicos exatos ligam sozinhos (**padrão sujeito à revisão do Felipe**) |
 
@@ -41,7 +41,7 @@ depois de encerrar; processo parado fecha em 30 dias) continua valendo.
 | 7b | Fiador só recebe FC quando o atendente pedir (POST nomeia o participante; sem pedido automático) |
 | 8 | Reaproveitar FC até 90 dias |
 | 9a | Resumo sem dados pessoais guardado como histórico (`locacao_processo_eventos.detalhe` e `campos_alterados`: só ids, versões e caminhos) |
-| 10a | Só o Felipe (platform admin) ou `locacao.aprovador_user_ids` aprova; qualquer atendente reprova com motivo |
+| 10a | **Supersedida em 01/11/2026:** qualquer atendente (agent+) da organização do processo aprova e reabre, sempre com clique humano e confirmação. `aprovador_user_ids` ficou sem efeito para essa decisão. Qualquer atendente continua reprovando com motivo. |
 | 11a | Rollback = desligar a chave e manter as tabelas |
 
 ---

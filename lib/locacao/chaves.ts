@@ -34,7 +34,12 @@ export const locacaoSettingsSchema = z.object({
   processos_habilitado: z.boolean().optional().default(false),
   arquivos_habilitado: z.boolean().optional().default(false),
   drive_habilitado: z.boolean().optional().default(false),
-  /** Ids de quem pode APROVAR. Vazio = só platform admin (Felipe). */
+  /**
+   * Lista legado de quem podia aprovar o processo. Continua no schema por
+   * compatibilidade, mas APROVAR/REABRIR não a lê mais — qualquer atendente
+   * da organização do processo aprova (`podeAprovarLocacao`). Ainda vale
+   * para vínculo Superlógica e para apagar documento (`ehAprovador`).
+   */
   aprovador_user_ids: z.array(uuid).max(20).optional().default([]),
   /** Fase 4. Todas false. Sem preço da FC (a confirmação só avisa créditos). */
   analise: locacaoAnaliseSettingsSchema.default({
@@ -98,6 +103,11 @@ export function vinculoLigado(settings: unknown): boolean {
   return lerSuperlogicaVinculoSettings(settings).habilitado === true;
 }
 
+/**
+ * Gate legado: platform admin ou `aprovador_user_ids`. Só o vínculo
+ * Superlógica e o apagar documento ainda usam isto. Aprovar/reabrir o
+ * processo usa `podeAprovarLocacao` — esta função não entra nessa decisão.
+ */
 export function ehAprovador(
   userId: string,
   isPlatformAdminFull: boolean,

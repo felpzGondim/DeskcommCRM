@@ -31,7 +31,7 @@ describe("chaves de locação", () => {
     })).toBe(false);
   });
 
-  it("aprovador: platform admin ou lista; lista vazia = só o admin da plataforma", () => {
+  it("ehAprovador legado: platform admin ou lista; lista vazia = só o admin da plataforma", () => {
     expect(ehAprovador("u1", true, {})).toBe(true);
     expect(ehAprovador("u1", false, {})).toBe(false);
     const uid = "00000000-0000-4000-8000-000000000001";
