@@ -8,6 +8,14 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+### Corrigido
+
+- **A aba Documentos abre e baixa os arquivos que já estão no Storage.** Cada arquivo tem Abrir (nova aba) e Baixar. A URL é assinada no servidor depois de conferir a organização da sessão; o clique não depende mais de prévia no modal (imagem/iframe), que falhava em PDF e em bucket privado.
+
+### Alterado
+
+- **Documentos agrupados por origem, aba por último.** Inquilino, ficha cadastral impressa, laudo da FC, Migra e contrato. Grupo sem arquivo mostra "nenhum arquivo ainda". Superlógica fica antes de Documentos.
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado

@@ -19,6 +19,8 @@ describe("VinculoSuperlogica", () => {
       "components/locacao/VinculoSuperlogica.tsx",
       "components/inbox/AnaliseInquilinoDialog.tsx",
       "components/locacao/ResumoLocacaoPainel.tsx",
+      "components/locacao/DocumentosLocacaoPainel.tsx",
+      "lib/locacao/grupo-de-documento.ts",
     ];
     for (const rel of arquivos) {
       const src = readFileSync(join(process.cwd(), rel), "utf8");

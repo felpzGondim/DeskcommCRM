@@ -102,8 +102,8 @@ export function AnaliseInquilinoDialog({
             <TabsTrigger disabled={ocupado} value="migra" onClick={() => setAba("migra")}>{t("4. Migra")}</TabsTrigger>
             <TabsTrigger disabled={ocupado} value="relatorio" onClick={() => setAba("relatorio")}>{t("5. Relatório")}</TabsTrigger>
             <TabsTrigger disabled={ocupado} value="contrato" onClick={() => setAba("contrato")}>{t("6. Contrato")}</TabsTrigger>
-            <TabsTrigger disabled={ocupado} value="documentos" onClick={() => setAba("documentos")}>{t("Documentos e relatórios")}</TabsTrigger>
             <TabsTrigger disabled={ocupado} value="sincronizacao" onClick={() => setAba("sincronizacao")}>{t("Superlógica")}</TabsTrigger>
+            <TabsTrigger disabled={ocupado} value="documentos" onClick={() => setAba("documentos")}>{t("Documentos e relatórios")}</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className={aba === "dados" ? "space-y-3" : "hidden"} role="tabpanel" hidden={aba !== "dados"}>

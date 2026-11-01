@@ -32,7 +32,7 @@
       "lane": "interface",
       "col": 1,
       "type": "frontend",
-      "label": "Cadastro e locação: seis etapas"
+      "label": "Cadastro e locação: etapas + Superlógica + Documentos por último"
     },
     {
       "id": "docs",
@@ -105,13 +105,13 @@
       "id": "e6",
       "from": "rota",
       "to": "storage",
-      "label": "URL temporária"
+      "label": "URL assinada (5 min), só da organização"
     },
     {
       "id": "e7",
       "from": "storage",
       "to": "docs",
-      "label": "visualização e download"
+      "label": "abrir em nova aba / baixar"
     }
   ]
 }
