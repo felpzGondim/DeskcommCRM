@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -56,8 +56,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       storagePath = typeof row.storage_path === "string" ? row.storage_path : null;
     }
     if (!storagePath || !storagePath.startsWith(c.orgId + "/")) return fail("not_found", "Arquivo indisponível.", 404, {requestId});
-    const {data, error} = await c.admin.storage.from(bucket).createSignedUrl(storagePath, 300, {download: url.searchParams.get("download") === "1"});
+    const baixar = url.searchParams.get("download") === "1";
+    const {data, error} = await c.admin.storage.from(bucket).createSignedUrl(storagePath, 300, {download: baixar});
     if (error || !data?.signedUrl) return fail("internal_error", "Não foi possível abrir o arquivo.", 500, {requestId});
+    if (url.searchParams.get("redirect") === "1") {
+      const response = NextResponse.redirect(data.signedUrl, 302);
+      response.headers.set("X-Request-Id", requestId);
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
+    }
     return ok({url: data.signedUrl}, {requestId, headers: {"Cache-Control": "private, no-store"}});
   }
   const pagina = Math.max(0, Math.min(1000, Math.trunc(Number(url.searchParams.get("pagina")) || 0)));
@@ -82,16 +89,26 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const meta = objeto(m.metadata);
     const classificacoes = objeto(meta.locacao_documentos);
     const porProcesso = objeto(classificacoes[processoId ?? "conversa"] ?? classificacoes.conversa);
-    return {id: m.id, origem: "mensagem", nome: typeof meta.media_filename === "string" ? meta.media_filename : m.type === "image" ? "Imagem recebida" : "Documento recebido",
+    return {id: m.id, origem: "mensagem", origem_arquivo: "anexo_conversa",
+      nome: typeof meta.media_filename === "string" ? meta.media_filename : m.type === "image" ? "Imagem recebida" : "Documento recebido",
       categoria: typeof porProcesso.categoria === "string" ? porProcesso.categoria : "outro",
       participante_id: typeof porProcesso.participante_id === "string" ? porProcesso.participante_id : null,
-      mime: m.media_mime, data: m.sent_at,
+      mime: m.media_mime, data: m.sent_at, mensagem_id: m.id,
       situacao: !m.media_storage_path ? "Aguardando armazenamento" : m.media_derived_status === "ready" ? "Texto disponível" : "Leitura a conferir"};
   });
-  const documentos = (docs.data ?? []).map((documento) => { const d = objeto(documento); return {
-    ...d, origem: "processo", nome: String(d.categoria).replaceAll("_", " "), data: d.created_at,
-    situacao: "Arquivo disponível",
-  }; });
+  const documentos = (docs.data ?? []).map((documento) => {
+    const d = objeto(documento);
+    return {
+      id: d.id, origem: "processo",
+      origem_arquivo: typeof d.origem === "string" ? d.origem : null,
+      nome: String(d.categoria).replaceAll("_", " "),
+      categoria: typeof d.categoria === "string" ? d.categoria : "outro",
+      participante_id: typeof d.participante_id === "string" ? d.participante_id : null,
+      mime: typeof d.mime === "string" ? d.mime : null,
+      data: d.created_at, mensagem_id: typeof d.mensagem_id === "string" ? d.mensagem_id : null,
+      situacao: "Arquivo disponível",
+    };
+  });
   return ok({
     processo_id: processoId, recebidos, documentos, participantes: partes.data ?? [],
     pendencias: ficha?.ficha.documentos.faltantes ?? [],
