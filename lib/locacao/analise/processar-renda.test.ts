@@ -23,6 +23,7 @@ describe("worker da análise de renda", () => {
     expect(cron).toContain("idsDeOrgsParadas");
     expect(cron).toContain("if (efeito > 0)");
     expect(cron).toContain("MOTIVOS_RENDA.timeout");
+    expect(cron).not.toMatch(/\.eq\(["']status["'],\s*["']active["']\)/);
     expect(cron).not.toMatch(/servidor-externo/);
   });
 

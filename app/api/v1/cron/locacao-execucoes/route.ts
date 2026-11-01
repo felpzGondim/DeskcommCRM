@@ -58,10 +58,14 @@ async function handle(req: NextRequest): Promise<Response> {
     timeouts += 1;
   }
 
-  const { data: orgs } = await admin.from("organizations").select("id,settings").eq("status", "active");
-  const settingsPorOrg = new Map(
-    (orgs ?? []).map((o) => [(o as { id: string }).id, (o as { settings: unknown }).settings]),
-  );
+  const orgIds = [...new Set(naFila.map((e) => e.organization_id))];
+  const settingsPorOrg = new Map<string, unknown>();
+  if (orgIds.length > 0) {
+    const { data: orgs } = await admin.from("organizations").select("id,settings").in("id", orgIds);
+    for (const o of orgs ?? []) {
+      settingsPorOrg.set((o as { id: string }).id, (o as { settings: unknown }).settings);
+    }
+  }
 
   for (const row of naFila) {
     const settings = settingsPorOrg.get(row.organization_id);
