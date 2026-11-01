@@ -13,7 +13,7 @@ import {
 export { STATUS_DO_PROCESSO, STATUS_FINAIS_DO_PROCESSO };
 export type { MotivoDeCancelamento, StatusDoProcesso };
 
-/** Quem pode pedir a transição. A rota ainda confere papel e, se for o caso, o aprovador. */
+/** Quem pode pedir a transição. A rota confere papel; aprovar/reabrir é qualquer atendente da org, com confirmação. */
 export type QuemMove =
   | "atendente"
   | "aprovador"

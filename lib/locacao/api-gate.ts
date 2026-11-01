@@ -6,7 +6,12 @@ import type { NextResponse } from "next/server";
 
 import { fail, type ApiError } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { escreveComoPlatformAdmin, type AuthUser, type ActiveOrg } from "@/lib/auth/types";
+import {
+  escreveComoPlatformAdmin,
+  roleAtLeast,
+  type AuthUser,
+  type ActiveOrg,
+} from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import {
   arquivosLigados,
@@ -34,18 +39,34 @@ export async function gateLocacao(
   const auth = await requireRole("agent", { requestId, resource: "locacao" });
   if (!auth.ok) return { ok: false, response: auth.response };
   const db = await createClient();
-  const { data: org } = await db.from("organizations").select("settings")
-    .eq("id", auth.org.orgId).maybeSingle();
+  const { data: org } = await db
+    .from("organizations")
+    .select("settings")
+    .eq("id", auth.org.orgId)
+    .maybeSingle();
   const settings = org?.settings ?? {};
   const t = (s: string) => traduzir(s, auth.user.idioma);
   if (opts?.exigirProcessos !== false && !processosLigados(settings)) {
-    return { ok: false, response: fail("forbidden", t("O processo de locação está desligado."), 403, { requestId }) };
+    return {
+      ok: false,
+      response: fail("forbidden", t("O processo de locação está desligado."), 403, { requestId }),
+    };
   }
   if (opts?.exigirVinculo && !vinculoLigado(settings)) {
-    return { ok: false, response: fail("forbidden", t("O vínculo com a Superlógica está desligado."), 403, { requestId }) };
+    return {
+      ok: false,
+      response: fail("forbidden", t("O vínculo com a Superlógica está desligado."), 403, {
+        requestId,
+      }),
+    };
   }
   if (opts?.exigirArquivos && !arquivosLigados(settings)) {
-    return { ok: false, response: fail("forbidden", t("Os arquivos do processo estão desligados."), 403, { requestId }) };
+    return {
+      ok: false,
+      response: fail("forbidden", t("Os arquivos do processo estão desligados."), 403, {
+        requestId,
+      }),
+    };
   }
   return {
     ok: true,
@@ -60,6 +81,23 @@ export async function gateLocacao(
   };
 }
 
+/**
+ * Quem pode APROVAR ou REABRIR o processo: qualquer atendente (agent+) da
+ * organização do processo. Nunca alguém de outra organização. Não lê
+ * `aprovador_user_ids` — aquele campo ficou sem efeito para esta decisão.
+ */
+export function podeAprovarLocacao(
+  gate: Pick<GateLocacao, "orgId" | "org">,
+  processoOrgId: string,
+): boolean {
+  if (!processoOrgId || gate.orgId !== processoOrgId) return false;
+  return roleAtLeast(gate.org.role, "agent");
+}
+
+/**
+ * Gate legado do vínculo Superlógica e do apagar documento. Continua lendo
+ * `aprovador_user_ids` / platform admin. Não usar em aprovar/reabrir.
+ */
 export function podeAprovarProcesso(gate: GateLocacao): boolean {
   return ehAprovador(gate.user.id, escreveComoPlatformAdmin(gate.user), gate.settings);
 }
