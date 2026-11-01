@@ -85,9 +85,9 @@ test.describe("Esteira de locação: dados e documentos no mesmo modal", () => {
     const processoId = String(vinculo.processo_id);
     const {data: ficha} = await db.from("locacao_processo_fichas").select("ficha").eq("organization_id", orgId).eq("processo_id", processoId).order("versao", {ascending: false}).limit(1).single();
     expect(ficha?.ficha.pessoas[0].renda_individual.valor).toBe(5000);
-    await modal.getByRole("tab", {name: "3. FCAnálise"}).click();
+    await modal.getByRole("tab", {name: "FC"}).click();
     await expect(modal.getByRole("button", {name: "Analisar FC", exact: true})).toBeEnabled();
-    await modal.getByRole("tab", {name: "Documentos e relatórios"}).click();
+    await modal.getByRole("tab", {name: "Documentos"}).click();
     await expect(modal.getByText("cadastro.png", {exact: true})).toBeVisible();
     const classificacao = page.waitForResponse((r) => r.request().method() === "PATCH" && r.url().endsWith("/locacao/documentos"));
     await modal.getByLabel("Categoria cadastro.png", {exact: true}).selectOption("documento_pessoal");

@@ -7,6 +7,12 @@ import { analiseLigada, processosLigados } from "@/lib/locacao/chaves";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { sanitizarResultadoFc } from "@/lib/locacao/analise/fc";
 import { sanitizarCards } from "@/lib/locacao/analise/seguro";
+import { entradaDaAba, hashDaEntrada } from "@/lib/locacao/entrada-hash";
+import {
+  execucoesVazias,
+  paraExecucaoPublica,
+} from "@/lib/locacao/execucao-da-aba";
+import { lerUltimasExecucoesDoProcesso } from "@/lib/locacao/execucoes";
 import {
   lerAnaliseFcMaisRecenteDoProcesso,
   lerAnaliseSeguroMaisRecente,
@@ -63,7 +69,17 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     superlogica_id_pessoa: vinculo.superlogica_id_pessoa,
     superlogica_tipo: vinculo.superlogica_tipo,
   };
-  if (!habilitado) return ok({ habilitado: false, analise, processos: [], contato }, { requestId });
+  if (!habilitado) {
+    return ok({
+      habilitado: false,
+      analise,
+      processos: [],
+      contato,
+      execucoes: execucoesVazias(),
+      entrada_atual: null,
+      etapa_quadro: null,
+    }, { requestId });
+  }
   const processos = await listarProcessosDaConversa(admin, auth.org.orgId, id);
   const imoveisIds = [...new Set(processos.map((p) => String(p.imovel_id ?? "")))].filter(Boolean);
   const rotulos = new Map<string, string>();
@@ -82,6 +98,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     return {
       id: idProc,
       ficha_versao: linha?.versao ?? 0,
+      ficha,
       renda_mensal: ficha?.renda.mensal.valor ?? null,
       renda_proposta_fc: ficha?.renda.proposta_fc.valor ?? null,
       alertas: ficha?.renda.alertas ?? [],
@@ -137,10 +154,29 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     };
   }));
   const fcPorId = new Map(fcs.map((f) => [f.id, f]));
+  const processoAtivo = processos[0];
+  const idAtivo = processoAtivo ? String(processoAtivo.id ?? "") : "";
+  const execucoes = execucoesVazias();
+  if (idAtivo) {
+    const linhas = await lerUltimasExecucoesDoProcesso(admin, auth.org.orgId, idAtivo);
+    for (const linha of linhas) execucoes[linha.aba] = paraExecucaoPublica(linha);
+  }
+  const fichaAtiva = idAtivo ? fichas.find((f) => f.id === idAtivo) : null;
+  const entradaAtual = idAtivo
+    ? hashDaEntrada(entradaDaAba("renda", {
+      fichaVersao: fichaAtiva?.ficha_versao ?? 0,
+      ficha: fichaAtiva?.ficha ?? null,
+    }))
+    : null;
   return ok({
     habilitado: true,
     analise,
     contato,
+    execucoes,
+    entrada_atual: entradaAtual,
+    etapa_quadro: processoAtivo
+      ? { status: String(processoAtivo.status ?? ""), processo_id: idAtivo }
+      : null,
     processos: processos.map((p) => {
       const idProc = String(p.id ?? "");
       const extra = rendaPorId.get(idProc);

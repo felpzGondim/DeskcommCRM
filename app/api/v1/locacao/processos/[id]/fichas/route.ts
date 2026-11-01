@@ -10,6 +10,7 @@ import { caminhosAlterados } from "@/lib/locacao/ficha-diff";
 import { fichaPreliminarSchema } from "@/lib/locacao/ficha-schema";
 import { gravarFichaDoProcesso, lerProcesso, LocacaoErro } from "@/lib/locacao/repositorio";
 import { tabelaLocacao } from "@/lib/locacao/admin";
+import { marcarExecucoesDesatualizadasAposEdicao } from "@/lib/locacao/marcar-desatualizado";
 import { ORIGENS_DA_FICHA_DO_PROCESSO } from "@/lib/locacao/vocabulario";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +68,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       action: "locacao.ficha_gravada",
       organizationId: g.gate.orgId, actorUserId: g.gate.user.id, requestId,
       metadata: { processo_id: id, versao, campos },
+    });
+    void marcarExecucoesDesatualizadasAposEdicao(g.gate.admin, {
+      orgId: g.gate.orgId,
+      processoId: id,
+      fichaVersao: versao,
+      ficha: parsed.data.ficha,
     });
     return ok({ versao }, { requestId });
   } catch (err) {
