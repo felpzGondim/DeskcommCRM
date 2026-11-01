@@ -17,6 +17,11 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 ### Alterado
 
 - **Análise de renda em segundo plano, sem teto de páginas** O clique (e a mesma função do chat) só enfileira a execução e devolve o id. Um cron lê o extrato inteiro em blocos, grava “lendo extrato pág. X de N” e aplica a regra 3× (aluguel+condomínio+IPTU+seguro-incêndio, sem fiança) com as exclusões à parte. Falha de leitura vira motivo em português e item de checklist. Quem já instalou não precisa editar arquivo; a chave `locacao.analise.renda` continua desligada por padrão.
+- **Documentos agrupados por origem, aba por último.** Inquilino, ficha cadastral impressa, laudo da FC, Migra e contrato. Grupo sem arquivo mostra "nenhum arquivo ainda". Superlógica fica antes de Documentos.
+
+### Corrigido
+
+- **A aba Documentos abre e baixa os arquivos que já estão no Storage.** Cada arquivo tem Abrir (nova aba) e Baixar. A URL é assinada no servidor depois de conferir a organização da sessão; o clique não depende mais de prévia no modal (imagem/iframe), que falhava em PDF e em bucket privado.
 
 ## [1.88.0-felpz.14] — 2026-10-29
 
