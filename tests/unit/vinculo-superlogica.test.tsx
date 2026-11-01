@@ -19,6 +19,8 @@ describe("VinculoSuperlogica", () => {
       "components/locacao/VinculoSuperlogica.tsx",
       "components/inbox/AnaliseInquilinoDialog.tsx",
       "components/locacao/ResumoLocacaoPainel.tsx",
+      "components/locacao/AbaComExecucao.tsx",
+      "lib/locacao/acoes-do-modal.ts",
       "components/locacao/DocumentosLocacaoPainel.tsx",
       "lib/locacao/grupo-de-documento.ts",
     ];

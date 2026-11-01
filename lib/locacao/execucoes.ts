@@ -133,6 +133,54 @@ export async function lerUltimaExecucaoPorAba(
   return data ? asLinha(data) : null;
 }
 
+export async function lerUltimasExecucoesDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<LocacaoExecucaoRow[]> {
+  const { data } = await tabelaLocacao(admin, "locacao_execucoes")
+    .select(COLUNAS)
+    .eq("organization_id", orgId)
+    .eq("processo_id", processoId)
+    .order("created_at", { ascending: false });
+  const vistas = new Set<string>();
+  const saida: LocacaoExecucaoRow[] = [];
+  for (const row of data ?? []) {
+    const linha = asLinha(row);
+    if (vistas.has(linha.aba)) continue;
+    vistas.add(linha.aba);
+    saida.push(linha);
+  }
+  return saida;
+}
+
+/**
+ * Marca execuções concluídas cujo hash da entrada não bate mais.
+ * Service role. Sem PII. Não cria linha nova.
+ */
+export async function marcarDesatualizadasSeEntradaMudou(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    processoId: string;
+    hashAtual: string;
+    abas?: readonly AbaDaExecucao[];
+  },
+): Promise<void> {
+  let q = tabelaLocacao(admin, "locacao_execucoes")
+    .update({ estado: "desatualizado" })
+    .eq("organization_id", input.orgId)
+    .eq("processo_id", input.processoId)
+    .eq("estado", "concluido")
+    .not("entrada_hash", "is", null)
+    .neq("entrada_hash", input.hashAtual);
+  if (input.abas && input.abas.length > 0) {
+    q = q.in("aba", [...input.abas]);
+  }
+  const { error } = await q;
+  if (error) throw new LocacaoErro("execucao_estado", "locacao_execucoes");
+}
+
 export async function atualizarExecucao(
   admin: SupabaseClient,
   input: {

@@ -84,12 +84,12 @@ describe("Painel do agente (UI)", () => {
     expect(screen.getAllByLabelText("RENDA (R$)")).toHaveLength(1);
     expect(screen.queryByLabelText("Renda proposta para a FC (R$)")).toBeNull();
     expect(screen.queryByRole("button", {name: "Abrir processo"})).toBeNull();
-    fireEvent.click(screen.getByRole("tab", {name: "6. Contrato"}));
+    fireEvent.click(screen.getByRole("tab", {name: "Contrato"}));
     const preparar = await screen.findByRole("button", {name: "Preparar locação"});
     expect(preparar).toBeVisible();
-    fireEvent.click(screen.getByRole("tab", {name: "1. Dados"}));
+    fireEvent.click(screen.getByRole("tab", {name: "Dados"}));
     expect(preparar).not.toBeVisible();
-    fireEvent.click(screen.getByRole("tab", {name: "Documentos e relatórios"}));
+    fireEvent.click(screen.getByRole("tab", {name: "Documentos"}));
     expect(await screen.findByTestId("documentos-locacao")).toBeVisible();
     expect(postMock).not.toHaveBeenCalled();
   });
@@ -557,6 +557,10 @@ describe("Painel do agente (UI)", () => {
       expect(getMock.mock.calls.some((c) => String(c[0]).includes("consulta_id="))).toBe(true);
     });
     await screen.findByText("consultando Superlógica…");
+    // O segundo tick do polling é 1s (`POLL_CONSULTA_MS`). O findBy padrão
+    // também é 1s — com a casca do modal montada no painel, o intervalo
+    // chega depois e o teste perde a corrida no CI.
+    await screen.findByText("Parei no limite.", {}, { timeout: 3_000 });
     await screen.findByRole("button", { name: "Continuar" });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));

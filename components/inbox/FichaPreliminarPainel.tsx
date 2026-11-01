@@ -21,6 +21,7 @@ import {
 interface Props {
   atualizacao?: number;
   onSalvo?: () => void;
+  onEntradaEditada?: () => void;
   conversationId: string;
   desabilitado?: boolean;
   senhasPdf: Array<{ nome: string; senha: string }>;
@@ -50,7 +51,7 @@ function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   return String(c.valor);
 }
 
-export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0, onSalvo }: Props) {
+export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0, onSalvo, onEntradaEditada }: Props) {
   const t = useT();
   const {
     ficha, setFicha, relatorio, setRelatorio, versao, historico,
@@ -58,8 +59,13 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
     gerar, salvar, verVersao,
   } = useFichaPreliminar(conversationId, atualizacao);
 
+  function mudarFicha(fn: (atual: FichaPreliminar | null) => FichaPreliminar | null) {
+    setFicha(fn);
+    onEntradaEditada?.();
+  }
+
   function patchPessoa(i: number, patch: Partial<FichaPreliminar["pessoas"][number]>) {
-    setFicha((atual) => {
+    mudarFicha((atual) => {
       if (!atual) return atual;
       const pessoas = atual.pessoas.map((p, idx) => idx === i ? { ...p, ...patch } : p);
       return { ...atual, pessoas };
@@ -167,39 +173,39 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>
             <label className="block text-[11px]">{t("Endereço do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
+                onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
             </label>
             <label className="block text-[11px]">{t("Número do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
+                onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
             </label>
             {(["aluguel", "condominio", "iptu", "seguro_incendio"] as const).map((chave) => (
               <label key={chave} className="block text-[11px]">{t(chave === "aluguel" ? "Aluguel (R$)" : chave === "condominio" ? "Condomínio / rateio (R$)" : chave === "iptu" ? "IPTU mensal (R$)" : "Seguro-incêndio mensal (R$)")}
                 <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
-                  onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
+                  onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
               </label>
             ))}
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
               <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
-                  onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
+                  onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
               </label>
             ))}
             <label className="block text-[11px]">{t("Tipo de imóvel")}
               <select className="h-8 w-full rounded-md border border-input bg-background text-xs" value={ficha.imovel.tipo ?? ""} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => { const tipo = e.target.value as FichaPreliminar["imovel"]["tipo"]; setFicha((a) => a ? {...a, imovel: {...a.imovel, tipo: tipo || null}} : a); }}>
+                onChange={(e) => { const tipo = e.target.value as FichaPreliminar["imovel"]["tipo"]; mudarFicha((a) => a ? {...a, imovel: {...a.imovel, tipo: tipo || null}} : a); }}>
                 <option value="">{t("Selecionar")}</option><option value="residencial">{t("Residencial")}</option><option value="comercial">{t("Comercial")}</option>
               </select>
             </label>
             <label className="block text-[11px]">{t("Código FC")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.codigo_fc)} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? { ...a, imovel: { ...a.imovel, codigo_fc: campo(e.target.value) } } : a)} />
+                onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, codigo_fc: campo(e.target.value) } } : a)} />
             </label>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {(["inicio", "fim"] as const).map((chave) => <label key={chave} className="text-[11px]">{t(chave === "inicio" ? "Início da locação" : "Término da locação")}
               <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => setFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
+                onChange={(e) => mudarFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
             </label>)}
           </div>
           {ficha.documentos.faltantes.length > 0 && (

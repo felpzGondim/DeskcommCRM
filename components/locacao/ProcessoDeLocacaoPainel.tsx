@@ -119,11 +119,13 @@ export function ProcessoDeLocacaoPainel({
   desabilitado = false,
   secoes,
   atualizacao = 0,
+  esconderBotoesPrincipais = false,
 }: {
   conversationId: string;
   desabilitado?: boolean;
   secoes?: readonly SecaoDoProcessoPainel[];
   atualizacao?: number;
+  esconderBotoesPrincipais?: boolean;
 }) {
   const t = useT();
   const [habilitado, setHabilitado] = useState(false);
@@ -907,6 +909,7 @@ export function ProcessoDeLocacaoPainel({
                 </p>
               )}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || analisando || confirmando}
                   onClick={() => void analisar()}>
@@ -916,6 +919,7 @@ export function ProcessoDeLocacaoPainel({
                       ? t("Tentar de novo")
                       : t("Analisar renda")}
                 </Button>
+                )}
                 <Button size="sm" className="h-7 px-2 text-xs"
                   disabled={
                     desabilitado || analisando || confirmando
@@ -959,11 +963,13 @@ export function ProcessoDeLocacaoPainel({
                 <p className="text-xs text-text-muted">{t("Print da cotação guardado.")}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || cotando}
                   onClick={() => void cotar()}>
                   {cotando ? t("Cotando seguro-fiança…") : t("Analisar seguro-fiança")}
                 </Button>
+                )}
                 {processo.seguro_pedido_id ? (
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
                     disabled={desabilitado || cotando}
@@ -1012,11 +1018,13 @@ export function ProcessoDeLocacaoPainel({
                 <p className="text-xs text-text-muted">{t("Laudo da FC guardado.")}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || salvandoFc || confirmandoFc}
                   onClick={() => void salvarFc()}>
                   {salvandoFc ? t("Salvando FC Score+…") : t("Analisar FC")}
                 </Button>
+                )}
                 {processo.fc_estado === "aguardando_cobranca" || processo.fc_estado === "login_necessario" || processo.fc_cobranca === "incerta" ? (
                   <Button size="sm" className="h-7 px-2 text-xs"
                     disabled={desabilitado || salvandoFc || confirmandoFc}
@@ -1067,11 +1075,13 @@ export function ProcessoDeLocacaoPainel({
                 </p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
+                {esconderBotoesPrincipais ? null : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || gerandoRelatorio || aprovandoRelatorio}
                   onClick={() => void gerarRelatorio()}>
                   {gerandoRelatorio ? t("Gerando relatório…") : t("Gerar relatório")}
                 </Button>
+                )}
                 <Button size="sm" className="h-7 px-2 text-xs"
                   disabled={
                     desabilitado || gerandoRelatorio || aprovandoRelatorio

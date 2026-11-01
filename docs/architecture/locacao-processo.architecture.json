@@ -16,7 +16,8 @@
   "mainPath": ["painel", "flag", "processo", "etapa"],
   "nodes": [
     { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: resumo + Abrir análise (papel contato)" },
-    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal Análise de inquilino com vínculo Superlógica" },
+    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal: Dados, Renda, FC, Migra, Relatório, Contrato, Documentos" },
+    { "id": "casca_aba", "lane": "inbox", "col": 1, "type": "frontend", "label": "AbaComExecucao: checklist, status, Tentar de novo, hora" },
     { "id": "lista", "lane": "inbox", "col": 1, "type": "frontend", "label": "/app/locacao e detalhe com aprovar/reprovar" },
     { "id": "config", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: chaves desligadas" },
     { "id": "flag", "lane": "servidor", "col": 2, "type": "process", "label": "organizations.settings.locacao.* e superlogica_vinculo" },
@@ -77,6 +78,10 @@
     { "id": "e37", "from": "valores", "to": "camposImovel", "label": "mostra valor e origem de cada campo" },
     { "id": "e38", "from": "processo", "to": "execucoes", "label": "uma execução por aba do processo" },
     { "id": "e39", "from": "execucoes", "to": "docs", "label": "ficha_cadastral em {org}/processos/{id}/ficha_cadastral/" },
-    { "id": "e40", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" }
+    { "id": "e40", "from": "analise_modal", "to": "casca_aba", "label": "cada aba tem botão, checklist e status" },
+    { "id": "e41", "from": "casca_aba", "to": "execucoes", "label": "polling / desatualizado pelo hash" },
+    { "id": "e42", "from": "execucoes", "to": "casca_aba", "label": "fila, etapa, erro, última execução" },
+    { "id": "e43", "from": "analise_modal", "to": "etapa", "label": "mostra a etapa do card, sem mover" },
+    { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" }
   ]
 }
