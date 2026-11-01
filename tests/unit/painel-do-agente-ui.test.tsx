@@ -557,6 +557,10 @@ describe("Painel do agente (UI)", () => {
       expect(getMock.mock.calls.some((c) => String(c[0]).includes("consulta_id="))).toBe(true);
     });
     await screen.findByText("consultando Superlógica…");
+    // O segundo tick do polling é 1s (`POLL_CONSULTA_MS`). O findBy padrão
+    // também é 1s — com a casca do modal montada no painel, o intervalo
+    // chega depois e o teste perde a corrida no CI.
+    await screen.findByText("Parei no limite.", {}, { timeout: 3_000 });
     await screen.findByRole("button", { name: "Continuar" });
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     await waitFor(() => expect(postMock).toHaveBeenCalledTimes(2));
