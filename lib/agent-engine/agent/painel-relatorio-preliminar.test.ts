@@ -193,9 +193,10 @@ describe("fontes da ficha preliminar", () => {
     expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(
       /sem renda comprovada o risco não pode ser baixo/i,
     );
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"imovel":\{"aluguel"/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"contrato":\{\},"garantia":\{\},"vigencia":\{\}/);
-    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/vão no bloco imovel/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"imovel":\{"logradouro"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"vigencia":\{"inicio"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"garantia":\{"valor_mensal"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/vai no JSON da ficha/);
   });
 
   it("3x usa o bloco do imóvel da ficha e mostra origem conversa", () => {

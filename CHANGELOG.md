@@ -18,7 +18,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ### Corrigido
 
-- **A ficha preliminar grava aluguel, condomínio, IPTU e seguro-incêndio citados na conversa.** O relatório pede o bloco `imovel` (e contrato/garantia/vigência) no JSON; o valor vai para a ficha e para o processo com origem `conversa`. Manual e Superlógica continuam na frente. O 3× (sem fiança) usa esses valores e mostra a origem. No modal, se faltar um valor do pacote, o aviso diz qual falta e pede para digitar no Imóvel e rodar Renda de novo. Quem já instalou não precisa fazer nada.
+- **Preencher pela conversa preenche a aba Dados, sem duplicar o pacote.** O relatório pede imóvel (endereço, valores), vigência, garantia e contrato no JSON; grava origem `conversa`. Aluguel, condomínio, IPTU e seguro-incêndio aparecem uma vez, no bloco que mostra a origem. Manual e Superlógica continuam na frente. Se faltar um valor do pacote, o aviso diz qual e pede para digitar no Imóvel e rodar Renda de novo. Quem já instalou não precisa fazer nada.
 - **A aba Documentos abre e baixa os arquivos que já estão no Storage.** Cada arquivo tem Abrir (nova aba) e Baixar. A URL é assinada no servidor depois de conferir a organização da sessão; o clique não depende mais de prévia no modal (imagem/iframe), que falhava em PDF e em bucket privado.
 
 ### Adicionado

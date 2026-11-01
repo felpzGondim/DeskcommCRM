@@ -118,4 +118,6 @@ export const TEXTOS_PAINEL_FICHA = {
   "Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.": {
     es: "Falta en el paquete: {campos}. Escriba el valor en Inmueble y ejecute Renta de nuevo.",
   },
+  Mista: { es: "Mixta" },
+  "Valor mensal da garantia (R$)": { es: "Valor mensual de la garantía (R$)" },
 };

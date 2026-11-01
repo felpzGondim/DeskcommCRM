@@ -10,6 +10,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import {
   PAPEIS_DA_FICHA,
+  TIPOS_DE_GARANTIA,
   fichaVazia,
   pessoaVazia,
   type CampoFicha,
@@ -17,18 +18,6 @@ import {
   type NumeroFicha,
   type PapelDaFicha,
 } from "@/lib/locacao/ficha-schema";
-import {
-  camposFaltantesDoPacote,
-  valoresDoPacoteDaFicha,
-  type CampoObrigatorioDoPacote,
-} from "@/lib/locacao/valores-imovel";
-
-const ROTULO_FALTANTE_PACOTE: Record<CampoObrigatorioDoPacote, string> = {
-  aluguel: "aluguel",
-  condominio: "condomínio (inclui rateio)",
-  iptu: "IPTU",
-  seguro_incendio: "seguro-incêndio",
-};
 
 interface Props {
   atualizacao?: number;
@@ -44,6 +33,14 @@ const ROTULO_PAPEL: Record<PapelDaFicha, string> = {
   solidario: "Solidário",
   fiador: "Fiador",
   contato: "Contato (só conversa)",
+};
+
+const ROTULO_GARANTIA: Record<(typeof TIPOS_DE_GARANTIA)[number], string> = {
+  caucao: "Caução",
+  seguro_fianca: "Seguro fiança",
+  fiador: "Fiador",
+  mista: "Mista",
+  nenhuma: "Nenhuma",
 };
 
 function campo(valor: string): CampoFicha {
@@ -85,13 +82,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
   }
 
   const bloqueado = desabilitado || carregando !== null || gerando;
-  const faltantesPacote = ficha ? camposFaltantesDoPacote(valoresDoPacoteDaFicha(ficha)) : [];
-  const avisoPacote = faltantesPacote.length
-    ? t("Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.").replace(
-      "{campos}",
-      faltantesPacote.map((c) => t(ROTULO_FALTANTE_PACOTE[c])).join(", "),
-    )
-    : null;
 
   return (
     <div className="space-y-2" data-testid="ficha-preliminar">
@@ -190,11 +180,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           </div>
           <div className="space-y-1">
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>
-            {avisoPacote && (
-              <p role="status" data-testid="aviso-pacote-incompleto" className="text-[11px] font-medium text-destructive">
-                {avisoPacote}
-              </p>
-            )}
             <label className="block text-[11px]">{t("Endereço do imóvel")}
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
@@ -203,12 +188,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
             </label>
-            {(["aluguel", "condominio", "iptu", "seguro_incendio"] as const).map((chave) => (
-              <label key={chave} className="block text-[11px]">{t(chave === "aluguel" ? "Aluguel (R$)" : chave === "condominio" ? "Condomínio / rateio (R$)" : chave === "iptu" ? "IPTU mensal (R$)" : "Seguro-incêndio mensal (R$)")}
-                <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
-                  onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
-              </label>
-            ))}
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
               <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
@@ -231,6 +210,50 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
             </label>)}
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-[11px] font-semibold">{t("Garantia")}</h4>
+            <label className="block text-[11px]">{t("Garantia")}
+              <select className="h-8 w-full rounded-md border border-input bg-background text-xs"
+                value={ficha.garantia.tipo ?? ""} disabled={somenteLeitura || desabilitado}
+                onChange={(e) => {
+                  const tipo = e.target.value as FichaPreliminar["garantia"]["tipo"];
+                  mudarFicha((a) => a ? { ...a, garantia: { ...a.garantia, tipo: tipo || null } } : a);
+                }}>
+                <option value="">{t("Selecionar")}</option>
+                {TIPOS_DE_GARANTIA.map((tipo) => (
+                  <option key={tipo} value={tipo}>{t(ROTULO_GARANTIA[tipo])}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[11px]">{t("Valor mensal da garantia (R$)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.garantia.valor_mensal)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, garantia: { ...a.garantia, valor_mensal: numero(e.target.value) } } : a)} />
+            </label>
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-[11px] font-semibold">{t("Contrato")}</h4>
+            <label className="block text-[11px]">{t("Índice de reajuste")}
+              <Input className="h-8 text-xs" value={textoDe(ficha.contrato.indice_reajuste)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, indice_reajuste: campo(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Taxa de administração (%)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_adm)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_adm: numero(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Taxa de locação (%)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_locacao)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_locacao: numero(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Observação")}
+              <Input className="h-8 text-xs" value={textoDe(ficha.contrato.observacao)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, observacao: campo(e.target.value) } } : a)} />
+            </label>
           </div>
           {ficha.documentos.faltantes.length > 0 && (
             <p className="text-[11px]"><span className="font-semibold">{t("Documentos faltantes")}:</span> {ficha.documentos.faltantes.join(", ")}</p>
