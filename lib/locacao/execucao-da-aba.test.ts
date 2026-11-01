@@ -4,6 +4,7 @@ import {
   ABAS_DO_MODAL_LOCACAO,
   PONTO_RENDA_ASSINCRONA,
   ROTULO_DA_ABA,
+  ROTULO_DO_BOTAO_DA_ABA,
   checklistDaAba,
   estadoVisivelDaAba,
   execucaoEmAndamento,
@@ -32,7 +33,7 @@ function exec(parcial: Partial<ExecucaoPublica> & Pick<ExecucaoPublica, "estado"
 }
 
 describe("ordem e ponto de ligação das abas", () => {
-  it("a ordem das abas é Dados, Renda, FC, Migra, Relatório, Contrato, Documentos", () => {
+  it("a ordem das abas é Dados, Análise de renda, Análise FC, Análise Migra, Relatório, Gerar contrato, Documentos", () => {
     expect(ABAS_DO_MODAL_LOCACAO).toEqual([
       "dados",
       "renda",
@@ -45,13 +46,14 @@ describe("ordem e ponto de ligação das abas", () => {
     expect(ABAS_DO_MODAL_LOCACAO.at(-1)).toBe("documentos");
     expect(Object.values(ROTULO_DA_ABA)).toEqual([
       "Dados",
-      "Renda",
-      "FC",
-      "Migra",
+      "Análise de renda",
+      "Análise FC",
+      "Análise Migra",
       "Relatório",
-      "Contrato",
+      "Gerar contrato",
       "Documentos",
     ]);
+    expect(ROTULO_DO_BOTAO_DA_ABA.migra).toBe("Analisar Migra");
   });
 
   it("a renda assíncrona aponta para o POST que só enfileira", () => {

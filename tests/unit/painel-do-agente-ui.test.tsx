@@ -86,7 +86,7 @@ describe("Painel do agente (UI)", () => {
     expect(screen.getAllByLabelText("RENDA (R$)")).toHaveLength(1);
     expect(screen.queryByLabelText("Renda proposta para a FC (R$)")).toBeNull();
     expect(screen.queryByRole("button", {name: "Abrir processo"})).toBeNull();
-    fireEvent.click(screen.getByRole("tab", {name: "Contrato"}));
+    fireEvent.click(screen.getByRole("tab", {name: "Gerar contrato"}));
     const preparar = await screen.findByRole("button", {name: "Preparar locação"});
     expect(preparar).toBeVisible();
     fireEvent.click(screen.getByRole("tab", {name: "Dados"}));

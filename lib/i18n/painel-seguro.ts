@@ -1,6 +1,7 @@
 export const TEXTOS_PAINEL_SEGURO = {
   "Seguro-fiança": { es: "Seguro de fianza" },
   "Analisar seguro-fiança": { es: "Analizar seguro de fianza" },
+  "Analisar Migra": { es: "Analizar Migra" },
   "Cotando seguro-fiança…": { es: "Cotizando seguro de fianza…" },
   "cotando seguro-fiança…": { es: "cotizando seguro de fianza…" },
   "consultando cotação…": { es: "consultando cotización…" },

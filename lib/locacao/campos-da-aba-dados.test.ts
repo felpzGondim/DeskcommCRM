@@ -28,6 +28,7 @@ const FIXTURA_CONVERSA = {
   vigencia: { inicio: "2026-11-10", fim: "2029-05-10" },
   garantia: { tipo: "seguro_fianca", valor_mensal: 99 },
   contrato: { indice_reajuste: "IGPM", taxa_adm: 8, taxa_locacao: 50, observacao: "reajuste anual" },
+  locador: { nome: "Maria Locadora", documento: "52998224725", contato: "11987654321" },
 } as const;
 
 const ESPERADO: Record<string, unknown> = {
@@ -52,6 +53,9 @@ const ESPERADO: Record<string, unknown> = {
   "contrato.taxa_adm": 8,
   "contrato.taxa_locacao": 50,
   "contrato.observacao": "reajuste anual",
+  "locador.nome": "Maria Locadora",
+  "locador.documento": "52998224725",
+  "locador.contato": "11987654321",
 };
 
 function valorExibido(bruto: unknown): unknown {
@@ -107,6 +111,15 @@ describe("campos da aba Dados preenchidos pela conversa", () => {
     },
   );
 
+  it.each(CAMPOS_DA_ABA_DADOS.filter((c) => c.superficie === "locador"))(
+    "o bloco do locador liga $tela em $path",
+    (campo) => {
+      const src = readFileSync("components/locacao/CamposLocador.tsx", "utf8");
+      expect(src, campo.tela).toContain(campo.tela);
+      expect(src, campo.path).toContain(campo.path.split(".")[1]!);
+    },
+  );
+
   it("a aba Dados não duplica o pacote: valores só no bloco com origem", () => {
     const ficha = readFileSync("components/inbox/FichaPreliminarPainel.tsx", "utf8");
     const dialog = readFileSync("components/inbox/AnaliseInquilinoDialog.tsx", "utf8");
@@ -124,5 +137,14 @@ describe("campos da aba Dados preenchidos pela conversa", () => {
     expect(src).toContain("ficha.contrato");
     expect(src).toContain("Valor mensal da garantia (R$)");
     expect(src).toContain("Índice de reajuste");
+  });
+
+  it("o texto do relatório preliminar não ocupa o topo da aba Dados", () => {
+    const src = readFileSync("components/inbox/FichaPreliminarPainel.tsx", "utf8");
+    const pessoas = src.indexOf('t("Pessoas")');
+    const relatorio = src.indexOf("relatorio-preliminar-recolhido");
+    expect(pessoas).toBeGreaterThan(0);
+    expect(relatorio).toBeGreaterThan(pessoas);
+    expect(src).toContain("<details");
   });
 });

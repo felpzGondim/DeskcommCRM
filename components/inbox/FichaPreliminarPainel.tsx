@@ -1,13 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
+import { CamposLocadorNaFicha, campoLocadorDaEdicao } from "@/components/locacao/CamposLocador";
+import { SeloOrigem } from "@/components/locacao/SeloOrigem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
+import { seloDaFonte } from "@/lib/locacao/origem-do-campo";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import {
   PAPEIS_DA_FICHA,
@@ -68,6 +72,33 @@ function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
 
 function numeroDaFicha(valor: number | null): NumeroFicha {
   return { valor, fonte: "atendente", trecho: null, confianca: 1, message_id: null };
+}
+
+function SeloDoCampo({ campo }: { campo: CampoFicha | NumeroFicha | undefined }) {
+  const temValor = campo?.valor !== null && campo?.valor !== undefined && String(campo.valor) !== "";
+  return <SeloOrigem origem={seloDaFonte(campo?.fonte, temValor)} />;
+}
+
+function CampoComOrigem({
+  rotulo,
+  campo,
+  selo,
+  children,
+}: {
+  rotulo: string;
+  campo?: CampoFicha | NumeroFicha;
+  selo?: "conversa" | "vazio";
+  children: ReactNode;
+}) {
+  return (
+    <div className="block text-[11px]">
+      <label className="block text-[11px]">
+        {rotulo}
+        {children}
+      </label>
+      {selo ? <SeloOrigem origem={selo} /> : <SeloDoCampo campo={campo} />}
+    </div>
+  );
 }
 
 const CAMPOS_DO_PACOTE_NA_FICHA = [
@@ -156,11 +187,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
       {ficha && (
         <div className="space-y-3 rounded-md border border-border p-2">
-          <div>
-            <h4 className="text-[11px] font-semibold">{t("Relatório preliminar")} · {t("Versão")} {versao}</h4>
-            <Textarea className="mt-1 min-h-20 text-xs" value={relatorio} disabled={somenteLeitura || desabilitado}
-              onChange={(e) => setRelatorio(e.target.value)} maxLength={60000} rows={6} />
-          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-[11px] font-semibold">{t("Pessoas")}</h4>
@@ -190,22 +216,22 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                     onChange={(e) => patchPessoa(i, { principal: e.target.checked })} />
                   {t("Principal")}
                 </label>
-                <label className="block text-[11px]">{t("Nome")}
+                <CampoComOrigem rotulo={t("Nome")} campo={p.nome}>
                   <Input className="h-8 text-xs" value={textoDe(p.nome)} disabled={somenteLeitura || desabilitado}
                     onChange={(e) => patchPessoa(i, { nome: campo(e.target.value) })} />
-                </label>
-                <label className="block text-[11px]">{t("CPF")}
+                </CampoComOrigem>
+                <CampoComOrigem rotulo={t("CPF")} campo={p.cpf}>
                   <Input className="h-8 text-xs" value={textoDe(p.cpf)} disabled={somenteLeitura || desabilitado}
                     onChange={(e) => patchPessoa(i, { cpf: campo(e.target.value) })} />
-                </label>
-                <label className="block text-[11px]">{t("Celular")}
+                </CampoComOrigem>
+                <CampoComOrigem rotulo={t("Celular")} campo={p.celular}>
                   <Input className="h-8 text-xs" value={textoDe(p.celular)} disabled={somenteLeitura || desabilitado}
                     onChange={(e) => patchPessoa(i, { celular: campo(e.target.value) })} />
-                </label>
-                <label className="block text-[11px]">{t("E-mail")}
+                </CampoComOrigem>
+                <CampoComOrigem rotulo={t("E-mail")} campo={p.email}>
                   <Input className="h-8 text-xs" value={textoDe(p.email)} disabled={somenteLeitura || desabilitado}
                     onChange={(e) => patchPessoa(i, { email: campo(e.target.value) })} />
-                </label>
+                </CampoComOrigem>
                 {(["nascimento", "rg", "profissao", "empregador"] as const).map((chave) => (
                   <label key={chave} className="block text-[11px]">{t({ nascimento: "Nascimento", rg: "RG", profissao: "Profissão", empregador: "Empregador"}[chave])}
                     <Input className="h-8 text-xs" value={textoDe(p[chave])} disabled={somenteLeitura || desabilitado}
@@ -219,42 +245,57 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               </fieldset>
             ))}
           </div>
+          <CamposLocadorNaFicha
+            conversationId={conversationId}
+            locador={ficha.locador ?? { nome: campo(""), documento: campo(""), contato: campo("") }}
+            desabilitado={somenteLeitura || desabilitado}
+            atualizacao={atualizacao}
+            onAlterar={(chave, valor) => {
+              mudarFicha((a) => {
+                if (!a) return a;
+                const atual = a.locador ?? { nome: campo(""), documento: campo(""), contato: campo("") };
+                return { ...a, locador: { ...atual, [chave]: campoLocadorDaEdicao(valor) } };
+              });
+            }}
+          />
           <div className="space-y-1">
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>
-            <label className="block text-[11px]">{t("Endereço do imóvel")}
+            <CampoComOrigem rotulo={t("Endereço do imóvel")} campo={ficha.imovel.logradouro}>
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
-            </label>
-            <label className="block text-[11px]">{t("Número do imóvel")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Número do imóvel")} campo={ficha.imovel.numero}>
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
-            </label>
+            </CampoComOrigem>
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
-              <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
+              <CampoComOrigem key={chave} rotulo={t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])} campo={ficha.imovel[chave]}>
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
                   onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
-              </label>
+              </CampoComOrigem>
             ))}
-            <label className="block text-[11px]">{t("Tipo de imóvel")}
+            <CampoComOrigem rotulo={t("Tipo de imóvel")} selo={ficha.imovel.tipo ? "conversa" : "vazio"}>
               <select className="h-8 w-full rounded-md border border-input bg-background text-xs" value={ficha.imovel.tipo ?? ""} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => { const tipo = e.target.value as FichaPreliminar["imovel"]["tipo"]; mudarFicha((a) => a ? {...a, imovel: {...a.imovel, tipo: tipo || null}} : a); }}>
                 <option value="">{t("Selecionar")}</option><option value="residencial">{t("Residencial")}</option><option value="comercial">{t("Comercial")}</option>
               </select>
-            </label>
-            <label className="block text-[11px]">{t("Código FC")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Código FC")} campo={ficha.imovel.codigo_fc}>
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.codigo_fc)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, codigo_fc: campo(e.target.value) } } : a)} />
-            </label>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(["inicio", "fim"] as const).map((chave) => <label key={chave} className="text-[11px]">{t(chave === "inicio" ? "Início da locação" : "Término da locação")}
-              <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
-                onChange={(e) => mudarFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
-            </label>)}
+            </CampoComOrigem>
           </div>
           <div className="space-y-1">
-            <h4 className="text-[11px] font-semibold">{t("Garantia")}</h4>
-            <label className="block text-[11px]">{t("Garantia")}
+            <h4 className="text-[11px] font-semibold">{t("Contrato")}</h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["inicio", "fim"] as const).map((chave) => (
+                <CampoComOrigem key={chave} rotulo={t(chave === "inicio" ? "Início da locação" : "Término da locação")} campo={ficha.vigencia[chave]}>
+                  <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
+                    onChange={(e) => mudarFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
+                </CampoComOrigem>
+              ))}
+            </div>
+            <CampoComOrigem rotulo={t("Garantia")} selo={ficha.garantia.tipo ? "conversa" : "vazio"}>
               <select className="h-8 w-full rounded-md border border-input bg-background text-xs"
                 value={ficha.garantia.tipo ?? ""} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => {
@@ -266,35 +307,32 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                   <option key={tipo} value={tipo}>{t(ROTULO_GARANTIA[tipo])}</option>
                 ))}
               </select>
-            </label>
-            <label className="block text-[11px]">{t("Valor mensal da garantia (R$)")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Valor mensal da garantia (R$)")} campo={ficha.garantia.valor_mensal}>
               <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.garantia.valor_mensal)}
                 disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, garantia: { ...a.garantia, valor_mensal: numero(e.target.value) } } : a)} />
-            </label>
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-[11px] font-semibold">{t("Contrato")}</h4>
-            <label className="block text-[11px]">{t("Índice de reajuste")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Índice de reajuste")} campo={ficha.contrato.indice_reajuste}>
               <Input className="h-8 text-xs" value={textoDe(ficha.contrato.indice_reajuste)}
                 disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, indice_reajuste: campo(e.target.value) } } : a)} />
-            </label>
-            <label className="block text-[11px]">{t("Taxa de administração (%)")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Taxa de administração (%)")} campo={ficha.contrato.taxa_adm}>
               <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_adm)}
                 disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_adm: numero(e.target.value) } } : a)} />
-            </label>
-            <label className="block text-[11px]">{t("Taxa de locação (%)")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Taxa de locação (%)")} campo={ficha.contrato.taxa_locacao}>
               <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_locacao)}
                 disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_locacao: numero(e.target.value) } } : a)} />
-            </label>
-            <label className="block text-[11px]">{t("Observação")}
+            </CampoComOrigem>
+            <CampoComOrigem rotulo={t("Observação")} campo={ficha.contrato.observacao}>
               <Input className="h-8 text-xs" value={textoDe(ficha.contrato.observacao)}
                 disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, observacao: campo(e.target.value) } } : a)} />
-            </label>
+            </CampoComOrigem>
           </div>
           {ficha.documentos.faltantes.length > 0 && (
             <p className="text-[11px]"><span className="font-semibold">{t("Documentos faltantes")}:</span> {ficha.documentos.faltantes.join(", ")}</p>
@@ -324,24 +362,38 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               </ol>
             </div>
           )}
+          <CamposImovelProcessoNaFicha
+            conversationId={conversationId}
+            desabilitado={desabilitado || somenteLeitura}
+            atualizacao={atualizacao}
+            valoresFicha={valoresDoPacoteNaFicha(ficha)}
+            onAlterarFicha={(campo, valor) => {
+              mudarFicha((a) => {
+                if (!a) return a;
+                const n = numeroDaFicha(valor);
+                if (campo === "seguro_fianca") {
+                  return { ...a, garantia: { ...a.garantia, valor_mensal: n } };
+                }
+                return { ...a, imovel: { ...a.imovel, [campo]: n } };
+              });
+            }}
+          />
+          <details className="rounded-md border border-border/60 p-2" data-testid="relatorio-preliminar-recolhido">
+            <summary className="cursor-pointer text-[11px] font-semibold">
+              {t("Relatório preliminar")} · {t("Versão")} {versao}
+            </summary>
+            <Textarea className="mt-1 min-h-20 text-xs" value={relatorio} disabled={somenteLeitura || desabilitado}
+              onChange={(e) => setRelatorio(e.target.value)} maxLength={60000} rows={6} />
+          </details>
         </div>
       )}
-      <CamposImovelProcessoNaFicha
-        conversationId={conversationId}
-        desabilitado={desabilitado || somenteLeitura}
-        atualizacao={atualizacao}
-        valoresFicha={ficha ? valoresDoPacoteNaFicha(ficha) : undefined}
-        onAlterarFicha={ficha ? (campo, valor) => {
-          mudarFicha((a) => {
-            if (!a) return a;
-            const n = numeroDaFicha(valor);
-            if (campo === "seguro_fianca") {
-              return { ...a, garantia: { ...a.garantia, valor_mensal: n } };
-            }
-            return { ...a, imovel: { ...a.imovel, [campo]: n } };
-          });
-        } : undefined}
-      />
+      {!ficha && (
+        <CamposImovelProcessoNaFicha
+          conversationId={conversationId}
+          desabilitado={desabilitado || somenteLeitura}
+          atualizacao={atualizacao}
+        />
+      )}
     </div>
   );
 }

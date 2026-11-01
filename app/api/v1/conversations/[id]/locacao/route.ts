@@ -21,6 +21,7 @@ import {
   listarProcessosDaConversa,
   vinculoDoContato,
 } from "@/lib/locacao/repositorio";
+import { locadorDoVinculo } from "@/lib/locacao/locador-do-vinculo";
 import { vinculoDaLinha } from "@/lib/locacao/superlogica-id";
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -56,12 +57,11 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const contactId = typeof conv.contact_id === "string" ? conv.contact_id : null;
   const admin = createAdminClient();
   const { data: contatoLinha } = contactId
-    ? await db.from("contacts").select("id")
+    ? await db.from("contacts").select("id,name,phone_number,email")
       .eq("organization_id", auth.org.orgId).eq("id", contactId).maybeSingle()
     : { data: null };
-  const vinculo = vinculoDaLinha(
-    contactId ? await vinculoDoContato(admin, auth.org.orgId, contactId) : null,
-  );
+  const vinculoLinha = contactId ? await vinculoDoContato(admin, auth.org.orgId, contactId) : null;
+  const vinculo = vinculoDaLinha(vinculoLinha);
   const contato = {
     id: typeof (contatoLinha as { id?: unknown } | null)?.id === "string"
       ? (contatoLinha as { id: string }).id
@@ -69,12 +69,26 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     superlogica_id_pessoa: vinculo.superlogica_id_pessoa,
     superlogica_tipo: vinculo.superlogica_tipo,
   };
+  const locador = locadorDoVinculo({
+    tipos: vinculoLinha && typeof vinculoLinha === "object" ? (vinculoLinha as { tipos?: unknown }).tipos : [],
+    tipo: vinculo.superlogica_tipo,
+    nome: typeof (contatoLinha as { name?: unknown } | null)?.name === "string"
+      ? (contatoLinha as { name: string }).name
+      : null,
+    documento: null,
+    contato: typeof (contatoLinha as { phone_number?: unknown } | null)?.phone_number === "string"
+      ? (contatoLinha as { phone_number: string }).phone_number
+      : typeof (contatoLinha as { email?: unknown } | null)?.email === "string"
+        ? (contatoLinha as { email: string }).email
+        : null,
+  });
   if (!habilitado) {
     return ok({
       habilitado: false,
       analise,
       processos: [],
       contato,
+      locador,
       execucoes: execucoesVazias(),
       entrada_atual: null,
       etapa_quadro: null,
@@ -172,6 +186,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     habilitado: true,
     analise,
     contato,
+    locador,
     execucoes,
     entrada_atual: entradaAtual,
     etapa_quadro: processoAtivo

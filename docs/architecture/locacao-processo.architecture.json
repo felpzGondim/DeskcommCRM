@@ -16,7 +16,7 @@
   "mainPath": ["painel", "flag", "processo", "etapa"],
   "nodes": [
     { "id": "painel", "lane": "inbox", "col": 1, "type": "frontend", "label": "Painel: resumo + Abrir análise (papel contato)" },
-    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal: Dados, Renda, FC, Migra, Relatório, Contrato, Documentos" },
+    { "id": "analise_modal", "lane": "inbox", "col": 1, "type": "frontend", "label": "Modal: Dados, Análise de renda, Análise FC, Análise Migra, Relatório, Gerar contrato, Documentos" },
     { "id": "casca_aba", "lane": "inbox", "col": 1, "type": "frontend", "label": "AbaComExecucao: checklist, status, Tentar de novo, hora" },
     { "id": "lista", "lane": "inbox", "col": 1, "type": "frontend", "label": "/app/locacao e detalhe com aprovar/reprovar" },
     { "id": "config", "lane": "inbox", "col": 1, "type": "frontend", "label": "Configurações › Locação: chaves desligadas" },
@@ -36,6 +36,7 @@
     { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "api_audit_log: ação e ids, sem CPF/nome/telefone" },
     { "id": "valores", "lane": "registro", "col": 3, "type": "database", "label": "valores do imóvel no processo: origem e edição" },
     { "id": "camposImovel", "lane": "inbox", "col": 1, "type": "frontend", "label": "CamposImovelProcesso na aba Dados (origem visível)" },
+    { "id": "camposLocador", "lane": "inbox", "col": 1, "type": "frontend", "label": "CamposLocador na aba Dados (nome, documento e contato mascarados, origem visível)" },
     { "id": "execucoes", "lane": "registro", "col": 3, "type": "database", "label": "locacao_execucoes: uma linha por aba (fila, progresso, hash, resultado)" }
   ],
   "edges": [
@@ -82,6 +83,8 @@
     { "id": "e41", "from": "casca_aba", "to": "execucoes", "label": "polling / desatualizado pelo hash" },
     { "id": "e42", "from": "execucoes", "to": "casca_aba", "label": "fila, etapa, erro, última execução" },
     { "id": "e43", "from": "analise_modal", "to": "etapa", "label": "mostra a etapa do card, sem mover" },
-    { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" }
+    { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" },
+    { "id": "e45", "from": "analise_modal", "to": "camposLocador", "label": "aba Dados: locador com selo de origem" },
+    { "id": "e46", "from": "vinculo", "to": "camposLocador", "label": "proprietário do vínculo preenche o locador mascarado" }
   ]
 }

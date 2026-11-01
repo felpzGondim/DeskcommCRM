@@ -15,18 +15,18 @@ export type AbaDoModalLocacao = AbaDaExecucao;
 
 export const ROTULO_DA_ABA: Record<AbaDaExecucao, string> = {
   dados: "Dados",
-  renda: "Renda",
-  fc: "FC",
-  migra: "Migra",
+  renda: "Análise de renda",
+  fc: "Análise FC",
+  migra: "Análise Migra",
   relatorio: "Relatório",
-  contrato: "Contrato",
+  contrato: "Gerar contrato",
   documentos: "Documentos",
 };
 
 export const ROTULO_DO_BOTAO_DA_ABA: Partial<Record<AbaDaExecucao, string>> = {
   renda: "Analisar renda",
   fc: "Analisar FC",
-  migra: "Analisar seguro-fiança",
+  migra: "Analisar Migra",
   relatorio: "Gerar relatório",
 };
 

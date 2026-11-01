@@ -43,7 +43,7 @@ describe("casca do modal de locação", () => {
     post.mockResolvedValue({ data: {} });
   });
 
-  it("as abas vêm na ordem Dados, Renda, FC, Migra, Relatório, Contrato, Documentos — sem Analisar tudo", async () => {
+  it("as abas vêm na ordem Dados, Análise de renda, Análise FC, Análise Migra, Relatório, Gerar contrato, Documentos — sem Analisar tudo", async () => {
     render(
       <AnaliseInquilinoDialog
         aberto
@@ -134,7 +134,7 @@ describe("casca do modal de locação", () => {
       />,
     );
     await waitFor(() => expect(get).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("tab", { name: "Renda" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Análise de renda" }));
     fireEvent.click(await screen.findByRole("button", { name: "Analisar renda" }));
     await waitFor(() => {
       expect(post).toHaveBeenCalledWith("/api/v1/conversations/conv-1/painel-agente/renda", {
@@ -148,6 +148,21 @@ describe("casca do modal de locação", () => {
       expect(paineis.some((el) => el.getAttribute("data-estado") === "na_fila")).toBe(true);
     });
     expect(screen.getAllByTestId("rotulo-da-execucao").some((el) => el.textContent === "Na fila")).toBe(true);
+  });
+
+  it("a aba Análise Migra mostra o botão Analisar Migra", async () => {
+    render(
+      <AnaliseInquilinoDialog
+        aberto
+        onAbertoChange={vi.fn()}
+        conversationId="conv-1"
+        senhasPdf={[]}
+      />,
+    );
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("tab", { name: "Análise Migra" }));
+    expect(await screen.findByRole("button", { name: "Analisar Migra" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Analisar seguro-fiança" })).toBeNull();
   });
 
   it("não puxa o cliente MCP do Hub para o bundle do inbox", () => {

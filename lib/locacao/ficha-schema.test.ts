@@ -47,6 +47,16 @@ describe("ficha preliminar — schema", () => {
     expect(ficha.renda.mensal.valor).toBe(3000);
     expect(ficha.imovel.aluguel.valor).toBeNull();
     expect(ficha.versao).toBe("preliminar-v1");
+    expect(ficha.locador.nome.valor).toBeNull();
+  });
+
+  it("completa o locador citado na conversa sem inventar documento", () => {
+    const ficha = completarFicha({
+      locador: { nome: "Maria Locadora", contato: "11987654321" },
+    });
+    expect(ficha.locador.nome).toMatchObject({ valor: "Maria Locadora", fonte: "conversa" });
+    expect(ficha.locador.contato).toMatchObject({ valor: "11987654321", fonte: "conversa" });
+    expect(ficha.locador.documento.valor).toBeNull();
   });
 
   it("tira cerca de Markdown e recusa texto sem JSON", () => {

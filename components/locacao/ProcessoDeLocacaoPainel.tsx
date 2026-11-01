@@ -967,7 +967,7 @@ export function ProcessoDeLocacaoPainel({
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={desabilitado || cotando}
                   onClick={() => void cotar()}>
-                  {cotando ? t("Cotando seguro-fiança…") : t("Analisar seguro-fiança")}
+                  {cotando ? t("Cotando seguro-fiança…") : t("Analisar Migra")}
                 </Button>
                 )}
                 {processo.seguro_pedido_id ? (

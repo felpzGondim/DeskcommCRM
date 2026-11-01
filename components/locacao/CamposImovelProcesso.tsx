@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
+import { SeloOrigem } from "@/components/locacao/SeloOrigem";
+import { seloDaOrigemDoValor } from "@/lib/locacao/origem-do-campo";
 import {
   CAMPOS_DO_VALOR_DO_IMOVEL,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
   camposFaltantesDoPacote,
-  rotuloDaOrigemDoValor,
   valoresVazios,
   type CampoDoValorDoImovel,
   type CampoObrigatorioDoPacote,
@@ -129,8 +130,8 @@ export function CamposImovelProcesso({
               }}
               aria-label={t(ROTULO_CAMPO_TELA[campo])}
             />
-            <span className="text-[10px] text-muted-foreground">
-              {t("Origem")}: {t(rotuloDaOrigemDoValor(origem))}
+            <span className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+              <SeloOrigem origem={seloDaOrigemDoValor(origem)} />
               {obrigatorio && valores[campo].valor == null ? ` · ${t("obrigatório para FC e Migra")}` : ""}
             </span>
           </label>
@@ -269,7 +270,7 @@ export function CamposImovelProcessoNaFicha({
     return () => { vivo = false; };
   }, [conversationId, atualizacao]);
 
-  if (processoId) {
+  if (processoId && !onAlterarFicha) {
     return (
       <CamposImovelProcessoDoProcesso
         processoId={processoId}

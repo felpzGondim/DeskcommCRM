@@ -15,7 +15,7 @@ describe("CamposImovelProcesso", () => {
     expect(screen.getByTestId("campos-imovel-processo")).toBeTruthy();
     expect(screen.getByDisplayValue("2000")).toBeTruthy();
     expect(screen.getByText(/Superlógica/)).toBeTruthy();
-    expect(screen.getByText(/conversa\/ficha/)).toBeTruthy();
+    expect(screen.getByText(/Origem: conversa/)).toBeTruthy();
     expect(screen.getByText(/não entra no 3×/)).toBeTruthy();
     expect(screen.getByLabelText(/Seguro-fiança/)).toBeTruthy();
   });
