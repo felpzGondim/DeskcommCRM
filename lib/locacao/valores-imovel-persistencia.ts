@@ -1,16 +1,15 @@
 /**
  * Leitura, pré-preenchimento e gravação dos valores do imóvel no processo.
- * Service role + organization_id da sessão. Superlógica só GET, injetável;
- * chave desligada = pula essa fonte. Evento sem valores (só nomes de campo).
+ * Service role + organization_id da sessão. Superlógica só GET via Hub,
+ * injetável; chave desligada = pula essa fonte. Falha do Hub cai na conversa.
+ * Evento sem valores (só nomes de campo).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { tabelaLocacao } from "@/lib/locacao/admin";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
-import {
-  leitorSuperlogicaDesligado,
-  type LeitorDePacoteSuperlogica,
-} from "@/lib/locacao/extrato/pacote";
+import { criarLeitorPacoteViaHub } from "@/lib/locacao/extrato/leitor-superlogica-hub";
+import type { LeitorDePacoteSuperlogica, LeituraDePacoteSuperlogica } from "@/lib/locacao/extrato/pacote";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { lerFichaAtual } from "@/lib/locacao/ficha-repositorio";
 import {
@@ -112,13 +111,18 @@ async function fonteSuperlogica(
     temVinculo = Object.keys(cf).some((k) => k.startsWith("superlogica_"));
   }
   if (!temVinculo) return null;
-  const leitor = input.leitor ?? leitorSuperlogicaDesligado();
-  const bruto = await leitor.ler({
-    orgId: input.orgId,
-    contactId: contactId ?? "",
-    superlogicaImovelId: typeof slImovel === "number" ? slImovel : Number(slImovel) || null,
-  });
-  if (!bruto) return null;
+  const leitor = input.leitor ?? criarLeitorPacoteViaHub({ admin });
+  let bruto: LeituraDePacoteSuperlogica | null = null;
+  try {
+    bruto = await leitor.ler({
+      orgId: input.orgId,
+      contactId: contactId ?? "",
+      superlogicaImovelId: typeof slImovel === "number" ? slImovel : Number(slImovel) || null,
+    });
+  } catch {
+    return null;
+  }
+  if (!bruto || bruto.aviso) return null;
   return {
     aluguel: centavosParaReais(bruto.aluguelCentavos),
     condominio: centavosParaReais(bruto.condominioCentavos),

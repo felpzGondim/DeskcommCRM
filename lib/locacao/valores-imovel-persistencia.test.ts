@@ -165,6 +165,31 @@ describe("persistência dos valores do imóvel", () => {
     expect(valores.condominio).toMatchObject({ valor: 400, origem: "superlogica" });
   });
 
+  it("leitor com aviso e sem valores cai na conversa e não lança", async () => {
+    mocks.tabela.mockImplementation((_admin: unknown, nome: string) => {
+      const data = nome === "locacao_imoveis"
+        ? { id: IMOVEL, superlogica_imovel_id: 77 }
+        : null;
+      const api = cadeia({ data });
+      api.update = vi.fn((patch: Record<string, unknown>) => {
+        updates.push({ patch, cadeia: api });
+        return api;
+      });
+      return api;
+    });
+    const leitor = {
+      ler: vi.fn(async () => ({ aviso: "Valores da Superlógica indisponíveis agora; usando os da conversa." })),
+    };
+    const valores = await garantirValoresDoProcesso(admin as never, {
+      orgId: ORG,
+      processoId: PROCESSO,
+      settings: { locacao: { pacote_superlogica_habilitado: true } },
+      leitor,
+    });
+    expect(leitor.ler).toHaveBeenCalled();
+    expect(valores.aluguel).toMatchObject({ valor: 2100, origem: "conversa" });
+  });
+
   it("origem manual não é sobrescrita no pré-preenchimento", async () => {
     mocks.lerProcesso.mockResolvedValue({
       id: PROCESSO,

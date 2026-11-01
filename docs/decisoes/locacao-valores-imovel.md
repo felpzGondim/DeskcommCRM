@@ -20,7 +20,7 @@ estes cinco campos).
 | Evento `valores_imovel` | só nomes de campo, sem valores |
 | 3× | 2c: aluguel + condomínio (inclui rateio) + IPTU + seguro-incêndio. Fiança fora. |
 | FC e Migra | usam o snapshot; recusam se faltar um dos quatro, apontando o campo |
-| Superlógica | só GET, injetável; chave desligada = pula essa fonte |
+| Superlógica | só GET via Hub (`/imovel/pacote`); chave desligada = pula essa fonte |
 | Edição humana | origem `manual`; pré-preenchimento posterior não sobrescreve |
 
 Não há função SECURITY DEFINER nova. RLS da tabela já existente (SELECT
@@ -33,8 +33,11 @@ authenticated, escrita só `service_role`).
 1. Se a chave `locacao.pacote_superlogica_habilitado` estiver ligada **e** o
    contato/imóvel tiver vínculo Superlógica (`superlogica_imovel_id`,
    `contato_superlogica_vinculos` ou `custom_fields superlogica_*`), lê
-   aluguel/condomínio/IPTU/seguro-incêndio via `LeitorDePacoteSuperlogica`
-   (GET). Sem cliente HTTP neste repo: o stub devolve `null`.
+   aluguel/condomínio/IPTU/seguro-incêndio via `criarLeitorPacoteViaHub`
+   (`GET /imovel/pacote` no Hub, ou a ferramenta MCP `ler_pacote_imovel`).
+   Contrato do endpoint: `docs/planos/hub-pacote-imovel-superlogica.md`.
+   O Hub ainda precisa expor a rota; até lá a leitura devolve aviso e o
+   CRM cai na conversa. Falha do Hub **não** quebra o fluxo.
 2. Senão (ou para o que a Superlógica não trouxe): ficha/relatório preliminar.
 3. Manual vence Superlógica, que vence conversa.
 

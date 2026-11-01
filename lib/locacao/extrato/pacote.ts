@@ -1,7 +1,7 @@
 /**
  * Pacote para 3×: aluguel + condomínio + IPTU + seguro-incêndio.
- * Seguro-fiança NÃO entra. Superlógica só GET, injetável; sem cliente HTTP
- * neste repo a chave nasce desligada.
+ * Seguro-fiança NÃO entra. Superlógica só GET via Hub, injetável.
+ * A chave `locacao.pacote_superlogica_habilitado` nasce desligada.
  */
 import { formatarReais, lerCentavos } from "./dinheiro";
 
@@ -23,17 +23,22 @@ export interface PacoteDoImovel {
   faltantes: string[];
 }
 
+export type LeituraDePacoteSuperlogica = {
+  aluguelCentavos?: number | null;
+  condominioCentavos?: number | null;
+  iptuCentavos?: number | null;
+  seguroIncendioCentavos?: number | null;
+  /** Falha do Hub/Superlógica: o chamador cai na conversa e mostra o aviso. */
+  aviso?: string;
+};
+
 export interface LeitorDePacoteSuperlogica {
   ler(input: {
     orgId: string;
     contactId: string;
     superlogicaImovelId?: number | null;
-  }): Promise<{
-    aluguelCentavos?: number | null;
-    condominioCentavos?: number | null;
-    iptuCentavos?: number | null;
-    seguroIncendioCentavos?: number | null;
-  } | null>;
+    conversationId?: string;
+  }): Promise<LeituraDePacoteSuperlogica | null>;
 }
 
 export function leitorSuperlogicaDesligado(): LeitorDePacoteSuperlogica {

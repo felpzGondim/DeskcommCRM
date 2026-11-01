@@ -17,7 +17,7 @@ import {
 } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";
 import {
   criarExtratorComModelo,
-  leitorSuperlogicaDesligado,
+  criarLeitorPacoteViaHub,
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
@@ -137,8 +137,16 @@ export async function gerarRelatorioPreliminarDoPainel(
     const incendio =
       fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
     const sl = pacoteSuperlogicaLigado(ctx.settings)
-      ? await leitorSuperlogicaDesligado().ler({ orgId: ctx.orgId, contactId: ctx.contactId })
+      ? await criarLeitorPacoteViaHub({
+          admin: ctx.admin,
+          conversationId: ctx.conversationId,
+        }).ler({
+          orgId: ctx.orgId,
+          contactId: ctx.contactId,
+          conversationId: ctx.conversationId,
+        })
       : null;
+    const avisoSuperlogica = sl?.aviso;
     const pacote = montarPacote({
       superlogica: sl,
       conversa: { seguroIncendioCentavos: incendio },
@@ -164,7 +172,11 @@ export async function gerarRelatorioPreliminarDoPainel(
     const fichaExtraida = fichaPrevia ? preservarEdicoesHumanas(inicial, fichaPrevia) : inicial;
     const ficha = {
       ...fichaExtraida,
-      pendencias: [...new Set([...saida.ficha.pendencias, ...avisos])].slice(0, 20),
+      pendencias: [...new Set([
+        ...saida.ficha.pendencias,
+        ...avisos,
+        ...(avisoSuperlogica ? [avisoSuperlogica] : []),
+      ])].slice(0, 20),
     };
     etapa = "gravacao";
     const linha = await gravarVersaoDaFicha(ctx.admin, {
