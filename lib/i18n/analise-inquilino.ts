@@ -101,4 +101,8 @@ export const TEXTOS_ANALISE_INQUILINO = {
   "Esta etapa está desligada em Configurações › Locação.": {
     es: "Esta etapa está desactivada en Configuración › Locación.",
   },
+  "Inquilino": { es: "Inquilino" },
+  "Ficha cadastral impressa": { es: "Ficha catastral impresa" },
+  "Laudo da FC": { es: "Informe de FC" },
+  "nenhum arquivo ainda": { es: "ningún archivo todavía" },
 };
