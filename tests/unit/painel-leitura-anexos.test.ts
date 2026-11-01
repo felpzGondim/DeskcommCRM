@@ -195,15 +195,17 @@ describe("leitura original de anexos", () => {
         ? { ok: false as const, motivo: "falha" as const }
         : { ok: true as const, texto: "pagina" },
     );
-    const raster = vi
-      .spyOn(await import("@/lib/ai/rag/extractors/pdf-paginas"), "rasterizarPaginasPdf")
-      .mockResolvedValue(
-        Array.from({ length: 12 }, (_, i) => ({
-          pagina: i + 1,
-          mime: "image/png" as const,
-          bytes: Buffer.from(`p${i}`),
-        })),
-      );
+    const paginas = await import("@/lib/ai/rag/extractors/pdf-paginas");
+    const contar = vi.spyOn(paginas, "contarPaginasPdf").mockResolvedValue(12);
+    const raster = vi.spyOn(paginas, "rasterizarPaginasPdf").mockImplementation(async (_b, op) => {
+      const inicio = op?.paginaInicial ?? 1;
+      const fim = op?.paginaFinal ?? inicio;
+      return Array.from({ length: fim - inicio + 1 }, (_, i) => ({
+        pagina: inicio + i,
+        mime: "image/png" as const,
+        bytes: Buffer.from(`p${inicio + i}`),
+      }));
+    });
     const linhas = await lerPdfsOriginais(
       [
         {
@@ -226,6 +228,77 @@ describe("leitura original de anexos", () => {
     expect(chamadasPng[0]?.[0]?.mais).toHaveLength(4);
     expect(linhas[0]?.media_derived_text).toContain("pagina");
     raster.mockRestore();
+    contar.mockRestore();
+  });
+
+  it("sem teto de páginas lê além de 30 e grava progresso", async () => {
+    extractPdfDocument.mockRejectedValue(
+      new PdfExtractError("image-only", undefined, "sem_texto", 43),
+    );
+    const etapas: string[] = [];
+    const paginas = await import("@/lib/ai/rag/extractors/pdf-paginas");
+    const contar = vi.spyOn(paginas, "contarPaginasPdf").mockResolvedValue(43);
+    const raster = vi.spyOn(paginas, "rasterizarPaginasPdf").mockImplementation(async (_b, op) => {
+      const inicio = op?.paginaInicial ?? 1;
+      const fim = op?.paginaFinal ?? inicio;
+      return Array.from({ length: fim - inicio + 1 }, (_, i) => ({
+        pagina: inicio + i,
+        mime: "image/png" as const,
+        bytes: Buffer.from(`p${inicio + i}`),
+      }));
+    });
+    const lerDocumento = vi.fn(async (e: { mime: string }) =>
+      e.mime === "application/pdf"
+        ? { ok: false as const, motivo: "falha" as const }
+        : { ok: true as const, texto: "CREDITO SALARIO ACME C 1.000,00" },
+    );
+    await lerPdfsOriginais(
+      [
+        {
+          type: "document",
+          media_mime: "application/pdf",
+          media_storage_path: "org/conversa/extrato.pdf",
+          media_size_bytes: pdf.length,
+        },
+      ],
+      "org",
+      "conversa",
+      adminQueEntrega(pdf) as never,
+      {
+        lerDocumento,
+        semTetoPaginas: true,
+        semTetoTexto: true,
+        onProgresso: (p) => {
+          etapas.push(p.etapa);
+        },
+      },
+    );
+    expect(contar).toHaveBeenCalled();
+    expect(raster.mock.calls.length).toBeGreaterThan(6);
+    expect(etapas).toContain("lendo extrato pág. 5 de 43");
+    expect(etapas).toContain("lendo extrato pág. 30 de 43");
+    expect(etapas).toContain("lendo extrato pág. 43 de 43");
+    raster.mockRestore();
+    contar.mockRestore();
+  });
+
+  it("falha de leitura de imagem vira motivo visível, nunca silêncio", async () => {
+    const linhas = await lerImagensDocumentais(
+      [
+        {
+          type: "image",
+          media_mime: "image/jpeg",
+          media_storage_path: "org/conversa/foto.jpg",
+          media_size_bytes: 800,
+        },
+      ],
+      "org",
+      "conversa",
+      async () => ({ ok: false, motivo: "sem_credito" }),
+      adminQueEntrega(Buffer.from("img")) as never,
+    );
+    expect(linhas[0]?.pendencia_anexo).toBe("imagem_sem_leitura");
+    expect(linhas[0]?.motivo_anexo).toBe("leitura de imagem falhou");
   });
 
   it("sela o texto extraído para a confirmação não precisar da senha de novo", async () => {

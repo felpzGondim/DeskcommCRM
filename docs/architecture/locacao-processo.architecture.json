@@ -76,6 +76,7 @@
     { "id": "e36", "from": "camposImovel", "to": "valores", "label": "atendente edita; origem visível" },
     { "id": "e37", "from": "valores", "to": "camposImovel", "label": "mostra valor e origem de cada campo" },
     { "id": "e38", "from": "processo", "to": "execucoes", "label": "uma execução por aba do processo" },
-    { "id": "e39", "from": "execucoes", "to": "docs", "label": "ficha_cadastral em {org}/processos/{id}/ficha_cadastral/" }
+    { "id": "e39", "from": "execucoes", "to": "docs", "label": "ficha_cadastral em {org}/processos/{id}/ficha_cadastral/" },
+    { "id": "e40", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" }
   ]
 }

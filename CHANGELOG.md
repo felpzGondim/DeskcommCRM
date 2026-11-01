@@ -14,6 +14,10 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+### Alterado
+
+- **Análise de renda em segundo plano, sem teto de páginas** O clique (e a mesma função do chat) só enfileira a execução e devolve o id. Um cron lê o extrato inteiro em blocos, grava “lendo extrato pág. X de N” e aplica a regra 3× (aluguel+condomínio+IPTU+seguro-incêndio, sem fiança) com as exclusões à parte. Falha de leitura vira motivo em português e item de checklist. Quem já instalou não precisa editar arquivo; a chave `locacao.analise.renda` continua desligada por padrão.
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado

@@ -157,6 +157,9 @@ CRONS="
 # Cópia Drive da locação (Fase 3b). Minuto a minuto e no-op sem credencial e
 # sem chave da organização. Nunca apaga. Nunca manda mensagem a contato.
 * * * * *|60|api/v1/cron/locacao-drive-copia
+# Fila da análise de renda. Minuto a minuto; no-op sem linha na_fila.
+# Sem mensagem a contato. Timeout 180s: extrato longo lê em blocos.
+* * * * *|180|api/v1/cron/locacao-execucoes
 # AS RECORRÊNCIAS. Uma vez ao dia é o bastante: o que ela gera é uma conta a
 # pagar, e a diferença entre nascer às 5h ou às 17h não muda nada para quem paga.
 # Barato: uma consulta por instalação, e quem não tem molde nenhum sai na hora.

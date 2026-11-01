@@ -1,3 +1,4 @@
+import { avaliarRegra3x, textoDasExclusoes3x } from "@/lib/locacao/analise/regra-3x";
 import type { AnaliseDeExtrato } from "@/lib/locacao/extrato/tipos";
 import type { FichaPreliminar } from "@/lib/locacao/ficha-schema";
 
@@ -62,6 +63,30 @@ export function montarRelatorioDeRenda(ficha: FichaPreliminar, analises: readonl
     const total = valores.reduce<number>((s, v) => s + (v ?? 0), 0);
     linhas.push("Aluguel + condomínio/rateio + IPTU: " + dinheiro(Math.round(total * 100)) + "; comprometimento sobre a RENDA utilizada: " + (total / renda * 100).toFixed(2) + "%.");
   }
+  const regra = avaliarRegra3x({
+    aluguel: ficha.imovel.aluguel.valor,
+    condominio: ficha.imovel.condominio.valor,
+    iptu: ficha.imovel.iptu.valor,
+    seguro_incendio: ficha.imovel.seguro_incendio.valor,
+    seguro_fianca: ficha.contrato.seguro_fianca_mensal.valor,
+    comprovada: ficha.renda.mensal.valor,
+    exclusoes: {
+      propria: ficha.renda.excluida.autotransferencias,
+      familiar: ficha.renda.excluida.familiares,
+      familiar_provavel: ficha.renda.excluida.familiares_provaveis,
+      poupanca: [...ficha.renda.excluida.poupanca, ...ficha.renda.excluida.rende_facil],
+      estorno: ficha.renda.excluida.estornos,
+      emprestimo: ficha.renda.excluida.emprestimos,
+    },
+  });
+  linhas.push(
+    "3× (aluguel + condomínio + IPTU + seguro-incêndio): " +
+      (regra.tres_vezes == null ? "não calculado." : dinheiro(Math.round(regra.tres_vezes * 100)) + ".") +
+      " " +
+      regra.frase,
+  );
+  const exclusoes = textoDasExclusoes3x(regra.exclusoes);
+  if (exclusoes) linhas.push("Exclusões à parte: " + exclusoes + ".");
   const avisos = [...new Set([...pendencias, ...ficha.renda.alertas, ...ficha.pendencias])];
   linhas.push(...avisos.map((a) => "- " + celula(a)));
   linhas.push("", "Recebimentos comerciais e movimentação bancária não demonstram, por si, lucro ou renda líquida pessoal. Conferir a natureza dos créditos antes da decisão. A decisão de locação cabe ao responsável humano.");

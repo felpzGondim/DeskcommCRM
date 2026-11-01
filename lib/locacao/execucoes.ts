@@ -55,6 +55,7 @@ export async function abrirExecucao(
     callId?: string | null;
     etapaTexto?: string | null;
     progressoTotal?: number;
+    resultado?: Record<string, unknown> | null;
   },
 ): Promise<string> {
   const { data, error } = await tabelaLocacao(admin, "locacao_execucoes")
@@ -72,6 +73,7 @@ export async function abrirExecucao(
       origem: input.origem,
       ator_user_id: input.atorUserId,
       call_id: input.callId ?? null,
+      resultado: input.resultado ?? null,
     })
     .select("id")
     .maybeSingle();
@@ -174,4 +176,77 @@ export async function atualizarExecucao(
       .is("iniciado_em", null);
     if (stampErr) throw new LocacaoErro("execucao_estado", "locacao_execucoes");
   }
+}
+
+export async function listarExecucoesNaFila(
+  admin: SupabaseClient,
+  input: { aba: AbaDaExecucao; limite?: number },
+): Promise<LocacaoExecucaoRow[]> {
+  const { data } = await tabelaLocacao(admin, "locacao_execucoes")
+    .select(COLUNAS)
+    .eq("aba", input.aba)
+    .eq("estado", "na_fila")
+    .order("created_at", { ascending: true })
+    .limit(input.limite ?? 5);
+  return (data ?? []).map(asLinha);
+}
+
+export async function listarExecucoesPresas(
+  admin: SupabaseClient,
+  input: { aba: AbaDaExecucao; minutos?: number; limite?: number },
+): Promise<LocacaoExecucaoRow[]> {
+  const minutos = input.minutos ?? 10;
+  const corte = new Date(Date.now() - minutos * 60_000).toISOString();
+  const { data } = await tabelaLocacao(admin, "locacao_execucoes")
+    .select(COLUNAS)
+    .eq("aba", input.aba)
+    .eq("estado", "processando")
+    .lt("iniciado_em", corte)
+    .order("iniciado_em", { ascending: true })
+    .limit(input.limite ?? 5);
+  return (data ?? []).map(asLinha);
+}
+
+/** na_fila → processando. Devolve null se outra rodada já pegou. */
+export async function reivindicarExecucao(
+  admin: SupabaseClient,
+  input: { orgId: string; execucaoId: string; etapaTexto?: string | null },
+): Promise<LocacaoExecucaoRow | null> {
+  const { data, error } = await tabelaLocacao(admin, "locacao_execucoes")
+    .update({
+      estado: "processando",
+      etapa_texto: input.etapaTexto ?? "lendo extrato",
+    })
+    .eq("organization_id", input.orgId)
+    .eq("id", input.execucaoId)
+    .eq("estado", "na_fila")
+    .select(COLUNAS)
+    .maybeSingle();
+  if (error) throw new LocacaoErro("execucao_estado", "locacao_execucoes");
+  if (!data) return null;
+  const { error: stampErr } = await tabelaLocacao(admin, "locacao_execucoes")
+    .update({ iniciado_em: new Date().toISOString() })
+    .eq("organization_id", input.orgId)
+    .eq("id", input.execucaoId)
+    .is("iniciado_em", null);
+  if (stampErr) throw new LocacaoErro("execucao_estado", "locacao_execucoes");
+  return asLinha(data);
+}
+
+export async function conversaDoProcesso(
+  admin: SupabaseClient,
+  orgId: string,
+  processoId: string,
+): Promise<string | null> {
+  const { data } = await tabelaLocacao(admin, "locacao_processo_conversas")
+    .select("conversation_id")
+    .eq("organization_id", orgId)
+    .eq("processo_id", processoId)
+    .order("ultimo_uso_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const id = data && typeof (data as { conversation_id?: unknown }).conversation_id === "string"
+    ? (data as { conversation_id: string }).conversation_id
+    : "";
+  return id || null;
 }
