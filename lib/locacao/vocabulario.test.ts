@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ABAS_DA_EXECUCAO,
+  CATEGORIAS_DE_DOCUMENTO,
   CHAVES_DA_ANALISE,
   ESTADOS_DA_ANALISE_FC,
   ESTADOS_DA_ANALISE_SEGURO,
+  ESTADOS_DA_EXECUCAO,
   ORIGENS_DA_ANALISE,
+  ORIGENS_DA_EXECUCAO,
   ORIGENS_DA_FICHA_DO_PROCESSO,
   ORIGENS_DO_DOCUMENTO,
   ORIGENS_DO_VALOR_DO_IMOVEL,
@@ -35,5 +39,16 @@ describe("vocabulário da Fase 4", () => {
   it("as cinco chaves da análise são as do plano, sem preço", () => {
     expect(CHAVES_DA_ANALISE).toEqual(["renda", "seguro", "fc", "relatorio", "manual"]);
     expect(CHAVES_DA_ANALISE as readonly string[]).not.toContain("fc_preco");
+  });
+
+  it("execução por aba e ficha cadastral impressa (0772)", () => {
+    expect(ABAS_DA_EXECUCAO).toContain("documentos");
+    expect(ESTADOS_DA_EXECUCAO).toContain("na_fila");
+    expect(ESTADOS_DA_EXECUCAO).toContain("desatualizado");
+    expect(ORIGENS_DA_EXECUCAO).toEqual(["botao", "chat"]);
+    expect(CATEGORIAS_DE_DOCUMENTO).toContain("ficha_cadastral");
+    expect(CATEGORIAS_DE_DOCUMENTO).toContain("ficha_migra");
+    expect(ORIGENS_DO_DOCUMENTO).toContain("ficha_cadastral");
+    expect(ORIGENS_DO_DOCUMENTO).toContain("contrato");
   });
 });

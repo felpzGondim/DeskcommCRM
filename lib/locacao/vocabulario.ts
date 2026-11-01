@@ -151,6 +151,8 @@ export const CATEGORIAS_DE_DOCUMENTO = [
   "relatorio",
   "contrato",
   "outro",
+  "ficha_cadastral",
+  "ficha_migra",
 ] as const;
 export type CategoriaDeDocumento = (typeof CATEGORIAS_DE_DOCUMENTO)[number];
 
@@ -161,8 +163,34 @@ export const ORIGENS_DO_DOCUMENTO = [
   "hub_migra",
   "relatorio",
   "manual_assistido",
+  "ficha_cadastral",
+  "contrato",
 ] as const;
 export type OrigemDoDocumento = (typeof ORIGENS_DO_DOCUMENTO)[number];
+
+/** Abas que gravam uma linha em `locacao_execucoes` (migration 0772). */
+export const ABAS_DA_EXECUCAO = [
+  "dados",
+  "renda",
+  "fc",
+  "migra",
+  "relatorio",
+  "contrato",
+  "documentos",
+] as const;
+export type AbaDaExecucao = (typeof ABAS_DA_EXECUCAO)[number];
+
+export const ESTADOS_DA_EXECUCAO = [
+  "na_fila",
+  "processando",
+  "concluido",
+  "erro",
+  "desatualizado",
+] as const;
+export type EstadoDaExecucao = (typeof ESTADOS_DA_EXECUCAO)[number];
+
+export const ORIGENS_DA_EXECUCAO = ["botao", "chat"] as const;
+export type OrigemDaExecucao = (typeof ORIGENS_DA_EXECUCAO)[number];
 
 export const ESTADOS_DO_DRIVE = [
   "nao_se_aplica",

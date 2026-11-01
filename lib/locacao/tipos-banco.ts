@@ -1,13 +1,16 @@
 /**
- * Tipos das tabelas de locação deste fork. `locacao_analises_seguro` também
- * entra em `lib/database.types.ts` (à mão: o dump gerado é do upstream).
- * Sem dado pessoal neste arquivo.
+ * Tipos das tabelas de locação deste fork. `locacao_analises_seguro` e
+ * `locacao_execucoes` também entram em `lib/database.types.ts` (à mão: o dump
+ * gerado é do upstream). Sem dado pessoal neste arquivo.
  */
 import type { Json } from "@/lib/database.types";
 import type {
+  AbaDaExecucao,
   EstadoDaAnaliseFc,
   EstadoDaAnaliseSeguro,
+  EstadoDaExecucao,
   OrigemDaAnalise,
+  OrigemDaExecucao,
 } from "@/lib/locacao/vocabulario";
 
 export type LocacaoAnaliseSeguroRow = {
@@ -49,6 +52,30 @@ export type LocacaoProcessoColunasFase4 = {
   relatorio_aprovado_em: string | null;
   relatorio_aprovado_por: string | null;
   relatorio_documento_id: string | null;
+};
+
+export type LocacaoExecucaoRow = {
+  id: string;
+  organization_id: string;
+  processo_id: string;
+  participante_id: string | null;
+  aba: AbaDaExecucao;
+  estado: EstadoDaExecucao;
+  etapa_texto: string | null;
+  progresso_atual: number;
+  progresso_total: number;
+  erro_codigo: string | null;
+  erro_motivo: string | null;
+  entrada_hash: string | null;
+  ficha_versao: number | null;
+  origem: OrigemDaExecucao;
+  ator_user_id: string | null;
+  resultado: Json | null;
+  iniciado_em: string | null;
+  terminado_em: string | null;
+  call_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type LocacaoProcessoColunasValoresImovel = {

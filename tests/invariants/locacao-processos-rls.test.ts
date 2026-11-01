@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { countAs, sql } from "./gov-helpers";
 
 /**
- * Fases 3 / 3.5 / 3b / 4 / valores do imóvel (0763–0771): membro lê a linha da própria org e zero
+ * Fases 3 / 3.5 / 3b / 4 / valores do imóvel / execuções (0763–0772): membro lê a linha da própria org e zero
  * da outra; authenticated não escreve; sem SECURITY DEFINER exposta a
  * authenticated. Sem dado pessoal: nomes e ids desta suíte são de teste.
  */
@@ -27,6 +27,7 @@ const TABELAS = [
   "locacao_processo_eventos",
   "locacao_analises_fc",
   "locacao_analises_seguro",
+  "locacao_execucoes",
   "contato_superlogica_vinculos",
   "superlogica_vinculo_execucoes",
   "superlogica_vinculo_revisoes",
@@ -66,6 +67,8 @@ beforeAll(() => {
         values ('${org}', '${proc}', '${part}', '${randomUUID()}', 'solicitada');
       insert into locacao_analises_seguro (organization_id, processo_id, participante_id, pedido_id, estado)
         values ('${org}', '${proc}', '${part}', '${randomUUID()}', 'solicitada');
+      insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem, ator_user_id)
+        values ('${org}', '${proc}', 'renda', 'concluido', 'botao', '${membro}');
       insert into superlogica_vinculo_execucoes (id, organization_id, modo, estado)
         values ('${execucao}', '${org}', 'simulacao', 'concluida');
       insert into contato_superlogica_vinculos (organization_id, contact_id, superlogica_pessoa_id, origem, execucao_id)
@@ -148,6 +151,72 @@ describe("locacao processos: RLS e escrita", () => {
     ).toThrow(/check|violat/i);
     expect(() =>
       sql(`update locacao_processos set condominio_origem = null where id = '${procA}'`),
+    ).toThrow(/check|violat/i);
+  });
+
+  it("índice único impede duas execuções em andamento na mesma aba do processo", () => {
+    sql(`insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem)
+          values ('${orgA}', '${procA}', 'fc', 'na_fila', 'botao');`);
+    expect(() =>
+      sql(`insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem)
+            values ('${orgA}', '${procA}', 'fc', 'processando', 'chat');`),
+    ).toThrow(/duplicate|unique/i);
+    sql(`insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem)
+          values ('${orgA}', '${procA}', 'migra', 'na_fila', 'chat');`);
+    expect(
+      sql(`select count(*) from locacao_execucoes where processo_id = '${procA}' and aba = 'migra';`),
+    ).toBe("1");
+  });
+
+  it("aceita ficha_cadastral, ficha_migra e origem contrato; recusa categoria inventada", () => {
+    const shaFicha = "ef".repeat(32);
+    const shaMigra = "12".repeat(32);
+    const shaContrato = "34".repeat(32);
+    sql(`insert into locacao_processo_documentos (
+            organization_id, processo_id, participante_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+          ) values (
+            '${orgA}', '${procA}', '${partA}', 'ficha_cadastral',
+            '${orgA}/processos/${procA}/ficha_cadastral/${randomUUID()}.pdf',
+            'application/pdf', 1, '${shaFicha}', 'ficha_cadastral'
+          );`);
+    sql(`insert into locacao_processo_documentos (
+            organization_id, processo_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+          ) values (
+            '${orgA}', '${procA}', 'ficha_migra',
+            '${orgA}/processos/${procA}/ficha_migra/${randomUUID()}.pdf',
+            'application/pdf', 1, '${shaMigra}', 'hub_migra'
+          );`);
+    sql(`insert into locacao_processo_documentos (
+            organization_id, processo_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+          ) values (
+            '${orgA}', '${procA}', 'contrato',
+            '${orgA}/processos/${procA}/contrato/${randomUUID()}.pdf',
+            'application/pdf', 1, '${shaContrato}', 'contrato'
+          );`);
+    expect(
+      sql(`select count(*) from locacao_processo_documentos
+            where processo_id = '${procA}' and categoria in ('ficha_cadastral','ficha_migra','contrato')
+              and origem in ('ficha_cadastral','hub_migra','contrato');`),
+    ).toBe("3");
+    expect(() =>
+      sql(`insert into locacao_processo_documentos (
+              organization_id, processo_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+            ) values (
+              '${orgA}', '${procA}', 'inventada',
+              '${orgA}/processos/${procA}/inventada/x.pdf',
+              'application/pdf', 1, '${"56".repeat(32)}', 'ficha_cadastral'
+            );`),
+    ).toThrow(/check|violat/i);
+  });
+
+  it("recusa aba e estado de execução fora do vocabulário", () => {
+    expect(() =>
+      sql(`insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem)
+            values ('${orgA}', '${procA}', 'sincronizacao', 'na_fila', 'botao');`),
+    ).toThrow(/check|violat/i);
+    expect(() =>
+      sql(`insert into locacao_execucoes (organization_id, processo_id, aba, estado, origem)
+            values ('${orgA}', '${procA}', 'renda', 'fila', 'botao');`),
     ).toThrow(/check|violat/i);
   });
 
