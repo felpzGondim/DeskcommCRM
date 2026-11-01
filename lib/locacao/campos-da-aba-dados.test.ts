@@ -114,8 +114,8 @@ describe("campos da aba Dados preenchidos pela conversa", () => {
       expect(ficha, rotulo).not.toContain(rotulo);
     }
     expect(ficha).not.toMatch(/ficha\.imovel\.(aluguel|condominio|iptu|seguro_incendio)/);
-    expect(dialog).toContain("CamposImovelProcessoNaFicha");
-    expect(dialog.match(/CamposImovelProcessoNaFicha/g)?.length).toBe(2);
+    expect(ficha).toContain("CamposImovelProcessoNaFicha");
+    expect(dialog).not.toContain("CamposImovelProcessoNaFicha");
   });
 
   it("a aba Dados mostra garantia e contrato extraídos", () => {

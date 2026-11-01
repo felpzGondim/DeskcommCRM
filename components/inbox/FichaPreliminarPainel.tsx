@@ -2,6 +2,7 @@
 
 import { toast } from "sonner";
 
+import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,11 @@ import {
   type NumeroFicha,
   type PapelDaFicha,
 } from "@/lib/locacao/ficha-schema";
+import {
+  valoresVazios,
+  type CampoDoValorDoImovel,
+  type ValoresDoImovel,
+} from "@/lib/locacao/valores-imovel";
 
 interface Props {
   atualizacao?: number;
@@ -58,6 +64,41 @@ function numero(valor: string): NumeroFicha {
 function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   if (!c || c.valor === null || c.valor === undefined) return "";
   return String(c.valor);
+}
+
+function numeroDaFicha(valor: number | null): NumeroFicha {
+  return { valor, fonte: "atendente", trecho: null, confianca: 1, message_id: null };
+}
+
+const CAMPOS_DO_PACOTE_NA_FICHA = [
+  "aluguel",
+  "condominio",
+  "iptu",
+  "seguro_incendio",
+] as const satisfies readonly CampoDoValorDoImovel[];
+
+function valoresDoPacoteNaFicha(ficha: FichaPreliminar): ValoresDoImovel {
+  const saida = valoresVazios();
+  for (const campo of CAMPOS_DO_PACOTE_NA_FICHA) {
+    const n = ficha.imovel[campo];
+    if (!n || n.valor == null) continue;
+    saida[campo] = {
+      valor: n.valor,
+      origem: n.fonte === "atendente" ? "manual" : "conversa",
+      editado_por: null,
+      editado_em: null,
+    };
+  }
+  const fianca = ficha.garantia.valor_mensal;
+  if (fianca.valor != null) {
+    saida.seguro_fianca = {
+      valor: fianca.valor,
+      origem: fianca.fonte === "atendente" ? "manual" : "conversa",
+      editado_por: null,
+      editado_em: null,
+    };
+  }
+  return saida;
 }
 
 export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0, onSalvo, onEntradaEditada }: Props) {
@@ -285,6 +326,22 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           )}
         </div>
       )}
+      <CamposImovelProcessoNaFicha
+        conversationId={conversationId}
+        desabilitado={desabilitado || somenteLeitura}
+        atualizacao={atualizacao}
+        valoresFicha={ficha ? valoresDoPacoteNaFicha(ficha) : undefined}
+        onAlterarFicha={ficha ? (campo, valor) => {
+          mudarFicha((a) => {
+            if (!a) return a;
+            const n = numeroDaFicha(valor);
+            if (campo === "seguro_fianca") {
+              return { ...a, garantia: { ...a.garantia, valor_mensal: n } };
+            }
+            return { ...a, imovel: { ...a.imovel, [campo]: n } };
+          });
+        } : undefined}
+      />
     </div>
   );
 }

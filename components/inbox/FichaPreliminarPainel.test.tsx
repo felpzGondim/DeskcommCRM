@@ -10,6 +10,13 @@ import { completarFicha } from "@/lib/locacao/ficha-schema";
 
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    get: async () => ({ data: { processos: [] } }),
+    patch: async () => ({ data: {} }),
+  },
+}));
+
 const ficha = completarFicha({
   imovel: {
     logradouro: "Rua das Flores",
@@ -83,7 +90,9 @@ describe("FichaPreliminarPainel — aba Dados", () => {
     for (const rotulo of ROTULOS_DO_PACOTE_NA_FICHA) {
       expect(screen.queryByLabelText(rotulo)).toBeNull();
     }
-    expect(screen.queryByTestId("campos-imovel-processo")).toBeNull();
+    expect(screen.getAllByTestId("campos-imovel-processo")).toHaveLength(1);
+    expect(screen.getByLabelText("Aluguel (R$/mês)")).toHaveValue("2100");
+    expect(screen.getAllByText(/Origem/).length).toBeGreaterThan(0);
   });
 
   it("mostra garantia e contrato extraídos da conversa", () => {
