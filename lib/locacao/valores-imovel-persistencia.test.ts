@@ -99,7 +99,7 @@ describe("persistência dos valores do imóvel", () => {
 
   it("chave Superlógica desligada: não chama o leitor e preenche pela conversa", async () => {
     const leitor = { ler: vi.fn(async () => ({ aluguelCentavos: 999_00 })) };
-    const valores = await garantirValoresDoProcesso(admin as never, {
+    const { valores } = await garantirValoresDoProcesso(admin as never, {
       orgId: ORG,
       processoId: PROCESSO,
       settings: { locacao: { processos_habilitado: true } },
@@ -131,7 +131,7 @@ describe("persistência dos valores do imóvel", () => {
     expect(leitor.ler).not.toHaveBeenCalled();
   });
 
-  it("chave ligada com vínculo GET: Superlógica vence a conversa", async () => {
+  it("chave ligada com vínculo GET: ficha permanece e Superlógica só preenche vazio", async () => {
     mocks.tabela.mockImplementation((_admin: unknown, nome: string) => {
       const data = nome === "locacao_imoveis"
         ? { id: IMOVEL, superlogica_imovel_id: 77 }
@@ -151,7 +151,7 @@ describe("persistência dos valores do imóvel", () => {
         seguroIncendioCentavos: 8_000,
       })),
     };
-    const valores = await garantirValoresDoProcesso(admin as never, {
+    const { valores, divergencias } = await garantirValoresDoProcesso(admin as never, {
       orgId: ORG,
       processoId: PROCESSO,
       settings: { locacao: { pacote_superlogica_habilitado: true } },
@@ -161,8 +161,37 @@ describe("persistência dos valores do imóvel", () => {
       orgId: ORG,
       superlogicaImovelId: 77,
     }));
-    expect(valores.aluguel).toMatchObject({ valor: 3000, origem: "superlogica" });
-    expect(valores.condominio).toMatchObject({ valor: 400, origem: "superlogica" });
+    expect(valores.aluguel).toMatchObject({ valor: 2100, origem: "conversa" });
+    expect(valores.condominio).toMatchObject({ valor: 350, origem: "conversa" });
+    expect(valores.seguro_incendio).toMatchObject({ valor: 80, origem: "superlogica" });
+    expect(divergencias.map((d) => d.campo)).toEqual(
+      expect.arrayContaining(["aluguel", "condominio", "iptu"]),
+    );
+  });
+
+  it("leitor com aviso e sem valores cai na conversa e não lança", async () => {
+    mocks.tabela.mockImplementation((_admin: unknown, nome: string) => {
+      const data = nome === "locacao_imoveis"
+        ? { id: IMOVEL, superlogica_imovel_id: 77 }
+        : null;
+      const api = cadeia({ data });
+      api.update = vi.fn((patch: Record<string, unknown>) => {
+        updates.push({ patch, cadeia: api });
+        return api;
+      });
+      return api;
+    });
+    const leitor = {
+      ler: vi.fn(async () => ({ aviso: "Valores da Superlógica indisponíveis agora; usando os da conversa." })),
+    };
+    const { valores } = await garantirValoresDoProcesso(admin as never, {
+      orgId: ORG,
+      processoId: PROCESSO,
+      settings: { locacao: { pacote_superlogica_habilitado: true } },
+      leitor,
+    });
+    expect(leitor.ler).toHaveBeenCalled();
+    expect(valores.aluguel).toMatchObject({ valor: 2100, origem: "conversa" });
   });
 
   it("origem manual não é sobrescrita no pré-preenchimento", async () => {
@@ -173,7 +202,7 @@ describe("persistência dos valores do imóvel", () => {
       aluguel_origem: "manual",
       aluguel_editado_por: USER,
     });
-    const valores = await garantirValoresDoProcesso(admin as never, {
+    const { valores } = await garantirValoresDoProcesso(admin as never, {
       orgId: ORG,
       processoId: PROCESSO,
       settings: {},

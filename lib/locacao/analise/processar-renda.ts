@@ -29,7 +29,7 @@ import {
 } from "@/lib/locacao/execucoes";
 import {
   criarExtratorComModelo,
-  leitorSuperlogicaDesligado,
+  criarLeitorPacoteViaHub,
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
@@ -244,9 +244,13 @@ export async function processarAnaliseDeRenda(
     const incendio =
       fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
     const sl = pacoteSuperlogicaLigado(settings)
-      ? await leitorSuperlogicaDesligado().ler({
+      ? await criarLeitorPacoteViaHub({
+          admin,
+          conversationId,
+        }).ler({
           orgId: row.organization_id,
           contactId: entrada.contactId ?? conversationId,
+          conversationId,
         })
       : null;
     const reaisParaCentavos = (v: number | null) => (v == null ? null : Math.round(v * 100));
@@ -257,6 +261,11 @@ export async function processarAnaliseDeRenda(
         condominioCentavos: reaisParaCentavos(fichaBase.imovel.condominio.valor),
         iptuCentavos: reaisParaCentavos(fichaBase.imovel.iptu.valor),
         seguroIncendioCentavos: reaisParaCentavos(fichaBase.imovel.seguro_incendio.valor) ?? incendio,
+        endereco: [fichaBase.imovel.logradouro.valor, fichaBase.imovel.numero.valor]
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .join(", ") || null,
+        cep: fichaBase.imovel.cep.valor,
       },
     });
     const declaradaCentavos = rendaDeclaradaNasFontes(fontes);
@@ -265,7 +274,13 @@ export async function processarAnaliseDeRenda(
       holeriteCentavos: preparado.holeriteCentavos,
       declarada: declaradaCentavos == null ? null : declaradaCentavos / 100,
       pacote,
-      pendencias: [...preparado.pendencias, ...avisos, ...checklist],
+      pendencias: [
+        ...preparado.pendencias,
+        ...avisos,
+        ...checklist,
+        ...(sl?.aviso ? [sl.aviso] : []),
+        ...pacote.divergencias.map((d) => d.aviso),
+      ],
     });
     const regra = avaliarRegra3x({
       aluguel: ficha.imovel.aluguel.valor,

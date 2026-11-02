@@ -43,9 +43,22 @@ export {
   lerSeguroIncendioNoTexto,
   montarPacote,
   textoDoPacote,
+  avisoDoCampoNasPendencias,
+  PREFIXO_DIVERGENCIA,
   type LeitorDePacoteSuperlogica,
+  type LeituraDePacoteSuperlogica,
   type PacoteDoImovel,
+  type DivergenciaDoPacote,
 } from "./pacote";
+export {
+  AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
+  CAMINHO_PACOTE_HUB,
+  NOME_FERRAMENTA_PACOTE_SUPERLOGICA,
+  criarLeitorPacoteViaHub,
+  interpretarPacoteHub,
+  urlDoPacoteHub,
+  type ClientePacoteHub,
+} from "./leitor-superlogica-hub";
 export { resumirMeses, resumoVazio, textoDoResumoParaIa } from "./resumo-mensal";
 export { conferirSaldo, recadoDeSaldo } from "./saldo";
 export type {

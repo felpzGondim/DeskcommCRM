@@ -82,6 +82,7 @@
     { "id": "e41", "from": "casca_aba", "to": "execucoes", "label": "polling / desatualizado pelo hash" },
     { "id": "e42", "from": "execucoes", "to": "casca_aba", "label": "fila, etapa, erro, última execução" },
     { "id": "e43", "from": "analise_modal", "to": "etapa", "label": "mostra a etapa do card, sem mover" },
-    { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" }
+    { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" },
+    { "id": "e45", "from": "hub", "to": "valores", "label": "GET /imovel/pacote: aluguel, condomínio, IPTU, incêndio" }
   ]
 }

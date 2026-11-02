@@ -50,8 +50,9 @@ export const locacaoSettingsSchema = z.object({
     manual: false,
   }),
   /**
-   * GET Superlógica para aluguel/condomínio/IPTU/seguro-incêndio do 3×.
-   * Desligada: não há cliente HTTP neste repo (o Hub é quem lê a API).
+   * GET Superlógica (via Hub) para aluguel/condomínio/IPTU/seguro-incêndio
+   * do 3×. Desligada: o leitor não é chamado. O Hub ainda precisa expor
+   * GET /imovel/pacote (docs/planos/hub-pacote-imovel-superlogica.md).
    */
   pacote_superlogica_habilitado: z.boolean().optional().default(false),
 }).passthrough();
