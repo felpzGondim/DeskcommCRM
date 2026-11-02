@@ -38,7 +38,11 @@ vi.mock("@/lib/locacao/repositorio", () => ({
   lerAnaliseSeguroMaisRecente: (...args: unknown[]) => mocks.recente(...args),
 }));
 vi.mock("@/lib/locacao/valores-imovel-persistencia", () => ({
-  garantirValoresDoProcesso: (...args: unknown[]) => mocks.valores(...args),
+  garantirValoresDoProcesso: async (...args: unknown[]) => {
+    const r = await mocks.valores(...args);
+    if (r && typeof r === "object" && "valores" in r) return r;
+    return { valores: r, divergencias: [] };
+  },
 }));
 
 import { fichaVazia } from "@/lib/locacao/ficha-schema";

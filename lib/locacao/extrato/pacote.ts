@@ -1,9 +1,26 @@
 /**
  * Pacote para 3×: aluguel + condomínio + IPTU + seguro-incêndio.
- * Seguro-fiança NÃO entra. Superlógica só GET, injetável; sem cliente HTTP
- * neste repo a chave nasce desligada.
+ * Seguro-fiança NÃO entra. Superlógica só GET via Hub, injetável.
+ * A chave `locacao.pacote_superlogica_habilitado` nasce desligada.
+ *
+ * Superlógica confronta a ficha e só sinaliza divergência. Valor já
+ * preenchido (conversa ou manual) permanece; Superlógica só entra no
+ * campo vazio, com origem "superlogica".
  */
+import {
+  divergenciaDeCentavos,
+  divergenciaDeCep,
+  divergenciaDeEndereco,
+  valorNumericoPreenchido,
+  type DivergenciaDoPacote,
+} from "./divergencia-superlogica";
 import { formatarReais, lerCentavos } from "./dinheiro";
+
+export type { CampoDeDivergencia, DivergenciaDoPacote } from "./divergencia-superlogica";
+export {
+  PREFIXO_DIVERGENCIA,
+  avisoDoCampoNasPendencias,
+} from "./divergencia-superlogica";
 
 export type OrigemDoComponente = "superlogica" | "conversa" | "ausente";
 
@@ -21,19 +38,29 @@ export interface PacoteDoImovel {
   totalCentavos: number | null;
   vezes3Centavos: number | null;
   faltantes: string[];
+  /** Ficha preenchida × Superlógica, sem sobrescrever. */
+  divergencias: DivergenciaDoPacote[];
 }
+
+export type LeituraDePacoteSuperlogica = {
+  aluguelCentavos?: number | null;
+  condominioCentavos?: number | null;
+  iptuCentavos?: number | null;
+  seguroIncendioCentavos?: number | null;
+  /** Opcional: só para confrontar. Nunca grava na ficha. */
+  endereco?: string | null;
+  cep?: string | null;
+  /** Falha do Hub/Superlógica: o chamador cai na conversa e mostra o aviso. */
+  aviso?: string;
+};
 
 export interface LeitorDePacoteSuperlogica {
   ler(input: {
     orgId: string;
     contactId: string;
     superlogicaImovelId?: number | null;
-  }): Promise<{
-    aluguelCentavos?: number | null;
-    condominioCentavos?: number | null;
-    iptuCentavos?: number | null;
-    seguroIncendioCentavos?: number | null;
-  } | null>;
+    conversationId?: string;
+  }): Promise<LeituraDePacoteSuperlogica | null>;
 }
 
 export function leitorSuperlogicaDesligado(): LeitorDePacoteSuperlogica {
@@ -53,28 +80,40 @@ export function montarPacote(input: {
     condominioCentavos?: number | null;
     iptuCentavos?: number | null;
     seguroIncendioCentavos?: number | null;
+    endereco?: string | null;
+    cep?: string | null;
   } | null;
   conversa: {
     aluguelCentavos?: number | null;
     condominioCentavos?: number | null;
     iptuCentavos?: number | null;
     seguroIncendioCentavos?: number | null;
+    endereco?: string | null;
+    cep?: string | null;
   };
 }): PacoteDoImovel {
   const sl = input.superlogica ?? null;
   const cv = input.conversa;
   const escolher = (
+    ficha: number | null | undefined,
     slv: number | null | undefined,
-    cvv: number | null | undefined,
   ): ComponenteDoPacote => {
-    if (slv != null && Number.isFinite(slv)) return comp(slv, "superlogica");
-    if (cvv != null && Number.isFinite(cvv)) return comp(cvv, "conversa");
+    if (valorNumericoPreenchido(ficha)) return comp(ficha, "conversa");
+    if (valorNumericoPreenchido(slv)) return comp(slv, "superlogica");
     return { valorCentavos: null, origem: "ausente" };
   };
-  const aluguel = escolher(sl?.aluguelCentavos, cv.aluguelCentavos);
-  const condominio = escolher(sl?.condominioCentavos, cv.condominioCentavos);
-  const iptu = escolher(sl?.iptuCentavos, cv.iptuCentavos);
-  const seguroIncendio = escolher(sl?.seguroIncendioCentavos, cv.seguroIncendioCentavos);
+  const aluguel = escolher(cv.aluguelCentavos, sl?.aluguelCentavos);
+  const condominio = escolher(cv.condominioCentavos, sl?.condominioCentavos);
+  const iptu = escolher(cv.iptuCentavos, sl?.iptuCentavos);
+  const seguroIncendio = escolher(cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos);
+  const divergencias = [
+    divergenciaDeCentavos("aluguel", cv.aluguelCentavos, sl?.aluguelCentavos),
+    divergenciaDeCentavos("condominio", cv.condominioCentavos, sl?.condominioCentavos),
+    divergenciaDeCentavos("iptu", cv.iptuCentavos, sl?.iptuCentavos),
+    divergenciaDeCentavos("seguro_incendio", cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos),
+    divergenciaDeEndereco(cv.endereco, sl?.endereco),
+    divergenciaDeCep(cv.cep, sl?.cep),
+  ].filter((d): d is DivergenciaDoPacote => d != null);
 
   const faltantes: string[] = [];
   if (aluguel.origem === "ausente") faltantes.push("aluguel");
@@ -91,6 +130,7 @@ export function montarPacote(input: {
       totalCentavos: null,
       vezes3Centavos: null,
       faltantes,
+      divergencias,
     };
   }
 
@@ -107,6 +147,7 @@ export function montarPacote(input: {
     totalCentavos: total,
     vezes3Centavos: total * 3,
     faltantes,
+    divergencias,
   };
 }
 
@@ -140,6 +181,7 @@ export function textoDoPacote(pacote: PacoteDoImovel): string {
       );
     }
   }
+  for (const d of pacote.divergencias) partes.push(d.aviso);
   return partes.join(" ");
 }
 

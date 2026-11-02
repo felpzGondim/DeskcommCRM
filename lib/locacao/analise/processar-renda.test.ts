@@ -13,7 +13,7 @@ describe("worker da análise de renda", () => {
     expect(src).toContain("imagem_sem_leitura");
     expect(src).not.toMatch(/servidor-externo|chamarFerramentaRemota|carregarServidorMcpExterno/);
     expect(src).not.toMatch(/catch\s*\(\s*\)\s*\{\s*\}/);
-    expect(src).toContain("leitorSuperlogicaDesligado");
+    expect(src).toContain("criarLeitorPacoteViaHub");
     expect(src).toContain(MOTIVOS_RENDA.timeout);
   });
 

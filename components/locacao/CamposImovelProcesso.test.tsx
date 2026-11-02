@@ -20,6 +20,23 @@ describe("CamposImovelProcesso", () => {
     expect(screen.getByLabelText(/Seguro-fiança/)).toBeTruthy();
   });
 
+  it("mostra aviso de divergência por campo sem trocar o valor da ficha", () => {
+    const valores = valoresVazios();
+    valores.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
+    render(
+      <CamposImovelProcesso
+        valores={valores}
+        divergencias={[
+          { campo: "aluguel", aviso: "Aluguel diverge: ficha R$ 2.000,00 × Superlógica R$ 3.000,00." },
+          { campo: "cep", aviso: "CEP diverge: ficha 01310-100 × Superlógica 01310-200." },
+        ]}
+      />,
+    );
+    expect(screen.getByDisplayValue("2000")).toBeTruthy();
+    expect(screen.getByText(/Aluguel diverge/)).toBeTruthy();
+    expect(screen.getByText(/CEP diverge/)).toBeTruthy();
+  });
+
   it("grava só o que o atendente mudou", async () => {
     const onSalvar = vi.fn().mockResolvedValue(undefined);
     const valores = valoresVazios();

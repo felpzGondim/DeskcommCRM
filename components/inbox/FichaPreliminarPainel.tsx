@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
+import {
+  avisoDoCampoNasPendencias,
+  type CampoDeDivergencia,
+} from "@/lib/locacao/extrato/divergencia-superlogica";
 import { seloDaFonte } from "@/lib/locacao/origem-do-campo";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
 import {
@@ -65,6 +69,29 @@ function numero(valor: string): NumeroFicha {
   };
 }
 
+const CAMPOS_DO_PACOTE_PARA_DIVERGENCIA = [
+  "aluguel",
+  "condominio",
+  "iptu",
+  "seguro_incendio",
+] as const satisfies readonly CampoDeDivergencia[];
+
+function divergenciasDoPacoteNasPendencias(pendencias: readonly string[] | undefined) {
+  return CAMPOS_DO_PACOTE_PARA_DIVERGENCIA.flatMap((campo) => {
+    const aviso = avisoDoCampoNasPendencias(pendencias, campo);
+    return aviso ? [{ campo, aviso }] : [];
+  });
+}
+
+function AvisoDeDivergencia({ texto }: { texto?: string }) {
+  if (!texto) return null;
+  return (
+    <span role="status" className="block text-[10px] text-amber-700 dark:text-amber-400">
+      {texto}
+    </span>
+  );
+}
+
 function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   if (!c || c.valor === null || c.valor === undefined) return "";
   return String(c.valor);
@@ -83,11 +110,13 @@ function CampoComOrigem({
   rotulo,
   campo,
   selo,
+  aviso,
   children,
 }: {
   rotulo: string;
   campo?: CampoFicha | NumeroFicha;
   selo?: "conversa" | "vazio";
+  aviso?: string;
   children: ReactNode;
 }) {
   return (
@@ -97,6 +126,7 @@ function CampoComOrigem({
         {children}
       </label>
       {selo ? <SeloOrigem origem={selo} /> : <SeloDoCampo campo={campo} />}
+      <AvisoDeDivergencia texto={aviso} />
     </div>
   );
 }
@@ -260,7 +290,11 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           />
           <div className="space-y-1">
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>
-            <CampoComOrigem rotulo={t("Endereço do imóvel")} campo={ficha.imovel.logradouro}>
+            <CampoComOrigem
+              rotulo={t("Endereço do imóvel")}
+              campo={ficha.imovel.logradouro}
+              aviso={avisoDoCampoNasPendencias(ficha.pendencias, "endereco")}
+            >
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.logradouro)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, logradouro: campo(e.target.value) } } : a)} />
             </CampoComOrigem>
@@ -269,7 +303,12 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
             </CampoComOrigem>
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
-              <CampoComOrigem key={chave} rotulo={t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])} campo={ficha.imovel[chave]}>
+              <CampoComOrigem
+                key={chave}
+                rotulo={t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
+                campo={ficha.imovel[chave]}
+                aviso={chave === "cep" ? avisoDoCampoNasPendencias(ficha.pendencias, "cep") : undefined}
+              >
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
                   onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: campo(e.target.value) } } : a)} />
               </CampoComOrigem>
@@ -367,6 +406,7 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
             desabilitado={desabilitado || somenteLeitura}
             atualizacao={atualizacao}
             valoresFicha={valoresDoPacoteNaFicha(ficha)}
+            divergencias={divergenciasDoPacoteNasPendencias(ficha.pendencias)}
             onAlterarFicha={(campo, valor) => {
               mudarFicha((a) => {
                 if (!a) return a;

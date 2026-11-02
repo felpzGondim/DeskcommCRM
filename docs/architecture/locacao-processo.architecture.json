@@ -85,6 +85,7 @@
     { "id": "e43", "from": "analise_modal", "to": "etapa", "label": "mostra a etapa do card, sem mover" },
     { "id": "e44", "from": "execucoes", "to": "relatorio", "label": "renda assíncrona grava 3× e exclusões na ficha" },
     { "id": "e45", "from": "analise_modal", "to": "camposLocador", "label": "aba Dados: locador com selo de origem" },
-    { "id": "e46", "from": "vinculo", "to": "camposLocador", "label": "proprietário do vínculo preenche o locador mascarado" }
+    { "id": "e46", "from": "vinculo", "to": "camposLocador", "label": "proprietário do vínculo preenche o locador mascarado" },
+    { "id": "e47", "from": "hub", "to": "valores", "label": "GET /imovel/pacote: aluguel, condomínio, IPTU, incêndio" }
   ]
 }

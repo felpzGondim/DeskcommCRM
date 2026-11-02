@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -37,6 +37,7 @@ const ficha = completarFicha({
   garantia: { tipo: "seguro_fianca", valor_mensal: 99 },
   contrato: { indice_reajuste: "IGPM", taxa_adm: 8, taxa_locacao: 50, observacao: "reajuste anual" },
   locador: { nome: "Maria Locadora", documento: "52998224725", contato: "11987654321" },
+  pendencias: ["Aluguel diverge: ficha R$ 2.100,00 × Superlógica R$ 2.400,00."],
 });
 
 vi.mock("@/hooks/inbox/useFichaPreliminar", () => ({
@@ -96,6 +97,15 @@ describe("FichaPreliminarPainel — aba Dados", () => {
     expect(screen.getAllByText(/Origem/).length).toBeGreaterThan(0);
   });
 
+  it("mostra divergência de aluguel no bloco único do pacote, sem trocar o valor da ficha", () => {
+    render(
+      <FichaPreliminarPainel conversationId="conv-ficticia" senhasPdf={[]} />,
+    );
+    const bloco = screen.getByTestId("campos-imovel-processo");
+    expect(within(bloco).getByLabelText("Aluguel (R$/mês)")).toHaveValue("2100");
+    expect(within(bloco).getByText(/Aluguel diverge: ficha R\$ 2.100,00 × Superlógica R\$ 2.400,00/)).toBeTruthy();
+  });
+
   it("mostra garantia e contrato extraídos da conversa", () => {
     render(
       <FichaPreliminarPainel conversationId="conv-ficticia" senhasPdf={[]} />,
@@ -122,5 +132,10 @@ describe("FichaPreliminarPainel — aba Dados", () => {
     expect(recolhido.tagName.toLowerCase()).toBe("details");
     expect(recolhido).not.toHaveAttribute("open");
     expect(screen.getAllByTestId("selo-origem").length).toBeGreaterThan(3);
+    expect(
+      within(screen.getByTestId("campos-imovel-processo")).getByText(
+        /Aluguel diverge: ficha R\$ 2.100,00 × Superlógica R\$ 2.400,00/,
+      ),
+    ).toBeTruthy();
   });
 });
