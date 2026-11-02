@@ -26,6 +26,9 @@ export const CAMPOS_DA_ABA_DADOS = [
   { tela: "Taxa de administração (%)", path: "contrato.taxa_adm", json: "taxa_adm", tipo: "numero", superficie: "ficha" },
   { tela: "Taxa de locação (%)", path: "contrato.taxa_locacao", json: "taxa_locacao", tipo: "numero", superficie: "ficha" },
   { tela: "Observação", path: "contrato.observacao", json: "observacao", tipo: "campo", superficie: "ficha" },
+  { tela: "Nome do locador", path: "locador.nome", json: "nome", tipo: "campo", superficie: "locador" },
+  { tela: "CPF/CNPJ do locador", path: "locador.documento", json: "documento", tipo: "campo", superficie: "locador" },
+  { tela: "Contato do locador", path: "locador.contato", json: "contato", tipo: "campo", superficie: "locador" },
 ] as const;
 
 export type CampoDaAbaDados = (typeof CAMPOS_DA_ABA_DADOS)[number];

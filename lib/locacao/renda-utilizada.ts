@@ -76,5 +76,6 @@ export function preservarEdicoesHumanas(nova: FichaPreliminar, anterior: FichaPr
     vigencia: preservar(nova.vigencia, anterior.vigencia) as FichaPreliminar["vigencia"],
     contrato: preservar(nova.contrato, anterior.contrato) as FichaPreliminar["contrato"],
     garantia: preservar(nova.garantia, anterior.garantia) as FichaPreliminar["garantia"],
+    locador: preservar(nova.locador, anterior.locador) as FichaPreliminar["locador"],
   });
 }

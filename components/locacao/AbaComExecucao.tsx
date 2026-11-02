@@ -35,7 +35,8 @@ function rotuloDoEstado(
 function rotuloDoBotao(t: (chave: string) => string, rotulo: string): string {
   if (rotulo === "Analisar renda") return t("Analisar renda");
   if (rotulo === "Analisar FC") return t("Analisar FC");
-  if (rotulo === "Analisar seguro-fiança") return t("Analisar seguro-fiança");
+  if (rotulo === "Analisar Migra") return t("Analisar Migra");
+  if (rotulo === "Analisar seguro-fiança") return t("Analisar Migra");
   if (rotulo === "Gerar relatório") return t("Gerar relatório");
   return rotulo;
 }

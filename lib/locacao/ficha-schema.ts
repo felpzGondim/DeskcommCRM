@@ -184,6 +184,15 @@ export const fichaPreliminarSchema = z.object({
     iptu_mensal: numeroSchema,
     seguro_fianca_mensal: numeroSchema,
   }),
+  locador: z.object({
+    nome: campoSchema.default(CAMPO_VAZIO),
+    documento: campoSchema.default(CAMPO_VAZIO),
+    contato: campoSchema.default(CAMPO_VAZIO),
+  }).default({
+    nome: CAMPO_VAZIO,
+    documento: CAMPO_VAZIO,
+    contato: CAMPO_VAZIO,
+  }),
   documentos: z.object({
     encontrados: z.array(z.object({
       tipo: z.string().max(80),
@@ -256,6 +265,9 @@ export function fichaVazia(): FichaPreliminar {
       indice_reajuste: { ...CAMPO_VAZIO }, split: null, isencao_multa_meses: { ...NUMERO_VAZIO },
       taxa_adm: { ...NUMERO_VAZIO }, taxa_locacao: { ...NUMERO_VAZIO }, observacao: { ...CAMPO_VAZIO },
       iptu_mensal: { ...NUMERO_VAZIO }, seguro_fianca_mensal: { ...NUMERO_VAZIO },
+    },
+    locador: {
+      nome: { ...CAMPO_VAZIO }, documento: { ...CAMPO_VAZIO }, contato: { ...CAMPO_VAZIO },
     },
     documentos: { encontrados: [], faltantes: [] },
     pendencias: [],
@@ -396,6 +408,7 @@ export function completarFicha(bruto: unknown): FichaPreliminar {
   const garantia = o.garantia && typeof o.garantia === "object" ? o.garantia as Record<string, unknown> : {};
   const vigencia = o.vigencia && typeof o.vigencia === "object" ? o.vigencia as Record<string, unknown> : {};
   const contrato = o.contrato && typeof o.contrato === "object" ? o.contrato as Record<string, unknown> : {};
+  const locador = o.locador && typeof o.locador === "object" ? o.locador as Record<string, unknown> : {};
   const documentos = o.documentos && typeof o.documentos === "object" ? o.documentos as Record<string, unknown> : {};
   const pessoas = Array.isArray(o.pessoas) && o.pessoas.length > 0
     ? o.pessoas.slice(0, 12).map(completarPessoa)
@@ -494,6 +507,11 @@ export function completarFicha(bruto: unknown): FichaPreliminar {
       observacao: completarCampo(contrato.observacao),
       iptu_mensal: completarNumero(contrato.iptu_mensal),
       seguro_fianca_mensal: completarNumero(contrato.seguro_fianca_mensal),
+    },
+    locador: {
+      nome: completarCampo(locador.nome),
+      documento: completarCampo(locador.documento ?? locador.cpf ?? locador.cnpj),
+      contato: completarCampo(locador.contato ?? locador.celular ?? locador.telefone),
     },
     documentos: {
       encontrados,

@@ -69,6 +69,9 @@ test.describe("Esteira de locação: dados e documentos no mesmo modal", () => {
     await dados.getByLabel("Celular", {exact: true}).fill("11987654321");
     await dados.getByLabel("E-mail", {exact: true}).fill("pessoa@exemplo.test");
     await dados.getByLabel("RENDA (R$)", {exact: true}).fill("5000");
+    await expect(dados.getByTestId("campos-locador")).toBeVisible();
+    await dados.getByLabel("Nome do locador", {exact: true}).fill("Locadora da Esteira");
+    await expect(dados.getByTestId("relatorio-preliminar-recolhido")).toBeVisible();
     await dados.getByLabel("Endereço do imóvel", {exact: true}).fill("Rua de Teste");
     await dados.getByLabel("Número do imóvel", {exact: true}).fill("100");
     const pacote = modal.getByTestId("campos-imovel-processo");
@@ -87,7 +90,7 @@ test.describe("Esteira de locação: dados e documentos no mesmo modal", () => {
     const processoId = String(vinculo.processo_id);
     const {data: ficha} = await db.from("locacao_processo_fichas").select("ficha").eq("organization_id", orgId).eq("processo_id", processoId).order("versao", {ascending: false}).limit(1).single();
     expect(ficha?.ficha.pessoas[0].renda_individual.valor).toBe(5000);
-    await modal.getByRole("tab", {name: "FC"}).click();
+    await modal.getByRole("tab", {name: "Análise FC"}).click();
     await expect(modal.getByRole("button", {name: "Analisar FC", exact: true})).toBeEnabled();
     await modal.getByRole("tab", {name: "Documentos"}).click();
     await expect(modal.getByRole("heading", {name: "Inquilino", exact: true})).toBeVisible();

@@ -36,6 +36,7 @@ const ficha = completarFicha({
   vigencia: { inicio: "2026-11-10", fim: "2029-05-10" },
   garantia: { tipo: "seguro_fianca", valor_mensal: 99 },
   contrato: { indice_reajuste: "IGPM", taxa_adm: 8, taxa_locacao: 50, observacao: "reajuste anual" },
+  locador: { nome: "Maria Locadora", documento: "52998224725", contato: "11987654321" },
   pendencias: ["Aluguel diverge: ficha R$ 2.100,00 × Superlógica R$ 2.400,00."],
 });
 
@@ -115,5 +116,26 @@ describe("FichaPreliminarPainel — aba Dados", () => {
     expect(screen.getByLabelText("Taxa de administração (%)")).toHaveValue("8");
     expect(screen.getByLabelText("Taxa de locação (%)")).toHaveValue("50");
     expect(screen.getByLabelText("Observação")).toHaveValue("reajuste anual");
+  });
+
+  it("mostra o locador mascarado e o relatório recolhido no fim", () => {
+    const { container } = render(
+      <FichaPreliminarPainel conversationId="conv-ficticia" senhasPdf={[]} />,
+    );
+    expect(screen.getByTestId("campos-locador")).toBeTruthy();
+    expect(screen.getByLabelText("Nome do locador")).toHaveValue("Maria Locadora");
+    expect(screen.getByLabelText("CPF/CNPJ do locador")).toHaveValue("***.***.**7-25");
+    expect(screen.getByLabelText("Contato do locador")).toHaveValue("(11) *****-4321");
+    const pessoas = container.querySelector("h4")?.textContent;
+    expect(pessoas).toBe("Pessoas");
+    const recolhido = screen.getByTestId("relatorio-preliminar-recolhido");
+    expect(recolhido.tagName.toLowerCase()).toBe("details");
+    expect(recolhido).not.toHaveAttribute("open");
+    expect(screen.getAllByTestId("selo-origem").length).toBeGreaterThan(3);
+    expect(
+      within(screen.getByTestId("campos-imovel-processo")).getByText(
+        /Aluguel diverge: ficha R\$ 2.100,00 × Superlógica R\$ 2.400,00/,
+      ),
+    ).toBeTruthy();
   });
 });

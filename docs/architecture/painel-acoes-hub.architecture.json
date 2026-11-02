@@ -340,7 +340,7 @@
       "id": "e30",
       "from": "analise_modal",
       "to": "ficha_botao",
-      "label": "aba Dados: ficha e relatório preliminar"
+      "label": "aba Dados: ficha, locador e contrato; relatório recolhido"
     },
     {
       "id": "e31",
