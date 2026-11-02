@@ -193,6 +193,25 @@ describe("fontes da ficha preliminar", () => {
     expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(
       /sem renda comprovada o risco não pode ser baixo/i,
     );
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"imovel":\{"logradouro"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"vigencia":\{"inicio"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/"garantia":\{"valor_mensal"/);
+    expect(SYSTEM_DO_RELATORIO_PRELIMINAR).toMatch(/vai no JSON da ficha/);
+  });
+
+  it("3x usa o bloco do imóvel da ficha e mostra origem conversa", () => {
+    const ficha = fichaVazia();
+    ficha.imovel.aluguel.valor = 2000;
+    ficha.imovel.condominio.valor = 400;
+    ficha.imovel.iptu.valor = 150;
+    ficha.imovel.seguro_incendio.valor = 80;
+    const saida = aplicarRegrasDoRelatorioPreliminar(
+      { relatorio: "Ana", ficha },
+      { analises: [], pendencias: [], rendaDeclaradaCentavos: null },
+    );
+    expect(saida.relatorio).toMatch(/aluguel: R\$\s*2\.000,00 \(conversa\/ficha\)/);
+    expect(saida.relatorio).toMatch(/3x o pacote: R\$\s*7\.890,00/);
+    expect(saida.relatorio).not.toContain(FRASE_PACOTE_AUSENTE);
   });
 
   it("declarado como comprovado é anulado", async () => {

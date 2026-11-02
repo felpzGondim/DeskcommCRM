@@ -72,6 +72,7 @@ describe("Painel do agente (UI)", () => {
     getMock.mockImplementation(async (url: unknown) => {
       const u = String(url);
       if (u.includes("/locacao/documentos")) return {data: {recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false}};
+      if (u.includes("/valores-imovel")) return {data: {valores: {aluguel: {valor: 2000, origem: "conversa", editado_em: null}}}};
       if (u.endsWith("/locacao")) return {data: {habilitado: true, analise: {fc: true, seguro: true}, processos: [{id: "proc-1", status: "lead", imovel: "Rua 1"}], contato: {id: "c1"}}};
       if (u.includes("/ficha")) return {data: {atual: {versao: 1, ficha, relatorio: "Cadastro de teste"}, historico: []}};
       return {data: {}};
@@ -80,7 +81,8 @@ describe("Painel do agente (UI)", () => {
     fireEvent.click(screen.getByRole("button", {name: "Cadastro e locação"}));
     expect(screen.getByRole("dialog", {name: "Cadastro e locação"})).toBeVisible();
     expect(await screen.findByDisplayValue("2000")).toBeVisible();
-    expect(screen.getAllByLabelText("Aluguel (R$)")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Aluguel (R$/mês)")).toHaveLength(1);
+    expect(screen.queryByLabelText("Aluguel (R$)")).toBeNull();
     expect(screen.getAllByLabelText("RENDA (R$)")).toHaveLength(1);
     expect(screen.queryByLabelText("Renda proposta para a FC (R$)")).toBeNull();
     expect(screen.queryByRole("button", {name: "Abrir processo"})).toBeNull();

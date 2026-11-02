@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,21 @@ import { apiClient } from "@/lib/api/client";
 import {
   CAMPOS_DO_VALOR_DO_IMOVEL,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
+  camposFaltantesDoPacote,
   rotuloDaOrigemDoValor,
   valoresVazios,
   type CampoDoValorDoImovel,
+  type CampoObrigatorioDoPacote,
   type OrigemDoValorDoImovel,
   type ValoresDoImovel,
 } from "@/lib/locacao/valores-imovel";
+
+const ROTULO_FALTANTE_PACOTE: Record<CampoObrigatorioDoPacote, string> = {
+  aluguel: "aluguel",
+  condominio: "condomínio (inclui rateio)",
+  iptu: "IPTU",
+  seguro_incendio: "seguro-incêndio",
+};
 
 const ROTULO_CAMPO_TELA: Record<CampoDoValorDoImovel, string> = {
   aluguel: "Aluguel (R$/mês)",
@@ -27,20 +36,29 @@ const ROTULO_CAMPO_TELA: Record<CampoDoValorDoImovel, string> = {
 export function CamposImovelProcesso({
   valores,
   onSalvar,
+  onAlterar,
   desabilitado = false,
   aviso = null,
 }: {
   valores: ValoresDoImovel;
   onSalvar?: (patch: Partial<Record<CampoDoValorDoImovel, number>>) => Promise<void> | void;
+  onAlterar?: (campo: CampoDoValorDoImovel, valor: number | null) => void;
   desabilitado?: boolean;
   aviso?: string | null;
 }) {
   const t = useT();
+  const faltantes = camposFaltantesDoPacote(valores);
+  const avisoPacote = faltantes.length
+    ? t("Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.").replace(
+      "{campos}",
+      faltantes.map((c) => t(ROTULO_FALTANTE_PACOTE[c])).join(", "),
+    )
+    : null;
   const [rascunho, setRascunho] = useState<Record<CampoDoValorDoImovel, string>>(() => textosDe(valores));
   const [valoresVistos, setValoresVistos] = useState(valores);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  if (valores !== valoresVistos) {
+  if (chaveDosValores(valores) !== chaveDosValores(valoresVistos)) {
     setValoresVistos(valores);
     setRascunho(textosDe(valores));
   }
@@ -77,6 +95,11 @@ export function CamposImovelProcesso({
         {t("3× usa aluguel + condomínio + IPTU + seguro-incêndio. O seguro-fiança é informativo.")}
       </p>
       {aviso && <p className="text-[11px] text-muted-foreground">{aviso}</p>}
+      {avisoPacote && (
+        <p role="status" data-testid="aviso-pacote-incompleto" className="text-[11px] font-medium text-destructive">
+          {avisoPacote}
+        </p>
+      )}
       {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
       {CAMPOS_DO_VALOR_DO_IMOVEL.map((campo) => {
         const obrigatorio = (CAMPOS_OBRIGATORIOS_DO_PACOTE as readonly string[]).includes(campo);
@@ -91,8 +114,19 @@ export function CamposImovelProcesso({
               className="h-8 text-xs"
               inputMode="decimal"
               value={rascunho[campo]}
-              disabled={desabilitado || salvando || !onSalvar}
-              onChange={(e) => setRascunho((a) => ({ ...a, [campo]: e.target.value }))}
+              disabled={desabilitado || salvando || (!onSalvar && !onAlterar)}
+              onChange={(e) => {
+                const texto = e.target.value;
+                setRascunho((a) => ({ ...a, [campo]: texto }));
+                if (!onAlterar) return;
+                const bruto = texto.trim().replace(",", ".");
+                if (!bruto) {
+                  onAlterar(campo, null);
+                  return;
+                }
+                const n = Number(bruto);
+                if (Number.isFinite(n) && n >= 0) onAlterar(campo, Math.round(n * 100) / 100);
+              }}
               aria-label={t(ROTULO_CAMPO_TELA[campo])}
             />
             <span className="text-[10px] text-muted-foreground">
@@ -110,6 +144,10 @@ export function CamposImovelProcesso({
       )}
     </fieldset>
   );
+}
+
+function chaveDosValores(valores: ValoresDoImovel): string {
+  return CAMPOS_DO_VALOR_DO_IMOVEL.map((c) => `${c}:${valores[c].valor}:${valores[c].origem}`).join("|");
 }
 
 function textosDe(valores: ValoresDoImovel): Record<CampoDoValorDoImovel, string> {
@@ -142,17 +180,33 @@ function valoresDeJson(bruto: Record<string, ValorJson> | undefined): ValoresDoI
   return saida;
 }
 
+function mesclarValores(processo: ValoresDoImovel, ficha?: ValoresDoImovel): ValoresDoImovel {
+  if (!ficha) return processo;
+  const saida = { ...ficha };
+  for (const campo of CAMPOS_DO_VALOR_DO_IMOVEL) {
+    if (processo[campo].valor != null) saida[campo] = processo[campo];
+  }
+  return saida;
+}
+
 /** Ilha cliente: GET/PATCH do processo. Usado na aba Dados. */
 export function CamposImovelProcessoDoProcesso({
   processoId,
   desabilitado = false,
+  valoresIniciais,
 }: {
   processoId: string;
   desabilitado?: boolean;
+  valoresIniciais?: ValoresDoImovel;
 }) {
   const t = useT();
-  const [valores, setValores] = useState<ValoresDoImovel>(valoresVazios());
+  const iniciais = useRef(valoresIniciais);
+  const [valores, setValores] = useState<ValoresDoImovel>(valoresIniciais ?? valoresVazios());
   const [aviso, setAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    iniciais.current = valoresIniciais;
+  }, [valoresIniciais]);
 
   useEffect(() => {
     let vivo = true;
@@ -160,7 +214,7 @@ export function CamposImovelProcessoDoProcesso({
       `/api/v1/locacao/processos/${processoId}/valores-imovel`,
     ).then((r) => {
       if (!vivo) return;
-      setValores(valoresDeJson(r.data.valores));
+      setValores(mesclarValores(valoresDeJson(r.data.valores), iniciais.current));
       setAviso(null);
     }).catch(() => {
       if (vivo) setAviso(t("Não foi possível ler os valores do imóvel."));
@@ -184,13 +238,19 @@ export function CamposImovelProcessoDoProcesso({
   );
 }
 
-/** Onde a ficha aparece hoje: acha o processo da conversa ou avisa para abrir. */
+/** Onde a ficha aparece hoje: acha o processo da conversa ou grava na ficha. */
 export function CamposImovelProcessoNaFicha({
   conversationId,
   desabilitado = false,
+  atualizacao = 0,
+  valoresFicha,
+  onAlterarFicha,
 }: {
   conversationId: string;
   desabilitado?: boolean;
+  atualizacao?: number;
+  valoresFicha?: ValoresDoImovel;
+  onAlterarFicha?: (campo: CampoDoValorDoImovel, valor: number | null) => void;
 }) {
   const t = useT();
   const [processoId, setProcessoId] = useState<string | null>(null);
@@ -202,21 +262,30 @@ export function CamposImovelProcessoNaFicha({
     ).then((r) => {
       if (!vivo) return;
       const id = r.data.processos?.[0]?.id;
-      if (id) setProcessoId(id);
+      setProcessoId(id ?? null);
     }).catch(() => {
-      /* sem processo: o formulário fica visível, só não grava */
+      /* sem processo: o formulário fica visível e grava na ficha, se houver */
     });
     return () => { vivo = false; };
-  }, [conversationId]);
+  }, [conversationId, atualizacao]);
 
   if (processoId) {
-    return <CamposImovelProcessoDoProcesso processoId={processoId} desabilitado={desabilitado} />;
+    return (
+      <CamposImovelProcessoDoProcesso
+        processoId={processoId}
+        desabilitado={desabilitado}
+        valoresIniciais={valoresFicha}
+      />
+    );
   }
   return (
     <CamposImovelProcesso
-      valores={valoresVazios()}
-      desabilitado
-      aviso={t("Abra o processo para gravar os valores do imóvel. A edição humana não é sobrescrita.")}
+      valores={valoresFicha ?? valoresVazios()}
+      desabilitado={desabilitado || !onAlterarFicha}
+      onAlterar={onAlterarFicha}
+      aviso={onAlterarFicha
+        ? null
+        : t("Abra o processo para gravar os valores do imóvel. A edição humana não é sobrescrita.")}
     />
   );
 }

@@ -33,6 +33,19 @@ describe("RENDA compartilhada na esteira", () => {
     expect(atual.imovel.aluguel.valor).toBe(1500);
     expect(atual.renda.proposta_fc.valor).toBe(5000);
   });
+  it("reextração vazia preserva valores da conversa e não sobrescreve o atendente", () => {
+    const antes = fichaVazia();
+    antes.imovel.aluguel = {...antes.imovel.aluguel, valor: 2100, fonte: "conversa"};
+    antes.imovel.condominio = {...antes.imovel.condominio, valor: 350, fonte: "conversa"};
+    antes.imovel.iptu = {...antes.imovel.iptu, valor: 99, fonte: "atendente"};
+    const extraida = fichaVazia();
+    extraida.imovel.aluguel.valor = 9999;
+    extraida.imovel.aluguel.fonte = "M1";
+    const atual = preservarEdicoesHumanas(extraida, antes);
+    expect(atual.imovel.aluguel).toMatchObject({ valor: 9999, fonte: "M1" });
+    expect(atual.imovel.condominio).toMatchObject({ valor: 350, fonte: "conversa" });
+    expect(atual.imovel.iptu).toMatchObject({ valor: 99, fonte: "atendente" });
+  });
   it("inicia pela renda declarada e permite limpá-la manualmente", () => {
     const inicial = preencherRendaDeclaradaInicial(fichaVazia(), 500000);
     expect(inicial.pessoas[0]!.renda_individual.valor).toBe(5000);

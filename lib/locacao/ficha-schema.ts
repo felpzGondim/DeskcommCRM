@@ -262,7 +262,35 @@ export function fichaVazia(): FichaPreliminar {
   };
 }
 
+function parseValorNumerico(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v * 100) / 100;
+  if (typeof v !== "string" || !v.trim()) return null;
+  const s = v.trim();
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) {
+    const n = Number(s.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+  }
+  const n = Number(s.replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+}
+
+function comFonteConversaCampo(c: CampoFicha): CampoFicha {
+  if (!c.valor || c.fonte) return c;
+  return { ...c, fonte: "conversa" };
+}
+
+function comFonteConversaNumero(n: NumeroFicha): NumeroFicha {
+  if (n.valor == null || n.fonte) return n;
+  return { ...n, fonte: "conversa" };
+}
+
 function completarCampo(v: unknown): CampoFicha {
+  if (typeof v === "string") {
+    const valor = v.trim() || null;
+    return comFonteConversaCampo({
+      valor, fonte: null, trecho: null, confianca: null, message_id: null,
+    });
+  }
   const o = v && typeof v === "object" ? v as Record<string, unknown> : {};
   const parsed = campoSchema.safeParse({
     valor: typeof o.valor === "string" || o.valor === null ? o.valor : null,
@@ -271,7 +299,7 @@ function completarCampo(v: unknown): CampoFicha {
     confianca: typeof o.confianca === "number" ? o.confianca : null,
     message_id: typeof o.message_id === "string" || o.message_id === null ? o.message_id : null,
   });
-  return parsed.success ? parsed.data : { ...CAMPO_VAZIO };
+  return comFonteConversaCampo(parsed.success ? parsed.data : { ...CAMPO_VAZIO });
 }
 
 function completarLancamentos(v: unknown): z.infer<typeof lancamentoDaRendaSchema>[] {
@@ -308,15 +336,21 @@ function completarEvidencias(v: unknown): z.infer<typeof evidenciaDaRendaSchema>
 }
 
 function completarNumero(v: unknown): NumeroFicha {
+  if (typeof v === "number" || typeof v === "string") {
+    const valor = parseValorNumerico(v);
+    return comFonteConversaNumero({
+      valor, fonte: null, trecho: null, confianca: null, message_id: null,
+    });
+  }
   const o = v && typeof v === "object" ? v as Record<string, unknown> : {};
   const parsed = numeroSchema.safeParse({
-    valor: typeof o.valor === "number" || o.valor === null ? o.valor : null,
+    valor: parseValorNumerico(o.valor),
     fonte: typeof o.fonte === "string" || o.fonte === null ? o.fonte : null,
     trecho: typeof o.trecho === "string" || o.trecho === null ? o.trecho : null,
     confianca: typeof o.confianca === "number" ? o.confianca : null,
     message_id: typeof o.message_id === "string" || o.message_id === null ? o.message_id : null,
   });
-  return parsed.success ? parsed.data : { ...NUMERO_VAZIO };
+  return comFonteConversaNumero(parsed.success ? parsed.data : { ...NUMERO_VAZIO });
 }
 
 function completarEndereco(v: unknown): z.infer<typeof enderecoSchema> {

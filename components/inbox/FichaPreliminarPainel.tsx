@@ -2,21 +2,28 @@
 
 import { toast } from "sonner";
 
+import { CamposImovelProcessoNaFicha } from "@/components/locacao/CamposImovelProcesso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFichaPreliminar } from "@/hooks/inbox/useFichaPreliminar";
 import { useT } from "@/hooks/i18n/useT";
 import { normalizarRendaUtilizada } from "@/lib/locacao/renda-utilizada";
-import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
   PAPEIS_DA_FICHA,
+  TIPOS_DE_GARANTIA,
+  fichaVazia,
   pessoaVazia,
   type CampoFicha,
   type FichaPreliminar,
   type NumeroFicha,
   type PapelDaFicha,
 } from "@/lib/locacao/ficha-schema";
+import {
+  valoresVazios,
+  type CampoDoValorDoImovel,
+  type ValoresDoImovel,
+} from "@/lib/locacao/valores-imovel";
 
 interface Props {
   atualizacao?: number;
@@ -34,6 +41,14 @@ const ROTULO_PAPEL: Record<PapelDaFicha, string> = {
   contato: "Contato (só conversa)",
 };
 
+const ROTULO_GARANTIA: Record<(typeof TIPOS_DE_GARANTIA)[number], string> = {
+  caucao: "Caução",
+  seguro_fianca: "Seguro fiança",
+  fiador: "Fiador",
+  mista: "Mista",
+  nenhuma: "Nenhuma",
+};
+
 function campo(valor: string): CampoFicha {
   return { valor: valor.trim() || null, fonte: "atendente", trecho: null, confianca: 1, message_id: null };
 }
@@ -49,6 +64,41 @@ function numero(valor: string): NumeroFicha {
 function textoDe(c: CampoFicha | NumeroFicha | undefined): string {
   if (!c || c.valor === null || c.valor === undefined) return "";
   return String(c.valor);
+}
+
+function numeroDaFicha(valor: number | null): NumeroFicha {
+  return { valor, fonte: "atendente", trecho: null, confianca: 1, message_id: null };
+}
+
+const CAMPOS_DO_PACOTE_NA_FICHA = [
+  "aluguel",
+  "condominio",
+  "iptu",
+  "seguro_incendio",
+] as const satisfies readonly CampoDoValorDoImovel[];
+
+function valoresDoPacoteNaFicha(ficha: FichaPreliminar): ValoresDoImovel {
+  const saida = valoresVazios();
+  for (const campo of CAMPOS_DO_PACOTE_NA_FICHA) {
+    const n = ficha.imovel[campo];
+    if (!n || n.valor == null) continue;
+    saida[campo] = {
+      valor: n.valor,
+      origem: n.fonte === "atendente" ? "manual" : "conversa",
+      editado_por: null,
+      editado_em: null,
+    };
+  }
+  const fianca = ficha.garantia.valor_mensal;
+  if (fianca.valor != null) {
+    saida.seguro_fianca = {
+      valor: fianca.valor,
+      origem: fianca.fonte === "atendente" ? "manual" : "conversa",
+      editado_por: null,
+      editado_em: null,
+    };
+  }
+  return saida;
 }
 
 export function FichaPreliminarPainel({ conversationId, desabilitado = false, senhasPdf, atualizacao = 0, onSalvo, onEntradaEditada }: Props) {
@@ -179,12 +229,6 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input className="h-8 text-xs" value={textoDe(ficha.imovel.numero)} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, numero: campo(e.target.value) } } : a)} />
             </label>
-            {(["aluguel", "condominio", "iptu", "seguro_incendio"] as const).map((chave) => (
-              <label key={chave} className="block text-[11px]">{t(chave === "aluguel" ? "Aluguel (R$)" : chave === "condominio" ? "Condomínio / rateio (R$)" : chave === "iptu" ? "IPTU mensal (R$)" : "Seguro-incêndio mensal (R$)")}
-                <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
-                  onChange={(e) => mudarFicha((a) => a ? { ...a, imovel: { ...a.imovel, [chave]: numero(e.target.value) } } : a)} />
-              </label>
-            ))}
             {(["complemento", "bairro", "cep", "cidade", "uf"] as const).map((chave) => (
               <label key={chave} className="block text-[11px]">{t({complemento: "Complemento", bairro: "Bairro", cep: "CEP", cidade: "Cidade", uf: "UF"}[chave])}
                 <Input className="h-8 text-xs" value={textoDe(ficha.imovel[chave])} disabled={somenteLeitura || desabilitado}
@@ -207,6 +251,50 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
               <Input type="date" className="h-8 text-xs" value={textoDe(ficha.vigencia[chave])} disabled={somenteLeitura || desabilitado}
                 onChange={(e) => mudarFicha((a) => a ? {...a, vigencia: {...a.vigencia, [chave]: campo(e.target.value)}} : a)} />
             </label>)}
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-[11px] font-semibold">{t("Garantia")}</h4>
+            <label className="block text-[11px]">{t("Garantia")}
+              <select className="h-8 w-full rounded-md border border-input bg-background text-xs"
+                value={ficha.garantia.tipo ?? ""} disabled={somenteLeitura || desabilitado}
+                onChange={(e) => {
+                  const tipo = e.target.value as FichaPreliminar["garantia"]["tipo"];
+                  mudarFicha((a) => a ? { ...a, garantia: { ...a.garantia, tipo: tipo || null } } : a);
+                }}>
+                <option value="">{t("Selecionar")}</option>
+                {TIPOS_DE_GARANTIA.map((tipo) => (
+                  <option key={tipo} value={tipo}>{t(ROTULO_GARANTIA[tipo])}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[11px]">{t("Valor mensal da garantia (R$)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.garantia.valor_mensal)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, garantia: { ...a.garantia, valor_mensal: numero(e.target.value) } } : a)} />
+            </label>
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-[11px] font-semibold">{t("Contrato")}</h4>
+            <label className="block text-[11px]">{t("Índice de reajuste")}
+              <Input className="h-8 text-xs" value={textoDe(ficha.contrato.indice_reajuste)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, indice_reajuste: campo(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Taxa de administração (%)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_adm)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_adm: numero(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Taxa de locação (%)")}
+              <Input className="h-8 text-xs" inputMode="decimal" value={textoDe(ficha.contrato.taxa_locacao)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, taxa_locacao: numero(e.target.value) } } : a)} />
+            </label>
+            <label className="block text-[11px]">{t("Observação")}
+              <Input className="h-8 text-xs" value={textoDe(ficha.contrato.observacao)}
+                disabled={somenteLeitura || desabilitado}
+                onChange={(e) => mudarFicha((a) => a ? { ...a, contrato: { ...a.contrato, observacao: campo(e.target.value) } } : a)} />
+            </label>
           </div>
           {ficha.documentos.faltantes.length > 0 && (
             <p className="text-[11px]"><span className="font-semibold">{t("Documentos faltantes")}:</span> {ficha.documentos.faltantes.join(", ")}</p>
@@ -238,6 +326,22 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
           )}
         </div>
       )}
+      <CamposImovelProcessoNaFicha
+        conversationId={conversationId}
+        desabilitado={desabilitado || somenteLeitura}
+        atualizacao={atualizacao}
+        valoresFicha={ficha ? valoresDoPacoteNaFicha(ficha) : undefined}
+        onAlterarFicha={ficha ? (campo, valor) => {
+          mudarFicha((a) => {
+            if (!a) return a;
+            const n = numeroDaFicha(valor);
+            if (campo === "seguro_fianca") {
+              return { ...a, garantia: { ...a.garantia, valor_mensal: n } };
+            }
+            return { ...a, imovel: { ...a.imovel, [campo]: n } };
+          });
+        } : undefined}
+      />
     </div>
   );
 }

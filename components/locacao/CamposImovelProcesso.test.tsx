@@ -29,4 +29,16 @@ describe("CamposImovelProcesso", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvar valores do imóvel" }));
     expect(onSalvar).toHaveBeenCalledWith({ condominio: 450 });
   });
+
+  it("avisa o que falta no pacote e como resolver", () => {
+    const valores = valoresVazios();
+    valores.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
+    render(<CamposImovelProcesso valores={valores} onSalvar={vi.fn()} />);
+    const aviso = screen.getByTestId("aviso-pacote-incompleto");
+    expect(aviso.textContent).toMatch(/condomínio/);
+    expect(aviso.textContent).toMatch(/IPTU/);
+    expect(aviso.textContent).toMatch(/seguro-incêndio/);
+    expect(aviso.textContent).toMatch(/Digite o valor no Imóvel e rode Renda de novo/);
+    expect(aviso.textContent).not.toMatch(/^Falta no pacote: aluguel/);
+  });
 });

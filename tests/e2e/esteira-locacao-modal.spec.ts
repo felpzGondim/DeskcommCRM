@@ -71,11 +71,13 @@ test.describe("Esteira de locação: dados e documentos no mesmo modal", () => {
     await dados.getByLabel("RENDA (R$)", {exact: true}).fill("5000");
     await dados.getByLabel("Endereço do imóvel", {exact: true}).fill("Rua de Teste");
     await dados.getByLabel("Número do imóvel", {exact: true}).fill("100");
-    await dados.getByLabel("Aluguel (R$)", {exact: true}).fill("1500");
-    await dados.getByLabel("Condomínio / rateio (R$)", {exact: true}).fill("85");
-    await dados.getByLabel("IPTU mensal (R$)", {exact: true}).fill("70");
-    await dados.getByLabel("Seguro-incêndio mensal (R$)", {exact: true}).fill("20");
-    await expect(dados.getByLabel("Aluguel (R$)", {exact: true})).toHaveCount(1);
+    const pacote = modal.getByTestId("campos-imovel-processo");
+    await pacote.getByLabel("Aluguel (R$/mês)", {exact: true}).fill("1500");
+    await pacote.getByLabel("Condomínio (R$/mês, inclui rateio)", {exact: true}).fill("85");
+    await pacote.getByLabel("IPTU (R$/mês)", {exact: true}).fill("70");
+    await pacote.getByLabel("Seguro-incêndio (R$/mês)", {exact: true}).fill("20");
+    await expect(modal.getByLabel("Aluguel (R$/mês)", {exact: true})).toHaveCount(1);
+    await expect(modal.getByLabel("Aluguel (R$)", {exact: true})).toHaveCount(0);
     await expect(dados.getByLabel("RENDA (R$)", {exact: true})).toHaveCount(1);
     const gravacao = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/painel-agente/ficha"));
     await modal.getByRole("button", {name: "Salvar ficha", exact: true}).click();
