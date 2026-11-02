@@ -311,6 +311,47 @@ export function pacote3x(valores: ValoresDoImovel): Pacote3x {
   return { ok: true, total: Math.round(total * 100) / 100, vezes3: Math.round(total * 3 * 100) / 100 };
 }
 
+export const AVISO_PACOTE_INCOMPLETO =
+  "Falta no pacote: {campos}. Digite o valor no Imóvel e rode Renda de novo.";
+
+export function camposFaltantesDoPacote(
+  valores: ValoresDoImovel,
+): CampoObrigatorioDoPacote[] {
+  return CAMPOS_OBRIGATORIOS_DO_PACOTE.filter((c) => valores[c].valor == null);
+}
+
+/** Aviso do modal: o que falta e como resolver. Sem I/O. */
+export function avisoDoPacoteIncompleto(
+  valores: ValoresDoImovel,
+  traduzir: (s: string) => string = (s) => s,
+): string | null {
+  const faltantes = camposFaltantesDoPacote(valores);
+  if (faltantes.length === 0) return null;
+  return traduzir(AVISO_PACOTE_INCOMPLETO).replace(
+    "{campos}",
+    faltantes.map((c) => traduzir(rotuloDoCampoDoImovel(c))).join(", "),
+  );
+}
+
+export function valoresDoPacoteDaFicha(ficha: FichaPreliminar): ValoresDoImovel {
+  const extraido = extrairValoresDaConversa({ ficha });
+  const saida = valoresVazios();
+  for (const campo of CAMPOS_DO_VALOR_DO_IMOVEL) {
+    const n = parseNumeroReais(extraido[campo]);
+    if (n == null) continue;
+    saida[campo] = { valor: n, origem: "conversa", editado_por: null, editado_em: null };
+  }
+  return saida;
+}
+
+export function avisoDoPacoteIncompletoDaFicha(
+  ficha: FichaPreliminar | null | undefined,
+  traduzir: (s: string) => string = (s) => s,
+): string | null {
+  if (!ficha) return null;
+  return avisoDoPacoteIncompleto(valoresDoPacoteDaFicha(ficha), traduzir);
+}
+
 export function valoresParaJson(valores: ValoresDoImovel): Record<string, {
   valor: number | null;
   origem: OrigemDoValorDoImovel | null;

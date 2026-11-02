@@ -51,6 +51,11 @@ export function preservarEdicoesHumanas(nova: FichaPreliminar, anterior: FichaPr
     if (!b || typeof b !== "object" || Array.isArray(b)) return a;
     const obj = b as Record<string, unknown>;
     if (obj.fonte === "atendente") return b;
+    if ("valor" in obj) {
+      const novo = a && typeof a === "object" && !Array.isArray(a) ? a as Record<string, unknown> : null;
+      const vazio = novo?.valor == null || novo.valor === "";
+      if (vazio && obj.valor != null && obj.valor !== "") return b;
+    }
     if (!a || typeof a !== "object" || Array.isArray(a)) return a;
     return Object.fromEntries(Object.entries(a).map(([k, v]) => [k, preservar(v, obj[k])]));
   };

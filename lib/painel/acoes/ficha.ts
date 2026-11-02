@@ -148,7 +148,7 @@ export async function gerarRelatorioPreliminarDoPainel(
       : null;
     const avisoSuperlogica = sl?.aviso;
     const reaisParaCentavos = (v: number | null | undefined) =>
-      v == null ? null : Math.round(v * 100);
+      v == null || !Number.isFinite(v) ? null : Math.round(v * 100);
     const imovelPrevio = fichaPrevia?.imovel;
     const pacote = montarPacote({
       superlogica: sl,

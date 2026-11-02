@@ -77,6 +77,23 @@ describe("casca do modal de locação", () => {
     expect(await screen.findByTestId("documentos-locacao")).toBeVisible();
   });
 
+  it("Dados mostra o pacote uma vez, com origem, e não de novo na ficha", async () => {
+    render(
+      <AnaliseInquilinoDialog
+        aberto
+        onAbertoChange={vi.fn()}
+        conversationId="conv-1"
+        senhasPdf={[]}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("campos-imovel-processo")).toBeVisible());
+    expect(screen.getAllByTestId("campos-imovel-processo")).toHaveLength(1);
+    expect(screen.getByLabelText("Aluguel (R$/mês)")).toBeTruthy();
+    expect(screen.queryByLabelText("Aluguel (R$)")).toBeNull();
+    expect(screen.queryByLabelText("Condomínio / rateio (R$)")).toBeNull();
+    expect(screen.getAllByText(/Origem/).length).toBeGreaterThan(0);
+  });
+
   it("o botão da aba Renda enfileira e a casca mostra o andamento", async () => {
     const execucaoNaFila = {
       id: "e-renda",

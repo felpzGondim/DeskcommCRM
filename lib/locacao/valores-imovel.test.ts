@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import { fichaVazia } from "@/lib/locacao/ficha-schema";
 import {
   aplicarEdicaoManual,
+  AVISO_PACOTE_INCOMPLETO,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
+  avisoDoPacoteIncompleto,
+  avisoDoPacoteIncompletoDaFicha,
   centavosParaReais,
   exigirObrigatorios,
   extrairValoresDaConversa,
@@ -119,5 +122,23 @@ describe("valores do imóvel no processo", () => {
     expect(linha.aluguel).toMatchObject({ valor: 2000, origem: "superlogica" });
     expect(linha.condominio.valor).toBeNull();
     expect(centavosParaReais(200_000)).toBe(2000);
+  });
+
+  it("aviso lista o que falta no pacote e como resolver; some quando fecha", () => {
+    const v = valoresVazios();
+    v.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
+    const aviso = avisoDoPacoteIncompleto(v);
+    expect(aviso).toContain("condomínio (inclui rateio)");
+    expect(aviso).toContain("IPTU");
+    expect(aviso).toContain("seguro-incêndio");
+    expect(aviso).not.toContain("aluguel");
+    expect(aviso).toMatch(/Digite o valor no Imóvel e rode Renda de novo/);
+    expect(avisoDoPacoteIncompleto(ficticios())).toBeNull();
+    const f = fichaVazia();
+    f.imovel.aluguel.valor = 2100;
+    const avisoFicha = avisoDoPacoteIncompletoDaFicha(f);
+    expect(avisoFicha).toMatch(/IPTU/);
+    expect(avisoFicha).toMatch(/Digite o valor no Imóvel e rode Renda de novo/);
+    expect(AVISO_PACOTE_INCOMPLETO).toContain("{campos}");
   });
 });
