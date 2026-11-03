@@ -25,6 +25,7 @@ describe("aba Documentos: grupos e abertura same-origin", () => {
         recebidos: [{
           id: arquivo, origem: "mensagem", origem_arquivo: "anexo_conversa",
           nome: "cadastro.png", categoria: "outro", participante_id: null,
+          categoria_automatica: false, participante_automatico: false,
           mime: "image/png", data: "2026-10-29T12:00:00Z", situacao: "Arquivo disponível",
         }],
         documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false,
@@ -59,5 +60,33 @@ describe("aba Documentos: grupos e abertura same-origin", () => {
       "noopener,noreferrer",
     );
     open.mockRestore();
+  });
+
+  it("mostra o selo automático e deixa os campos editáveis", async () => {
+    const locatario = "40000000-0000-4000-8000-000000000001";
+    get.mockResolvedValue({
+      data: {
+        recebidos: [{
+          id: arquivo, origem: "mensagem", origem_arquivo: "anexo_conversa",
+          nome: "folha.pdf", categoria: "comprovante_renda", participante_id: locatario,
+          categoria_automatica: true, participante_automatico: true,
+          mime: "application/pdf", data: "2026-10-29T12:00:00Z", situacao: "Texto disponível",
+        }],
+        documentos: [],
+        participantes: [{id: locatario, papel: "locatario", nome_exibicao: "Candidato", cpf_mascarado: null}],
+        pendencias: [], relatorios: [], ha_mais: false,
+      },
+    });
+    patch.mockResolvedValue({ data: { salvo: true } });
+    render(<DocumentosLocacaoPainel conversationId={conversa} />);
+    await screen.findByText("folha.pdf");
+    expect(screen.getAllByText("preenchido automaticamente")).toHaveLength(2);
+    expect(screen.getByLabelText("Categoria folha.pdf")).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Categoria folha.pdf"), { target: { value: "documento_pessoal" } });
+    expect(patch).toHaveBeenCalledWith(
+      `/api/v1/conversations/${conversa}/locacao/documentos`,
+      expect.objectContaining({ categoria: "documento_pessoal", participante_id: locatario }),
+    );
+    expect(await screen.findByText("preenchido automaticamente")).toBeVisible();
   });
 });
