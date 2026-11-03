@@ -6,19 +6,23 @@ Sem dado pessoal: ids e valores dos exemplos são fictícios.
 
 A chave `locacao.pacote_superlogica_habilitado` continua **desligada**.
 Ligada, o CRM lê aluguel, condomínio, IPTU e o **proprietário do imóvel**
-por este endpoint. Seguro-incêndio saiu deste contrato (outro PR o
-remove do CRM). Seguro-fiança **não entra** e **não** deve vir na
-resposta. Sem id no imóvel, o CRM manda `busca` (endereço ou código).
-Falhas caem nos valores da conversa com aviso; o fluxo não quebra.
+por este endpoint. Sem id no imóvel, o CRM manda `busca` (endereço ou
+código). O Hub ainda **pode** devolver `seguro_incendio_centavos`; o CRM
+**ignora** esse campo — não mostra, não confronta, não entra no 3× e não
+bloqueia FC/Migra. Seguro-fiança **não entra** e **não** deve vir na
+resposta. Falhas caem nos valores da conversa com aviso; o fluxo não
+quebra.
 
-**Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36):**
+**Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36;
+incêndio fora da regra em 03/11):**
 a Superlógica **confronta** a ficha e **só sinaliza** divergência. Não
 sobrescreve. Valores já preenchidos (conversa ou edição manual) continuam
-valendo. O leitor compara aluguel, condomínio, IPTU, seguro-incêndio e, se
+valendo. O leitor compara aluguel, condomínio, IPTU e, se
 vierem, endereço/CEP. Quando diferirem, o modal e a ficha mostram um aviso
 por campo (`ficha … × Superlógica …`). **Só o campo vazio da ficha** pode
 receber o valor da Superlógica, com origem `"superlogica"`. Endereço/CEP
-nunca são gravados da Superlógica — só o aviso.
+nunca são gravados da Superlógica — só o aviso. Seguro-incêndio, se o Hub
+trouxer, é descartado no CRM.
 
 ---
 
@@ -90,7 +94,7 @@ O CRM chama de novo com `id_imovel`.
 | Campo | Regra |
 |---|---|
 | `status` | `ok` \| `nao_encontrado` \| `pedido_invalido` \| `multiplos_contratos` \| `candidatos` \| `indisponivel` \| `nao_permitido` |
-| `encontrado` | `true` só com `status=ok` e pelo menos um dos quatro valores |
+| `encontrado` | `true` só com `status=ok` e pelo menos um de aluguel/condomínio/IPTU. Seguro-incêndio, se vier, o CRM descarta |
 | `*_centavos` | inteiro ≥ 0, **mensal**. Ausente ou `null` = o Hub não achou aquele componente |
 | `id_imovel` / `id_contrato` | opcionais, só o id numérico |
 | `endereco` / `cep` | opcionais, só para o CRM **confrontar**. Texto curto; CEP com 8 dígitos ou `00000-000`. Sem nome de pessoa. O CRM **não grava** esses campos na ficha |
@@ -148,7 +152,7 @@ Se houver mais de um contrato ativo: `status=multiplos_contratos` e
 - `proprietario` só vem em `status=ok`. `candidatos` não leva nome, CPF
   nem telefone. `endereco`/`cep` no pacote são opcionais e só para
   confronto; o CRM **não grava** esses campos na ficha.
-- Não devolve seguro-fiança nem seguro-incêndio.
+- Não devolve seguro-fiança. Seguro-incêndio, se vier, o CRM descarta.
 - Não exige o CRM mandar `organization_id` no body — a chave Bearer já
   identifica a instalação.
 

@@ -27,12 +27,12 @@ function ficticios() {
 }
 
 describe("valores do imóvel no processo", () => {
-  it("3x soma aluguel+condomínio+IPTU+seguro-incêndio e ignora fiança", () => {
+  it("3x soma aluguel+condomínio+IPTU e ignora incêndio e fiança", () => {
     const p = pacote3x(ficticios());
-    expect(p).toEqual({ ok: true, total: 2780, vezes3: 8340 });
+    expect(p).toEqual({ ok: true, total: 2700, vezes3: 8100 });
   });
 
-  it("3x não fecha se faltar um dos quatro, mesmo com fiança", () => {
+  it("3x não fecha se faltar um dos três, mesmo com fiança", () => {
     const v = ficticios();
     v.iptu = { valor: null, origem: null, editado_por: null, editado_em: null };
     const p = pacote3x(v);
@@ -41,15 +41,16 @@ describe("valores do imóvel no processo", () => {
     expect(p.faltantes).toEqual(["iptu"]);
   });
 
-  it("FC/Migra recusam apontando o campo; fiança ausente não recusa", () => {
+  it("FC/Migra recusam apontando o campo; incêndio e fiança ausentes não recusam", () => {
     const v = valoresVazios();
     v.aluguel = { valor: 2000, origem: "conversa", editado_por: null, editado_em: null };
     v.condominio = { valor: 500, origem: "conversa", editado_por: null, editado_em: null };
+    expect(exigirObrigatorios(v, "fc")).toMatch(/IPTU/);
+    expect(exigirObrigatorios(v, "seguro")).toMatch(/IPTU/);
     v.iptu = { valor: 200, origem: "conversa", editado_por: null, editado_em: null };
-    expect(exigirObrigatorios(v, "fc")).toMatch(/seguro-incêndio/);
-    expect(exigirObrigatorios(v, "seguro")).toMatch(/seguro-incêndio/);
-    v.seguro_incendio = { valor: 80, origem: "conversa", editado_por: null, editado_em: null };
     expect(exigirObrigatorios(v, "fc")).toBeNull();
+    expect(exigirObrigatorios(v, "seguro")).toBeNull();
+    expect(CAMPOS_OBRIGATORIOS_DO_PACOTE).not.toContain("seguro_incendio");
     expect(CAMPOS_OBRIGATORIOS_DO_PACOTE).not.toContain("seguro_fianca");
   });
 
@@ -77,7 +78,7 @@ describe("valores do imóvel no processo", () => {
     });
     expect(primeiro.valores.aluguel).toMatchObject({ valor: 2000, origem: "conversa" });
     expect(primeiro.valores.iptu).toMatchObject({ valor: 180, origem: "conversa" });
-    expect(primeiro.valores.seguro_incendio).toMatchObject({ valor: 80, origem: "superlogica" });
+    expect(primeiro.valores.seguro_incendio.valor).toBeNull();
     expect(primeiro.divergencias.map((d) => d.campo)).toEqual(["aluguel", "endereco", "cep"]);
     const segundo = preencherValores({
       atuais: primeiro.valores,
@@ -130,7 +131,7 @@ describe("valores do imóvel no processo", () => {
     const aviso = avisoDoPacoteIncompleto(v);
     expect(aviso).toContain("condomínio (inclui rateio)");
     expect(aviso).toContain("IPTU");
-    expect(aviso).toContain("seguro-incêndio");
+    expect(aviso).not.toContain("seguro-incêndio");
     expect(aviso).not.toContain("aluguel");
     expect(aviso).toMatch(/Digite o valor no Imóvel e rode Renda de novo/);
     expect(avisoDoPacoteIncompleto(ficticios())).toBeNull();

@@ -50,7 +50,7 @@ export const locacaoSettingsSchema = z.object({
     manual: false,
   }),
   /**
-   * GET Superlógica (via Hub) para aluguel/condomínio/IPTU/seguro-incêndio
+   * GET Superlógica (via Hub) para aluguel/condomínio/IPTU
    * do 3×. Desligada: o leitor não é chamado. O Hub ainda precisa expor
    * GET /imovel/pacote (docs/planos/hub-pacote-imovel-superlogica.md).
    */

@@ -73,7 +73,6 @@ const CAMPOS_DO_PACOTE_PARA_DIVERGENCIA = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
 ] as const satisfies readonly CampoDeDivergencia[];
 
 function divergenciasDoPacoteNasPendencias(pendencias: readonly string[] | undefined) {
@@ -135,7 +134,6 @@ const CAMPOS_DO_PACOTE_NA_FICHA = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
 ] as const satisfies readonly CampoDoValorDoImovel[];
 
 function valoresDoPacoteNaFicha(ficha: FichaPreliminar): ValoresDoImovel {

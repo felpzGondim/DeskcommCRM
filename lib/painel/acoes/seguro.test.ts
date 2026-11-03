@@ -182,7 +182,7 @@ describe("analisar seguro no painel", () => {
     expect(mocks.abrir).not.toHaveBeenCalled();
   });
 
-  it("recusa se faltar seguro-incêndio, apontando o campo; fiança não entra", async () => {
+  it("não recusa se faltar seguro-incêndio; fiança também não entra", async () => {
     mocks.valores.mockResolvedValue({
       aluguel: { valor: 2000, origem: "conversa", editado_por: null, editado_em: null },
       condominio: { valor: 500, origem: "conversa", editado_por: null, editado_em: null },
@@ -191,10 +191,9 @@ describe("analisar seguro no painel", () => {
       seguro_fianca: { valor: 90, origem: "conversa", editado_por: null, editado_em: null },
     });
     const r = await analisarSeguroDoPainel(ctx, { processo_id: "proc-1" });
-    expect(r.ok).toBe(false);
-    expect(r.texto).toMatch(/seguro-incêndio/);
-    expect(mocks.abrir).not.toHaveBeenCalled();
-    expect(mocks.chamar).not.toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+    expect(r.texto).not.toMatch(/seguro-incêndio/);
+    expect(mocks.abrir).toHaveBeenCalled();
   });
 
   it("dispara acao seguro com pedido_id próprio e não persiste score/risco", async () => {

@@ -18,6 +18,7 @@ describe("CamposImovelProcesso", () => {
     expect(screen.getByText(/Origem: conversa/)).toBeTruthy();
     expect(screen.getByText(/não entra no 3×/)).toBeTruthy();
     expect(screen.getByLabelText(/Seguro-fiança/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Seguro-incêndio/)).toBeNull();
   });
 
   it("mostra aviso de divergência por campo sem trocar o valor da ficha", () => {
@@ -54,7 +55,7 @@ describe("CamposImovelProcesso", () => {
     const aviso = screen.getByTestId("aviso-pacote-incompleto");
     expect(aviso.textContent).toMatch(/condomínio/);
     expect(aviso.textContent).toMatch(/IPTU/);
-    expect(aviso.textContent).toMatch(/seguro-incêndio/);
+    expect(aviso.textContent).not.toMatch(/seguro-incêndio/);
     expect(aviso.textContent).toMatch(/Digite o valor no Imóvel e rode Renda de novo/);
     expect(aviso.textContent).not.toMatch(/^Falta no pacote: aluguel/);
   });

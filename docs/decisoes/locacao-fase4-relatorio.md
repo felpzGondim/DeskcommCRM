@@ -13,7 +13,7 @@ Nada disto manda mensagem a contato. Nada escreve na Superlógica. Nenhum passo 
 - Ferramentas no registro único: `gerar_relatorio` (L) e `aprovar_relatorio` (S, só com clique de qualquer atendente — decisão 8a).
 - Montagem **determinística** de 6 seções (identificação, resumo, crédito, renda, financeira, risco) a partir dos blocos já gravados (ficha/preliminar, FC, seguro, manual). Bloco faltando → seção pendente, sem inventar número.
 - Risco só baixo / moderado / alto. Nunca "alugue" / "não alugue". Sem comprovada, o risco **não** sai baixo.
-- A seção de renda monta o bloco a partir da análise de extrato e do pacote do #31 (`lib/locacao/extrato`, 3× = aluguel+condomínio+IPTU+seguro-incêndio). Sem análises, lê `ficha.renda.bloco_calculado` gravado pelo 4.1 (mesmo motor). Sem os dois, fica pendente. A renda declarada **nunca** vira comprovada.
+- A seção de renda monta o bloco a partir da análise de extrato e do pacote do #31 (`lib/locacao/extrato`, 3× = aluguel+condomínio+IPTU). Sem análises, lê `ficha.renda.bloco_calculado` gravado pelo 4.1 (mesmo motor). Sem os dois, fica pendente. A renda declarada **nunca** vira comprovada.
 - Aprovar: qualquer atendente. Se arquivos do processo estiverem desligados, o rascunho permanece (o texto não some) e a aprovação não exige documento.
 - Chave `locacao.analise.relatorio` desligada por padrão. Sem ela, o Painel da conversa fica como hoje.
 - CPF, telefone, e-mail e RG saem mascarados. Audit sem PII.
@@ -47,7 +47,7 @@ Mapa: `docs/architecture/locacao-processo.architecture.json` (peça `relatorio`,
 | Quem aprova o relatório | Qualquer atendente (8a) | Só o Felipe, como a aprovação do processo? |
 | Arquivos desligados | Aprova sem documento e **mantém** o rascunho | Exigir arquivos ligados para aprovar? |
 | Risco sem FC | Nunca "baixo" se não há comprovada; sem os dois, pendente | Sempre pendente até ter FC? |
-| 3× o pacote | Aluguel+condomínio+IPTU+seguro-incêndio (sem fiança), do `montarPacote` | — |
+| 3× o pacote | Aluguel+condomínio+IPTU (sem incêndio nem fiança), do `montarPacote` | — |
 
 ## Destino
 

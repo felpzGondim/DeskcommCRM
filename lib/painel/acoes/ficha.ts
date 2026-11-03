@@ -21,6 +21,7 @@ import {
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
+import { aplicarPadroesDoContrato } from "@/lib/locacao/padroes-do-contrato";
 import { preencherRendaDeclaradaInicial, preservarEdicoesHumanas } from "@/lib/locacao/renda-utilizada";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
@@ -210,8 +211,9 @@ export async function gerarRelatorioPreliminarDoPainel(
       : null;
     const fichaComLocador = validacao?.ficha
       ?? (sl?.proprietario ? preencherLocadorNaFicha(fichaExtraida, sl.proprietario) : fichaExtraida);
+    const comPadroes = aplicarPadroesDoContrato(fichaComLocador);
     const ficha = {
-      ...fichaComLocador,
+      ...comPadroes,
       pendencias: pendenciasDoPacote(
         [
           ...saida.ficha.pendencias,

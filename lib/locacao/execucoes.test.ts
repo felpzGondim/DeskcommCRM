@@ -18,6 +18,7 @@ import {
   lerUltimasExecucoesDoProcesso,
   marcarDesatualizadasSeEntradaMudou,
   PASTA_FICHA_CADASTRAL,
+  registrarResultadoDaAba,
 } from "@/lib/locacao/execucoes";
 import {
   ABAS_DA_EXECUCAO,
@@ -169,6 +170,8 @@ describe("helper de locacao_execucoes", () => {
 });
 
 describe("vocabulário e migration 0772", () => {
+  const admin = {} as never;
+
   it("abas, estados e origens da execução são os do plano", () => {
     expect(ABAS_DA_EXECUCAO).toEqual([
       "dados",
@@ -199,6 +202,31 @@ describe("vocabulário e migration 0772", () => {
     expect(ORIGENS_DO_DOCUMENTO).toContain("hub_fc");
     expect(ORIGENS_DO_DOCUMENTO).toContain("hub_migra");
     expect(ORIGENS_DO_DOCUMENTO).toContain("contrato");
+  });
+
+  it("grava o término síncrono de FC/Migra com código de erro", async () => {
+    const api = cadeia({ data: { id: EXEC } });
+    mocks.tabela.mockReturnValue(api);
+    const id = await registrarResultadoDaAba(admin, {
+      orgId: ORG,
+      processoId: PROCESSO,
+      aba: "fc",
+      origem: "botao",
+      atorUserId: USER,
+      estado: "erro",
+      erroCodigo: "renda_nao_confirmada",
+      erroMotivo: "Confirme a renda antes de analisar a FC.",
+      resultado: { resumo: "Confirme a renda antes de analisar a FC." },
+    });
+    expect(id).toBe(EXEC);
+    expect(api.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aba: "fc",
+        estado: "erro",
+        erro_codigo: "renda_nao_confirmada",
+        erro_motivo: "Confirme a renda antes de analisar a FC.",
+      }),
+    );
   });
 
   it("a migration 0772 não cria SECURITY DEFINER e documenta o caminho da ficha", () => {

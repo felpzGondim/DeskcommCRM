@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { copyToClipboard } from "@/lib/clipboard";
+import {
+  rendaConfirmadaNaVersaoAtual,
+  relatorioDeRendaDaExecucao,
+  type ExecucaoPublica,
+} from "@/lib/locacao/execucao-da-aba";
 import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
 
 type CardSeguro = { seguradora?: string; codigo?: string; codigo_cotacao?: string; status?: string; plano?: string };
@@ -43,6 +48,8 @@ type ProcessoResumo = {
   imovel: string;
   encerrado_em: string | null;
   renda_confirmada_em?: string | null;
+  renda_confirmada_ficha_versao?: number | null;
+  ficha_versao?: number | null;
   relatorio_desatualizado?: boolean;
   seguro_desatualizado?: boolean;
   fc_desatualizado?: boolean;
@@ -181,6 +188,7 @@ export function ProcessoDeLocacaoPainel({
             habilitado?: boolean;
             analise?: { renda?: boolean; seguro?: boolean; fc?: boolean; manual?: boolean; relatorio?: boolean };
             processos?: ProcessoResumo[];
+            execucoes?: Partial<Record<string, ExecucaoPublica | null>>;
           };
         }>(`/api/v1/conversations/${conversationId}/locacao`);
         if (!vivo) return;
@@ -191,6 +199,27 @@ export function ProcessoDeLocacaoPainel({
         setAnaliseManual(r.data?.analise?.manual === true);
         setAnaliseRelatorio(r.data?.analise?.relatorio === true);
         setProcessos(r.data?.processos ?? []);
+        const rel = relatorioDeRendaDaExecucao(r.data?.execucoes?.renda ?? null);
+        if (rel) {
+          setExecucaoRenda({
+            execucao_id: rel.execucao_id,
+            estado: rel.estado,
+            etapa_texto: rel.etapa_texto,
+            progresso_atual: rel.progresso_atual,
+            progresso_total: rel.progresso_total,
+            motivo: rel.motivo,
+            resumo: rel.resumo ?? undefined,
+            renda_comprovada: rel.renda_comprovada,
+            renda_proposta_fc: rel.renda_proposta_fc,
+            alertas: rel.alertas,
+            checklist: rel.checklist,
+            regra_3x: rel.regra_3x ?? undefined,
+          });
+          if (rel.resumo) setResumo(rel.resumo);
+        } else {
+          setExecucaoRenda(null);
+          setResumo(null);
+        }
       } catch {
         if (vivo) setHabilitado(false);
       }
@@ -380,6 +409,7 @@ export function ProcessoDeLocacaoPainel({
   if (!habilitado) return null;
 
   const processo = processos[0];
+  const rendaConfirmada = rendaConfirmadaNaVersaoAtual(processo);
 
   async function abrir() {
     if (criando || desabilitado) return;
@@ -476,7 +506,7 @@ export function ProcessoDeLocacaoPainel({
   }
 
   async function cotar() {
-    if (cotando || desabilitado || !processo || !processo.renda_confirmada_em) return;
+    if (cotando || desabilitado || !processo || !rendaConfirmadaNaVersaoAtual(processo)) return;
     setErro(null);
     setCotando(true);
     try {
@@ -556,7 +586,7 @@ export function ProcessoDeLocacaoPainel({
   }
 
   async function salvarFc(participanteId?: string) {
-    if (salvandoFc || desabilitado || !processo || !processo.renda_confirmada_em) return;
+    if (salvandoFc || desabilitado || !processo || !rendaConfirmadaNaVersaoAtual(processo)) return;
     setErro(null);
     setSalvandoFc(true);
     try {
@@ -632,7 +662,13 @@ export function ProcessoDeLocacaoPainel({
       });
       setProcessos((atual) =>
         atual.map((p) =>
-          p.id === processo.id ? { ...p, renda_confirmada_em: new Date().toISOString() } : p,
+          p.id === processo.id
+            ? {
+                ...p,
+                renda_confirmada_em: new Date().toISOString(),
+                renda_confirmada_ficha_versao: p.ficha_versao ?? p.renda_confirmada_ficha_versao,
+              }
+            : p,
         ),
       );
     } catch (e) {
@@ -901,8 +937,12 @@ export function ProcessoDeLocacaoPainel({
                   />
                 </label>
               ))}
-              {processo.renda_confirmada_em ? (
+              {rendaConfirmada ? (
                 <p className="text-xs text-text-muted">{t("Renda confirmada.")}</p>
+              ) : processo.renda_confirmada_em ? (
+                <p className="text-[11px] text-text-muted">
+                  {t("A ficha mudou depois da última confirmação. Confirme a renda de novo.")}
+                </p>
               ) : (
                 <p className="text-[11px] text-text-muted">
                   {t("Confirme a renda antes de analisar o seguro-fiança ou a FC.")}
@@ -924,10 +964,14 @@ export function ProcessoDeLocacaoPainel({
                   disabled={
                     desabilitado || analisando || confirmando
                     || typeof processo.renda_proposta_fc !== "number"
-                    || !!processo.renda_confirmada_em
+                    || rendaConfirmada
                   }
                   onClick={() => void confirmar()}>
-                  {confirmando ? t("Confirmando renda…") : t("Confirmar renda")}
+                  {confirmando
+                    ? t("Confirmando renda…")
+                    : processo.renda_confirmada_em && !rendaConfirmada
+                      ? t("Confirmar renda de novo")
+                      : t("Confirmar renda")}
                 </Button>
               </div>
             </>
@@ -940,7 +984,7 @@ export function ProcessoDeLocacaoPainel({
           {processo?.seguro_desatualizado && <p role="status" className="text-xs text-amber-600">{t("Esta cotação utilizou uma versão anterior dos dados. Confira antes de continuar.")}</p>}
           {!processo ? (
             <p className="text-xs text-text-muted">{t("Abra um processo antes de cotar o seguro-fiança.")}</p>
-          ) : !processo.renda_confirmada_em ? (
+          ) : !rendaConfirmada ? (
             <p className="text-xs text-text-muted">
               {t("Confirme a renda antes de analisar o seguro-fiança ou a FC.")}
             </p>
@@ -988,7 +1032,7 @@ export function ProcessoDeLocacaoPainel({
           {processo?.fc_desatualizado && <p role="status" className="text-xs text-amber-600">{t("Esta FC utilizou uma versão anterior dos dados. Confira antes de continuar.")}</p>}
           {!processo ? (
             <p className="text-xs text-text-muted">{t("Abra um processo antes de analisar a FC.")}</p>
-          ) : !processo.renda_confirmada_em ? (
+          ) : !rendaConfirmada ? (
             <p className="text-xs text-text-muted">
               {t("Confirme a renda antes de analisar o seguro-fiança ou a FC.")}
             </p>

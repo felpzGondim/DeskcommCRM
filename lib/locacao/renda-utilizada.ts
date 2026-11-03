@@ -22,7 +22,7 @@ export function normalizarRendaUtilizada(ficha: FichaPreliminar): FichaPrelimina
     valor: completos ? Math.round(locatarios.reduce((s, p) => s + (p.renda_individual.valor ?? 0), 0) * 100) / 100 : null,
     fonte: locatarios.some((p) => p.renda_individual.fonte === "atendente") ? "atendente" : ficha.renda.mensal.fonte,
   };
-  const campos = [ficha.imovel.aluguel, ficha.imovel.condominio, ficha.imovel.iptu, ficha.imovel.seguro_incendio];
+  const campos = [ficha.imovel.aluguel, ficha.imovel.condominio, ficha.imovel.iptu];
   const completo = campos.every((c) => c?.valor != null);
   const pacote = completo ? Math.round(campos.reduce((s, c) => s + (c?.valor ?? 0), 0) * 100) / 100 : null;
   const bloco = ficha.renda.bloco_calculado;
@@ -36,6 +36,7 @@ export function normalizarRendaUtilizada(ficha: FichaPreliminar): FichaPrelimina
 
 /** Inicializa a única RENDA com o valor declarado; não atribui um total a várias pessoas. */
 export function preencherRendaDeclaradaInicial(ficha: FichaPreliminar, centavos: number | null): FichaPreliminar {
+  if (fichaTemRendaComprovada(ficha)) return normalizarRendaUtilizada(ficha);
   const candidatos = ficha.pessoas.filter((p) => p.papel !== "contato");
   if (candidatos.length !== 1 || centavos == null || centavos <= 0) return normalizarRendaUtilizada(ficha);
   const pessoa = candidatos[0]!;
@@ -43,6 +44,41 @@ export function preencherRendaDeclaradaInicial(ficha: FichaPreliminar, centavos:
   return normalizarRendaUtilizada({...ficha, pessoas: ficha.pessoas.map((p) => p !== pessoa ? p : {
     ...p, renda_individual: {...p.renda_individual, valor: Math.round(centavos) / 100, fonte: "conversa", trecho: "Renda declarada na conversa; não equivale à comprovação"},
   })});
+}
+
+/** Renda apurada na análise (bloco comprovada) vence a extraída da conversa. */
+export function fichaTemRendaComprovada(ficha: FichaPreliminar | null | undefined): boolean {
+  const c = ficha?.renda.bloco_calculado?.comprovada;
+  return typeof c === "number" && Number.isFinite(c) && c > 0;
+}
+
+function preservarRendaComprovada(nova: FichaPreliminar, anterior: FichaPreliminar): FichaPreliminar {
+  if (!fichaTemRendaComprovada(anterior)) return nova;
+  const pessoas = nova.pessoas.map((p) => {
+    const cpf = p.cpf.valor?.replace(/\D/g, "");
+    const antiga = anterior.pessoas.find((a) =>
+      cpf
+        ? a.cpf.valor?.replace(/\D/g, "") === cpf
+        : a.nome.valor === p.nome.valor,
+    );
+    if (!antiga || antiga.renda_individual.valor == null) return p;
+    return { ...p, renda_individual: antiga.renda_individual };
+  });
+  return {
+    ...nova,
+    pessoas,
+    renda: {
+      ...nova.renda,
+      mensal: anterior.renda.mensal,
+      proposta_fc: anterior.renda.proposta_fc,
+      bloco_calculado: anterior.renda.bloco_calculado,
+      excluida: anterior.renda.excluida,
+      pix_terceiros: anterior.renda.pix_terceiros,
+      vendas_cartao: anterior.renda.vendas_cartao,
+      evidencias: anterior.renda.evidencias,
+      alertas: anterior.renda.alertas,
+    },
+  };
 }
 
 /** Reextração preserva campos corrigidos pelo atendente, inclusive renda. */
@@ -70,12 +106,12 @@ export function preservarEdicoesHumanas(nova: FichaPreliminar, anterior: FichaPr
     if (p.nome.fonte === "atendente" && !pessoas.some((n) =>
       cpf ? n.cpf.valor?.replace(/\D/g, "") === cpf : n.nome.valor === p.nome.valor)) pessoas.push(p);
   }
-  return normalizarRendaUtilizada({
+  return preservarRendaComprovada(normalizarRendaUtilizada({
     ...nova, pessoas,
     imovel: preservar(nova.imovel, anterior.imovel) as FichaPreliminar["imovel"],
     vigencia: preservar(nova.vigencia, anterior.vigencia) as FichaPreliminar["vigencia"],
     contrato: preservar(nova.contrato, anterior.contrato) as FichaPreliminar["contrato"],
     garantia: preservar(nova.garantia, anterior.garantia) as FichaPreliminar["garantia"],
     locador: preservar(nova.locador, anterior.locador) as FichaPreliminar["locador"],
-  });
+  }), anterior);
 }

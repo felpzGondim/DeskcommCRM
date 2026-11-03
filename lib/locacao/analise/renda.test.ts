@@ -93,8 +93,8 @@ describe("análise de renda no motor do extrato", () => {
     );
     expect(ficha.renda.bloco_calculado?.comprovada).toBe(ficha.renda.mensal.valor);
     expect(ficha.renda.bloco_calculado?.declarada).toBe(9000);
-    expect(ficha.renda.bloco_calculado?.pacote).toBe(2800);
-    expect(ficha.renda.bloco_calculado?.tres_vezes_pacote).toBe(8400);
+    expect(ficha.renda.bloco_calculado?.pacote).toBe(2700);
+    expect(ficha.renda.bloco_calculado?.tres_vezes_pacote).toBe(8100);
     expect(ficha.renda.bloco_calculado?.tabela).toMatch(/Renda comprovada/);
     expect(ficha.renda.bloco_calculado?.motivo_nao_comprovacao).toBeNull();
   });

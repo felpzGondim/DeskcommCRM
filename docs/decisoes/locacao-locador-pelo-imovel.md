@@ -14,8 +14,9 @@ MCP `ler_pacote_imovel`) devolve `proprietario` quando `status=ok`.
 3. Um candidato: grava `superlogica_imovel_id` e lê o pacote + locador.
 4. Vários: a aba Dados lista `{id_imovel, codigo, endereco, cep}` (sem PII).
 5. Locador vazio recebe Superlógica com selo; **manual não é sobrescrito**.
-6. Pacote 3×: continua manual > conversa > Superlógica (só preenche vazio).
-   Endereço/CEP da Superlógica só avisam.
+6. Pacote 3× (aluguel + condomínio + IPTU; incêndio fora): continua
+   manual > conversa > Superlógica (só preenche vazio). Endereço/CEP da
+   Superlógica só avisam.
 7. Hub 404/`indisponivel`: aviso em português; o fluxo não quebra.
 
 Contrato do Hub: `docs/planos/hub-pacote-imovel-superlogica.md` (PR

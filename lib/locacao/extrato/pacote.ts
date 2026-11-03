@@ -1,5 +1,6 @@
 /**
- * Pacote para 3×: aluguel + condomínio + IPTU + seguro-incêndio.
+ * Pacote para 3×: aluguel + condomínio + IPTU.
+ * Seguro-incêndio saiu da regra e do confronto; a coluna no banco permanece.
  * Seguro-fiança NÃO entra. Superlógica só GET via Hub, injetável.
  * A chave `locacao.pacote_superlogica_habilitado` nasce desligada.
  *
@@ -136,12 +137,11 @@ export function montarPacote(input: {
   const aluguel = escolher(cv.aluguelCentavos, sl?.aluguelCentavos);
   const condominio = escolher(cv.condominioCentavos, sl?.condominioCentavos);
   const iptu = escolher(cv.iptuCentavos, sl?.iptuCentavos);
-  const seguroIncendio = escolher(cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos);
+  const seguroIncendio = { valorCentavos: null, origem: "ausente" as const };
   const divergencias = [
     divergenciaDeCentavos("aluguel", cv.aluguelCentavos, sl?.aluguelCentavos),
     divergenciaDeCentavos("condominio", cv.condominioCentavos, sl?.condominioCentavos),
     divergenciaDeCentavos("iptu", cv.iptuCentavos, sl?.iptuCentavos),
-    divergenciaDeCentavos("seguro_incendio", cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos),
     divergenciaDeEndereco(cv.endereco, sl?.endereco),
     divergenciaDeCep(cv.cep, sl?.cep),
   ].filter((d): d is DivergenciaDoPacote => d != null);
@@ -150,7 +150,6 @@ export function montarPacote(input: {
   if (aluguel.origem === "ausente") faltantes.push("aluguel");
   if (condominio.origem === "ausente") faltantes.push("condomínio");
   if (iptu.origem === "ausente") faltantes.push("IPTU");
-  if (seguroIncendio.origem === "ausente") faltantes.push("seguro-incêndio");
 
   if (aluguel.valorCentavos == null) {
     return {
@@ -168,8 +167,7 @@ export function montarPacote(input: {
   const total =
     aluguel.valorCentavos +
     (condominio.valorCentavos ?? 0) +
-    (iptu.valorCentavos ?? 0) +
-    (seguroIncendio.valorCentavos ?? 0);
+    (iptu.valorCentavos ?? 0);
   return {
     aluguel,
     condominio,
@@ -197,13 +195,12 @@ export function textoDoPacote(pacote: PacoteDoImovel): string {
     linha("aluguel", pacote.aluguel),
     linha("condomínio", pacote.condominio),
     linha("IPTU", pacote.iptu),
-    linha("seguro-incêndio", pacote.seguroIncendio),
   ];
   if (pacote.vezes3Centavos == null) {
     partes.push(FRASE_PACOTE_AUSENTE);
   } else {
     partes.push(
-      `Pacote (aluguel+condomínio+IPTU+seguro-incêndio, sem seguro-fiança): ${formatarReais(pacote.totalCentavos ?? 0)}.`,
+      `Pacote (aluguel+condomínio+IPTU, sem seguro-incêndio nem seguro-fiança): ${formatarReais(pacote.totalCentavos ?? 0)}.`,
     );
     partes.push(`3x o pacote: ${formatarReais(pacote.vezes3Centavos)}.`);
     if (pacote.faltantes.length > 0) {

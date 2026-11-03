@@ -13,6 +13,7 @@ import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { registrarResultadoDaAba } from "@/lib/locacao/execucoes";
 import { montarContexto } from "@/lib/painel/contexto";
 import { executarFerramenta } from "@/lib/painel/ferramentas/executar";
 import { respostaDaFerramenta } from "@/lib/painel/http";
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     .select("settings")
     .eq("id", orgId)
     .maybeSingle();
+  const admin = createAdminClient();
   const contexto = montarContexto({
     orgId,
     conversationId: id,
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     userId: auth.user.id,
     requestId,
     dbSessao: db,
-    admin: createAdminClient(),
+    admin,
     settings: orgLinha?.settings,
     idioma: auth.user.idioma,
     origem: "botao",
@@ -125,6 +127,21 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     ...("participante_id" in pedido ? { participante_id: pedido.participante_id } : {}),
   });
 
+  if (pedido.etapa === "analisar" && pedido.processo_id) {
+    await registrarResultadoDaAba(admin, {
+      orgId,
+      processoId: pedido.processo_id,
+      aba: "fc",
+      origem: "botao",
+      atorUserId: auth.user.id,
+      estado: r.ok ? "concluido" : "erro",
+      erroCodigo: r.ok ? null : (r.codigo ?? "hub_unavailable"),
+      erroMotivo: r.ok ? null : r.texto,
+      resultado: { resumo: r.texto, ...(r.extra ?? {}) },
+      callId: requestId,
+    });
+  }
+
   const efeito =
     pedido.etapa === "analisar"
     || pedido.etapa === "confirmar"
@@ -139,6 +156,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       requestId,
       metadata: {
         sucesso: r.ok,
+        erro_codigo: r.ok ? null : (r.codigo ?? "hub_unavailable"),
         pedido_id: r.extra?.pedido_id ?? null,
         estado: r.extra?.estado ?? null,
         documento_id: r.extra?.documento_id ?? null,
