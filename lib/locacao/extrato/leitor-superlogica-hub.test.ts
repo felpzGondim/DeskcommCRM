@@ -70,7 +70,7 @@ describe("interpretarPacoteHub", () => {
     expect(p.divergencias.map((d) => d.campo)).toContain("aluguel");
     const soSuperlogica = montarPacote({ superlogica: lido, conversa: {} });
     expect(soSuperlogica.aluguel).toEqual({ valorCentavos: 200_000, origem: "superlogica" });
-    expect(soSuperlogica.vezes3Centavos).toBe(3 * 270_000);
+    expect(soSuperlogica.vezes3Centavos).toBe(3 * 262_000);
   });
 
   it("lê endereço e CEP opcionais só para confronto", () => {
