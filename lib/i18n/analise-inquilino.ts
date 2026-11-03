@@ -60,6 +60,7 @@ export const TEXTOS_ANALISE_INQUILINO = {
   "Não foi possível abrir o arquivo.": { es: "No fue posible abrir el archivo." },
   "Não foi possível classificar o documento.": { es: "No fue posible clasificar el documento." },
   "Nenhum documento nesta seção.": { es: "No hay documentos en esta sección." },
+  "preenchido automaticamente": { es: "rellenado automáticamente" },
   "Participante": { es: "Participante" },
   "A identificar / documento do processo": { es: "Por identificar / documento del proceso" },
   "Atualizar documentos": { es: "Actualizar documentos" },
