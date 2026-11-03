@@ -18,8 +18,8 @@ estes cinco campos).
 | `aluguel`, `condominio`, `iptu`, `seguro_incendio`, `seguro_fianca` | mensais, nullable |
 | `*_origem` `superlogica \| conversa \| manual` | e `*_editado_por` / `*_editado_em` |
 | Evento `valores_imovel` | só nomes de campo, sem valores |
-| 3× | 2c: aluguel + condomínio (inclui rateio) + IPTU + seguro-incêndio. Fiança fora. |
-| FC e Migra | usam o snapshot; recusam se faltar um dos quatro, apontando o campo |
+| 3× | 2c: aluguel + condomínio (inclui rateio) + IPTU. Incêndio e fiança fora. A coluna `seguro_incendio` permanece no banco, fora da tela e da regra. |
+| FC e Migra | usam o snapshot; recusam se faltar um dos três (aluguel, condomínio, IPTU), apontando o campo |
 | Superlógica | só GET via Hub (`/imovel/pacote`); chave desligada = pula essa fonte |
 | Edição humana | origem `manual`; pré-preenchimento posterior não sobrescreve |
 
@@ -33,7 +33,7 @@ authenticated, escrita só `service_role`).
 1. Se a chave `locacao.pacote_superlogica_habilitado` estiver ligada **e** o
    contato/imóvel tiver vínculo Superlógica (`superlogica_imovel_id`,
    `contato_superlogica_vinculos` ou `custom_fields superlogica_*`), lê
-   aluguel/condomínio/IPTU/seguro-incêndio via `criarLeitorPacoteViaHub`
+   aluguel/condomínio/IPTU via `criarLeitorPacoteViaHub`
    (`GET /imovel/pacote` no Hub, ou a ferramenta MCP `ler_pacote_imovel`).
    Contrato do endpoint: `docs/planos/hub-pacote-imovel-superlogica.md`.
    O Hub ainda precisa expor a rota; até lá a leitura devolve aviso e o

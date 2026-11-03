@@ -78,7 +78,7 @@ test.describe("Esteira de locação: dados e documentos no mesmo modal", () => {
     await pacote.getByLabel("Aluguel (R$/mês)", {exact: true}).fill("1500");
     await pacote.getByLabel("Condomínio (R$/mês, inclui rateio)", {exact: true}).fill("85");
     await pacote.getByLabel("IPTU (R$/mês)", {exact: true}).fill("70");
-    await pacote.getByLabel("Seguro-incêndio (R$/mês)", {exact: true}).fill("20");
+    await expect(pacote.getByLabel("Seguro-incêndio (R$/mês)")).toHaveCount(0);
     await expect(modal.getByLabel("Aluguel (R$/mês)", {exact: true})).toHaveCount(1);
     await expect(modal.getByLabel("Aluguel (R$)", {exact: true})).toHaveCount(0);
     await expect(dados.getByLabel("RENDA (R$)", {exact: true})).toHaveCount(1);

@@ -1,13 +1,14 @@
 /**
- * Regra 3× da locação: 3 × (aluguel + condomínio + IPTU + seguro-incêndio)
- * contra a renda comprovada pelos créditos do extrato. Seguro-fiança não entra.
+ * Regra 3× da locação: 3 × (aluguel + condomínio + IPTU)
+ * contra a renda comprovada pelos créditos do extrato.
+ * Seguro-incêndio e seguro-fiança não entram.
  * Exclusões vão para a lista com volume — nunca somam na comprovada.
  */
 export const FRASE_3X_SEM_PACOTE = "3x não calculado: falta o valor do pacote";
 export const FRASE_3X_SEM_RENDA = "Sem renda comprovada depois das exclusões.";
 export const FRASE_3X_COBRE = "A renda comprovada cobre 3× o pacote.";
 export const FRASE_3X_ABAIXO =
-  "A renda comprovada não cobre 3× o pacote (aluguel+condomínio+IPTU+seguro-incêndio).";
+  "A renda comprovada não cobre 3× o pacote (aluguel+condomínio+IPTU).";
 
 export const MOTIVOS_DE_EXCLUSAO_3X = [
   "propria",
@@ -36,7 +37,8 @@ export type EntradaDaRegra3x = {
   aluguel: number | null;
   condominio: number | null;
   iptu: number | null;
-  seguro_incendio: number | null;
+  /** Ignorado. A coluna permanece; a regra 3× não usa. */
+  seguro_incendio?: number | null;
   /** Informativo. Nunca entra no pacote. */
   seguro_fianca?: number | null;
   comprovada: number | null;
@@ -71,7 +73,7 @@ function volumeDe(itens: readonly ItemExcluido3x[] | undefined): number {
   return Math.round(itens.reduce((s, i) => s + Math.abs(i.valor), 0) * 100) / 100;
 }
 
-/** Pacote 3×: aluguel + condomínio + IPTU + seguro-incêndio. Sem aluguel = sem 3×. */
+/** Pacote 3×: aluguel + condomínio + IPTU. Sem aluguel = sem 3×. */
 export function pacoteDaRegra3x(entrada: Pick<
   EntradaDaRegra3x,
   "aluguel" | "condominio" | "iptu" | "seguro_incendio" | "seguro_fianca"
@@ -81,8 +83,7 @@ export function pacoteDaRegra3x(entrada: Pick<
   const pacote =
     aluguel +
     (reais(entrada.condominio) ?? 0) +
-    (reais(entrada.iptu) ?? 0) +
-    (reais(entrada.seguro_incendio) ?? 0);
+    (reais(entrada.iptu) ?? 0);
   return { pacote: reais(pacote), tres_vezes: reais(pacote * 3) };
 }
 

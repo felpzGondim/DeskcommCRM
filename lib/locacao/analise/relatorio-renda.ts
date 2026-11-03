@@ -80,7 +80,7 @@ export function montarRelatorioDeRenda(ficha: FichaPreliminar, analises: readonl
     },
   });
   linhas.push(
-    "3× (aluguel + condomínio + IPTU + seguro-incêndio): " +
+    "3× (aluguel + condomínio + IPTU): " +
       (regra.tres_vezes == null ? "não calculado." : dinheiro(Math.round(regra.tres_vezes * 100)) + ".") +
       " " +
       regra.frase,

@@ -1,6 +1,6 @@
 /**
- * Leitor SOMENTE LEITURA do pacote 3× (aluguel, condomínio, IPTU,
- * seguro-incêndio) via Brisa Hub. Seguro-fiança fica de fora.
+ * Leitor SOMENTE LEITURA do pacote 3× (aluguel, condomínio, IPTU)
+ * via Brisa Hub. Seguro-incêndio e seguro-fiança ficam de fora.
  *
  * O CRM não fala com a Superlógica: só GET no Hub. Contrato em
  * `docs/planos/hub-pacote-imovel-superlogica.md`. Falha do Hub não

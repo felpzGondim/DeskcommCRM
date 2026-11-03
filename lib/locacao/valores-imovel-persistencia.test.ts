@@ -163,7 +163,7 @@ describe("persistência dos valores do imóvel", () => {
     }));
     expect(valores.aluguel).toMatchObject({ valor: 2100, origem: "conversa" });
     expect(valores.condominio).toMatchObject({ valor: 350, origem: "conversa" });
-    expect(valores.seguro_incendio).toMatchObject({ valor: 80, origem: "superlogica" });
+    expect(valores.seguro_incendio.valor).toBeNull();
     expect(divergencias.map((d) => d.campo)).toEqual(
       expect.arrayContaining(["aluguel", "condominio", "iptu"]),
     );

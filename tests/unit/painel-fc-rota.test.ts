@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
   audit: vi.fn(),
   executar: vi.fn(),
+  registrar: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -18,6 +19,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 vi.mock("@/lib/painel/ferramentas/executar", () => ({ executarFerramenta: mocks.executar }));
+vi.mock("@/lib/locacao/execucoes", () => ({
+  registrarResultadoDaAba: (...a: unknown[]) => mocks.registrar(...a),
+}));
 
 import { POST } from "@/app/api/v1/conversations/[id]/painel-agente/fc/route";
 
@@ -57,6 +61,7 @@ describe("rota da FC Score+ no painel", () => {
       texto: "FC Score+ salva (sem cobrança). Confirme no painel para gastar créditos.",
       extra: { pedido_id: "p1", estado: "aguardando_cobranca" },
     });
+    mocks.registrar.mockResolvedValue("exec-1");
   });
 
   it("analisar, status e confirmar passam por executarFerramenta com origem botao", async () => {
@@ -116,5 +121,35 @@ describe("rota da FC Score+ no painel", () => {
     const hub = readFileSync("lib/painel/acoes/hub.ts", "utf8");
     expect(hub).toContain("NOME_CONFIRMAR_COBRANCA_FC");
     expect(hub).toContain("exigirFerramentasDeFcCobranca");
+  });
+
+  it("grava a execução e o código de erro no audit quando a FC recusa", async () => {
+    mocks.executar.mockResolvedValue({
+      ok: false,
+      texto: "Confirme a renda antes de analisar a FC.",
+      codigo: "renda_nao_confirmada",
+    });
+    await POST(req({
+      etapa: "analisar",
+      processo_id: "00000000-0000-4000-8000-000000000011",
+    }), ctx);
+    expect(mocks.registrar).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        aba: "fc",
+        estado: "erro",
+        erroCodigo: "renda_nao_confirmada",
+        erroMotivo: "Confirme a renda antes de analisar a FC.",
+      }),
+    );
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "locacao.analise_fc_aberta",
+        metadata: expect.objectContaining({
+          sucesso: false,
+          erro_codigo: "renda_nao_confirmada",
+        }),
+      }),
+    );
   });
 });

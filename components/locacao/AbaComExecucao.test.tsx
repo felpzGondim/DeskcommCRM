@@ -93,4 +93,32 @@ describe("AbaComExecucao — estados da casca", () => {
     expect(screen.getByText("Salve a ficha para abrir o processo.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Analisar renda" })).toBeDisabled();
   });
+
+  it("mostra o erro imediato do servidor mesmo sem linha de execução", () => {
+    render(
+      <AbaComExecucao
+        execucao={null}
+        rotuloBotao="Analisar FC"
+        onRodar={vi.fn()}
+        erroImediato="Ferramenta indisponível no Hub."
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Ferramenta indisponível no Hub.");
+  });
+
+  it("mostra id/status da FC e cotação da Migra no resultado", () => {
+    render(
+      <AbaComExecucao
+        execucao={exec({
+          estado: "concluido",
+          aba: "fc",
+          resultado: { resumo: "FC Score+ salva.", id_fc: "FC-9", estado: "aguardando_cobranca" },
+        })}
+      />,
+    );
+    const bloco = screen.getByTestId("resultado-da-execucao");
+    expect(bloco).toHaveTextContent("FC Score+ salva.");
+    expect(bloco).toHaveTextContent("ID-FC: FC-9");
+    expect(bloco).toHaveTextContent("Estado: aguardando_cobranca");
+  });
 });

@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {fichaVazia, pessoaVazia} from "@/lib/locacao/ficha-schema";
-import {normalizarRendaUtilizada, preencherRendaDeclaradaInicial, preservarEdicoesHumanas, rendaDaPessoa} from "@/lib/locacao/renda-utilizada";
+import {fichaTemRendaComprovada, normalizarRendaUtilizada, preencherRendaDeclaradaInicial, preservarEdicoesHumanas, rendaDaPessoa} from "@/lib/locacao/renda-utilizada";
 
 describe("RENDA compartilhada na esteira", () => {
   it("migra a renda declarada legada quando existe uma única pessoa", () => {
@@ -61,9 +61,36 @@ describe("RENDA compartilhada na esteira", () => {
     ficha.renda.bloco_calculado = {comprovada: 6000, declarada: 5000, tabela: "memória documental",
       motivo_nao_comprovacao: null, pacote: 9999, tres_vezes_pacote: 29997, abaixo_de_3x: true};
     const atual = normalizarRendaUtilizada(ficha);
-    expect(atual.renda.bloco_calculado?.pacote).toBe(1675);
-    expect(atual.renda.bloco_calculado?.tres_vezes_pacote).toBe(5025);
+    expect(atual.renda.bloco_calculado?.pacote).toBe(1655);
+    expect(atual.renda.bloco_calculado?.tres_vezes_pacote).toBe(4965);
     expect(atual.renda.bloco_calculado?.abaixo_de_3x).toBe(false);
     expect(atual.renda.bloco_calculado?.tabela).toBe("memória documental");
+  });
+  it("Preencher pela conversa não sobrescreve renda comprovada da análise", () => {
+    const comprovada = fichaVazia();
+    comprovada.renda.mensal.valor = 7200;
+    comprovada.renda.proposta_fc.valor = 7200;
+    comprovada.renda.bloco_calculado = {
+      comprovada: 7200, declarada: 5000, tabela: "extrato",
+      motivo_nao_comprovacao: null, pacote: 2000, tres_vezes_pacote: 6000, abaixo_de_3x: false,
+    };
+    comprovada.pessoas[0]!.renda_individual = {
+      ...comprovada.pessoas[0]!.renda_individual, valor: 7200, fonte: "analise",
+    };
+    expect(fichaTemRendaComprovada(comprovada)).toBe(true);
+    const extraida = fichaVazia();
+    extraida.pessoas[0]!.cpf.valor = comprovada.pessoas[0]!.cpf.valor;
+    extraida.pessoas[0]!.nome.valor = comprovada.pessoas[0]!.nome.valor;
+    extraida.pessoas[0]!.renda_individual = {
+      ...extraida.pessoas[0]!.renda_individual, valor: 4000, fonte: "conversa",
+    };
+    extraida.renda.mensal.valor = 4000;
+    const reextraida = preservarEdicoesHumanas(extraida, comprovada);
+    expect(reextraida.renda.bloco_calculado?.comprovada).toBe(7200);
+    expect(reextraida.renda.mensal.valor).toBe(7200);
+    expect(reextraida.pessoas[0]!.renda_individual.valor).toBe(7200);
+    const ignorouDeclarada = preencherRendaDeclaradaInicial(comprovada, 300000);
+    expect(ignorouDeclarada.renda.bloco_calculado?.comprovada).toBe(7200);
+    expect(ignorouDeclarada.pessoas[0]!.renda_individual.valor).toBe(7200);
   });
 });

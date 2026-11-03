@@ -14,6 +14,7 @@ describe("selo de origem da aba Dados", () => {
     expect(seloDaFonte("superlogica", true)).toBe("superlogica");
     expect(seloDaFonte("conversa", true)).toBe("conversa");
     expect(seloDaFonte("preliminar_ia", true)).toBe("conversa");
+    expect(seloDaFonte("padrao", true)).toBe("padrao");
     expect(seloDaFonte(null, true)).toBe("conversa");
   });
 
@@ -23,11 +24,12 @@ describe("selo de origem da aba Dados", () => {
     expect(seloDaOrigemDoValor(null)).toBe("vazio");
   });
 
-  it("os rótulos da tela são exatamente os quatro combinados", () => {
+  it("os rótulos da tela são os cinco selos, inclusive padrão", () => {
     expect(Object.values(ROTULO_DO_SELO_DE_ORIGEM)).toEqual([
       "manual",
       "Superlógica",
       "conversa",
+      "padrão",
       "vazio",
     ]);
     expect(rotuloDaOrigemDoCampo("atendente", true)).toBe("manual");

@@ -158,7 +158,7 @@ export function textoDoResumoDoBloco(bloco: BlocoDeRendaCalculado, alertas: read
     linhas.push(`Renda declarada (não comprovada): R$ ${bloco.declarada.toFixed(2)}.`);
   }
   if (bloco.tres_vezes_pacote != null) {
-    linhas.push(`3× o pacote (aluguel+condomínio+IPTU+seguro-incêndio): R$ ${bloco.tres_vezes_pacote.toFixed(2)}.`);
+    linhas.push(`3× o pacote (aluguel+condomínio+IPTU): R$ ${bloco.tres_vezes_pacote.toFixed(2)}.`);
   } else {
     linhas.push(FRASE_PACOTE_AUSENTE);
   }
@@ -208,7 +208,7 @@ export function aplicarRendaNaFicha(
     pacote: entrada.pacote ?? null,
   });
   if (bloco.abaixo_de_3x === true) {
-    alertas.push("A renda comprovada não cobre 3× o pacote (aluguel+condomínio+IPTU+seguro-incêndio).");
+    alertas.push("A renda comprovada não cobre 3× o pacote (aluguel+condomínio+IPTU).");
   } else if (bloco.abaixo_de_3x === false) {
     alertas.push("A renda comprovada cobre 3× o pacote.");
   } else if (bloco.tres_vezes_pacote == null) {

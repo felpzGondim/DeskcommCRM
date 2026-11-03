@@ -1,7 +1,7 @@
 /**
  * Campos da aba Dados que "Preencher pela conversa" tem de gravar.
  * Tela ↔ caminho na ficha ↔ chave no JSON da IA. Sem dado pessoal.
- * Pacote (aluguel+condomínio+IPTU+seguro-incêndio) aparece só no bloco
+ * Pacote (aluguel+condomínio+IPTU) aparece só no bloco
  * com origem (`CamposImovelProcesso`), não de novo na ficha.
  */
 export const CAMPOS_DA_ABA_DADOS = [
@@ -17,7 +17,6 @@ export const CAMPOS_DA_ABA_DADOS = [
   { tela: "Aluguel (R$/mês)", path: "imovel.aluguel", json: "aluguel", tipo: "numero", superficie: "processo" },
   { tela: "Condomínio (R$/mês, inclui rateio)", path: "imovel.condominio", json: "condominio", tipo: "numero", superficie: "processo" },
   { tela: "IPTU (R$/mês)", path: "imovel.iptu", json: "iptu", tipo: "numero", superficie: "processo" },
-  { tela: "Seguro-incêndio (R$/mês)", path: "imovel.seguro_incendio", json: "seguro_incendio", tipo: "numero", superficie: "processo" },
   { tela: "Início da locação", path: "vigencia.inicio", json: "inicio", tipo: "campo", superficie: "ficha" },
   { tela: "Término da locação", path: "vigencia.fim", json: "fim", tipo: "campo", superficie: "ficha" },
   { tela: "Garantia", path: "garantia.tipo", json: "tipo", tipo: "enum", superficie: "ficha" },
@@ -37,7 +36,6 @@ export const ROTULOS_DO_PACOTE_NA_FICHA = [
   "Aluguel (R$)",
   "Condomínio / rateio (R$)",
   "IPTU mensal (R$)",
-  "Seguro-incêndio mensal (R$)",
 ] as const;
 
 export function valorNoCaminhoDaFicha(

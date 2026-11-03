@@ -8,6 +8,7 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import {
   estadoVisivelDaAba,
   horaDaUltimaExecucao,
+  linhasDoResultadoPublico,
   type ExecucaoPublica,
   type EstadoVisivelDaAba,
 } from "@/lib/locacao/execucao-da-aba";
@@ -66,6 +67,7 @@ export function AbaComExecucao({
   onRodar,
   desabilitado = false,
   ocupado = false,
+  erroImediato,
   children,
 }: {
   execucao: ExecucaoPublica | null;
@@ -76,6 +78,7 @@ export function AbaComExecucao({
   onRodar?: () => void | Promise<void>;
   desabilitado?: boolean;
   ocupado?: boolean;
+  erroImediato?: string | null;
   children?: ReactNode;
 }) {
   const t = useT();
@@ -83,7 +86,11 @@ export function AbaComExecucao({
   const estado: EstadoVisivelDaAba = estadoVisivelDaAba(execucao, { hashAtual, entradaSuja });
   const emAndamento = estado === "na_fila" || estado === "processando";
   const hora = formatarHora(horaDaUltimaExecucao(execucao), tag);
-  const motivo = estado === "erro" ? (execucao?.erro_motivo?.trim() || t("Não foi possível concluir.")) : null;
+  const motivo = (execucao?.erro_motivo?.trim() || erroImediato?.trim() || "")
+    || (estado === "erro" ? t("Não foi possível concluir.") : "");
+  const mostrarErro = estado === "erro" || !!erroImediato?.trim();
+  const linhasResultado = linhasDoResultadoPublico(execucao?.resultado ?? null)
+    .filter((linha) => linha !== motivo);
   const podeRodar = !!onRodar && !!rotuloBotao && !desabilitado && !ocupado && !emAndamento && checklist.length === 0;
   const podeTentar = estado === "erro" && !!onRodar && !desabilitado && !ocupado;
 
@@ -98,7 +105,14 @@ export function AbaComExecucao({
             {execucao.progresso_atual} / {execucao.progresso_total}
           </p>
         ) : null}
-        {motivo ? <p role="alert" className="text-xs text-destructive">{motivo}</p> : null}
+        {mostrarErro && motivo ? <p role="alert" className="text-xs text-destructive">{motivo}</p> : null}
+        {linhasResultado.length > 0 ? (
+          <div className="space-y-0.5" data-testid="resultado-da-execucao">
+            {linhasResultado.map((linha) => (
+              <p key={linha} className="text-xs whitespace-pre-wrap">{linha}</p>
+            ))}
+          </div>
+        ) : null}
         {hora ? (
           <p className="text-[11px] text-text-muted" data-testid="hora-da-execucao">
             {t("Última execução")}: {hora}

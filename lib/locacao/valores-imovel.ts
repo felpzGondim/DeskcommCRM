@@ -1,6 +1,7 @@
 /**
  * Valores mensais do imóvel no processo (reais). Snapshot por processo.
- * 3× = aluguel + condomínio (inclui rateio) + IPTU + seguro-incêndio.
+ * 3× = aluguel + condomínio (inclui rateio) + IPTU.
+ * Seguro-incêndio saiu da regra e da tela; a coluna no banco permanece.
  * Seguro-fiança é informativo: não entra no 3× e não bloqueia FC/Migra.
  * Sem I/O. Sem dado pessoal.
  */
@@ -27,14 +28,21 @@ export const CAMPOS_DO_VALOR_DO_IMOVEL = [
 ] as const;
 export type CampoDoValorDoImovel = (typeof CAMPOS_DO_VALOR_DO_IMOVEL)[number];
 
-/** Os quatro do pacote / 3×. Seguro-fiança fica de fora. */
+/** Os três do pacote / 3×. Seguro-incêndio e seguro-fiança ficam de fora. */
 export const CAMPOS_OBRIGATORIOS_DO_PACOTE = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
 ] as const;
 export type CampoObrigatorioDoPacote = (typeof CAMPOS_OBRIGATORIOS_DO_PACOTE)[number];
+
+/** O que a aba Dados mostra. `seguro_incendio` permanece no snapshot, fora da tela. */
+export const CAMPOS_VISIVEIS_DO_IMOVEL = [
+  "aluguel",
+  "condominio",
+  "iptu",
+  "seguro_fianca",
+] as const;
 
 export const COLUNAS_SQL_VALORES_DO_IMOVEL = CAMPOS_DO_VALOR_DO_IMOVEL
   .flatMap((c) => [c, `${c}_origem`, `${c}_editado_por`, `${c}_editado_em`])
@@ -196,6 +204,7 @@ export function preencherValores(input: {
   const campos: CampoDoValorDoImovel[] = [];
   const divergencias: DivergenciaDoPacote[] = [];
   for (const campo of CAMPOS_DO_VALOR_DO_IMOVEL) {
+    if (campo === "seguro_incendio") continue;
     const atual = saida[campo];
     const sl = parseNumeroReais(input.superlogica?.[campo]);
     const cv = parseNumeroReais(input.conversa?.[campo]);
@@ -299,15 +308,14 @@ export type Pacote3x =
   | { ok: true; total: number; vezes3: number }
   | { ok: false; faltantes: CampoObrigatorioDoPacote[] };
 
-/** 3× só fecha com os quatro. Seguro-fiança não entra, mesmo preenchido. */
+/** 3× só fecha com os três. Seguro-incêndio e fiança não entram, mesmo preenchidos. */
 export function pacote3x(valores: ValoresDoImovel): Pacote3x {
   const faltantes = CAMPOS_OBRIGATORIOS_DO_PACOTE.filter((c) => valores[c].valor == null);
   if (faltantes.length > 0) return { ok: false, faltantes };
   const total =
     valores.aluguel.valor!
     + valores.condominio.valor!
-    + valores.iptu.valor!
-    + valores.seguro_incendio.valor!;
+    + valores.iptu.valor!;
   return { ok: true, total: Math.round(total * 100) / 100, vezes3: Math.round(total * 3 * 100) / 100 };
 }
 
