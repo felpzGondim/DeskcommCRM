@@ -10,10 +10,12 @@ import { tabelaLocacao } from "@/lib/locacao/admin";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
 import { criarLeitorPacoteViaHub } from "@/lib/locacao/extrato/leitor-superlogica-hub";
 import type { LeitorDePacoteSuperlogica, LeituraDePacoteSuperlogica } from "@/lib/locacao/extrato/pacote";
+import { buscaDoImovel } from "@/lib/locacao/locador-do-pacote";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { lerFichaAtual } from "@/lib/locacao/ficha-repositorio";
 import {
   gravarEvento,
+  gravarSuperlogicaImovelId,
   lerFichaAtualDoProcesso,
   lerProcesso,
   listarParticipantes,
@@ -80,13 +82,22 @@ async function fonteSuperlogica(
 ): Promise<(FonteNumerica & EnderecoParaConfronto) | null> {
   if (!pacoteSuperlogicaLigado(input.settings)) return null;
   let slImovel: unknown = null;
+  let busca: string | null = null;
   if (input.imovelId) {
     const { data: imovel } = await tabelaLocacao(admin, "locacao_imoveis")
-      .select("id,superlogica_imovel_id")
+      .select("id,superlogica_imovel_id,logradouro,numero,complemento,cep,codigo_fc")
       .eq("organization_id", input.orgId)
       .eq("id", input.imovelId)
       .maybeSingle();
-    slImovel = imovel ? asRec(imovel).superlogica_imovel_id : null;
+    const rec = imovel ? asRec(imovel) : {};
+    slImovel = rec.superlogica_imovel_id ?? null;
+    busca = buscaDoImovel({
+      logradouro: typeof rec.logradouro === "string" ? rec.logradouro : null,
+      numero: typeof rec.numero === "string" ? rec.numero : null,
+      complemento: typeof rec.complemento === "string" ? rec.complemento : null,
+      cep: typeof rec.cep === "string" ? rec.cep : null,
+      codigo: typeof rec.codigo_fc === "string" ? rec.codigo_fc : null,
+    });
   }
   const participantes = await listarParticipantes(admin, input.orgId, input.processoId);
   const locatario = participantes.find((p) => p.papel === "locatario" && p.principal)
@@ -115,7 +126,7 @@ async function fonteSuperlogica(
       : {};
     temVinculo = Object.keys(cf).some((k) => k.startsWith("superlogica_"));
   }
-  if (!temVinculo) return null;
+  if (!temVinculo && !busca) return null;
   const leitor = input.leitor ?? criarLeitorPacoteViaHub({ admin });
   let bruto: LeituraDePacoteSuperlogica | null = null;
   try {
@@ -123,11 +134,23 @@ async function fonteSuperlogica(
       orgId: input.orgId,
       contactId: contactId ?? "",
       superlogicaImovelId: typeof slImovel === "number" ? slImovel : Number(slImovel) || null,
+      busca: slImovel != null && String(slImovel).trim() !== "" ? null : busca,
     });
   } catch {
     return null;
   }
   if (!bruto || bruto.aviso) return null;
+  if (bruto.idImovel != null && input.imovelId) {
+    try {
+      await gravarSuperlogicaImovelId(admin, {
+        orgId: input.orgId,
+        imovelId: input.imovelId,
+        superlogicaImovelId: bruto.idImovel,
+      });
+    } catch {
+      /* o id fica para a próxima validação; o pacote ainda vale */
+    }
+  }
   return {
     aluguel: centavosParaReais(bruto.aluguelCentavos),
     condominio: centavosParaReais(bruto.condominioCentavos),

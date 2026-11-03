@@ -43,7 +43,32 @@ export interface PacoteDoImovel {
   divergencias: DivergenciaDoPacote[];
 }
 
+export type StatusDoPacoteHub =
+  | "ok"
+  | "nao_encontrado"
+  | "pedido_invalido"
+  | "multiplos_contratos"
+  | "candidatos"
+  | "indisponivel"
+  | "nao_permitido";
+
+export type CandidatoImovelHub = {
+  id_imovel: number;
+  codigo: string | null;
+  endereco: string | null;
+  cep: string | null;
+};
+
+export type ProprietarioDoPacote = {
+  nome: string | null;
+  cpfCnpj: string | null;
+  idPessoa: string | null;
+  email: string | null;
+  telefone: string | null;
+};
+
 export type LeituraDePacoteSuperlogica = {
+  status?: StatusDoPacoteHub;
   aluguelCentavos?: number | null;
   condominioCentavos?: number | null;
   iptuCentavos?: number | null;
@@ -51,6 +76,11 @@ export type LeituraDePacoteSuperlogica = {
   /** Opcional: só para confrontar. Nunca grava na ficha. */
   endereco?: string | null;
   cep?: string | null;
+  idImovel?: number | null;
+  idContrato?: number | null;
+  proprietario?: ProprietarioDoPacote | null;
+  candidatos?: CandidatoImovelHub[];
+  haMais?: boolean;
   /** Falha do Hub/Superlógica: o chamador cai na conversa e mostra o aviso. */
   aviso?: string;
 };
@@ -61,6 +91,7 @@ export interface LeitorDePacoteSuperlogica {
     contactId: string;
     superlogicaImovelId?: number | null;
     conversationId?: string;
+    busca?: string | null;
   }): Promise<LeituraDePacoteSuperlogica | null>;
 }
 

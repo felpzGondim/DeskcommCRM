@@ -14,6 +14,7 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: {
     get: async () => ({ data: { processos: [] } }),
     patch: async () => ({ data: {} }),
+    post: async () => ({ data: {} }),
   },
 }));
 
