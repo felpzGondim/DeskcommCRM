@@ -20,6 +20,8 @@ type Documento = {
   nome: string;
   categoria: string;
   participante_id: string | null;
+  categoria_automatica?: boolean;
+  participante_automatico?: boolean;
   mime: string | null;
   data: string;
   situacao: string;
@@ -77,8 +79,16 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
       await apiClient.patch(endpoint, {id: doc.id, origem: doc.origem, categoria: patch.categoria ?? doc.categoria,
         participante_id: "participante_id" in patch ? patch.participante_id : doc.participante_id});
       setDados((d) => d ? {...d,
-        recebidos: d.recebidos.map((a) => a.id === doc.id ? {...a, ...patch} : a),
-        documentos: d.documentos.map((a) => a.id === doc.id ? {...a, ...patch} : a),
+        recebidos: d.recebidos.map((a) => a.id === doc.id ? {
+          ...a, ...patch,
+          categoria_automatica: "categoria" in patch ? false : a.categoria_automatica,
+          participante_automatico: "participante_id" in patch ? false : a.participante_automatico,
+        } : a),
+        documentos: d.documentos.map((a) => a.id === doc.id ? {
+          ...a, ...patch,
+          categoria_automatica: "categoria" in patch ? false : a.categoria_automatica,
+          participante_automatico: "participante_id" in patch ? false : a.participante_automatico,
+        } : a),
       } : d);
     } catch (e) {setErro(e instanceof Error ? e.message : t("Não foi possível classificar o documento."));}
     finally {setSalvando(null);}
@@ -89,6 +99,7 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
       <p className="text-xs text-muted-foreground">{new Date(doc.data).toLocaleDateString(tag)} · {t(doc.situacao)}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-xs">{t("Categoria")}
+          {doc.categoria_automatica ? <span className="ml-1 text-[10px] text-muted-foreground" data-origem="automatico">{t("preenchido automaticamente")}</span> : null}
           <select aria-label={t("Categoria") + " " + doc.nome} className="mt-1 w-full rounded-md border border-input bg-background p-1"
             value={doc.categoria} disabled={desabilitado || salvando !== null}
             onChange={(e) => void classificar(doc, {categoria: e.target.value})}>
@@ -96,6 +107,7 @@ export function DocumentosLocacaoPainel({conversationId, atualizacao = 0, desabi
           </select>
         </label>
         <label className="text-xs">{t("Participante")}
+          {doc.participante_automatico ? <span className="ml-1 text-[10px] text-muted-foreground" data-origem="automatico">{t("preenchido automaticamente")}</span> : null}
           <select aria-label={t("Participante") + " " + doc.nome} className="mt-1 w-full rounded-md border border-input bg-background p-1"
             value={doc.participante_id ?? ""} disabled={desabilitado || salvando !== null}
             onChange={(e) => void classificar(doc, {participante_id: e.target.value || null})}>

@@ -38,6 +38,13 @@ vi.mock("@/lib/supabase/admin", () => ({createAdminClient: () => ({
 vi.mock("@/lib/locacao/admin", () => ({tabelaLocacao: (_a: unknown, tabela: string) => query(tabela)}));
 vi.mock("@/lib/locacao/ficha-compartilhada", () => ({processoAtivoDaConversa: vi.fn(async () => estado.processo)}));
 vi.mock("@/lib/locacao/ficha-repositorio", () => ({lerFichaAtual: vi.fn(async () => null)}));
+vi.mock("@/lib/locacao/classificar-documento-modelo", () => ({
+  TETO_CHAMADAS_POR_LISTA: 3,
+  classificarDocumentoComModelo: vi.fn(async () => null),
+}));
+vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
+  requestTurnDeps: () => ({ llmCfg: {} }),
+}));
 
 import {GET} from "@/app/api/v1/conversations/[id]/locacao/documentos/route";
 
