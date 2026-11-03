@@ -5,8 +5,10 @@ não expõe a rota** — este arquivo é o pedido. Sem escrita na Superlógica.
 Sem dado pessoal: ids e valores dos exemplos são fictícios.
 
 A chave `locacao.pacote_superlogica_habilitado` continua **desligada**.
-Ligada, o CRM lê aluguel, condomínio, IPTU e seguro-incêndio por este
-endpoint. Seguro-fiança **não entra** no 3× e **não** deve vir na resposta.
+Ligada, o CRM lê aluguel, condomínio, IPTU e o **proprietário do imóvel**
+por este endpoint. Seguro-incêndio saiu deste contrato (outro PR o
+remove do CRM). Seguro-fiança **não entra** e **não** deve vir na
+resposta. Sem id no imóvel, o CRM manda `busca` (endereço ou código).
 Falhas caem nos valores da conversa com aviso; o fluxo não quebra.
 
 **Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36):**
@@ -33,7 +35,7 @@ nem texto de conversa.
 |---|---|
 | Método | `GET` (nunca POST/PUT/PATCH/DELETE) |
 | Rota | `{mesmo host do /mcp}/imovel/pacote` |
-| Query | `id_imovel` e/ou `id_pessoa` (pelo menos um) |
+| Query | `id_imovel` e/ou `id_pessoa` e/ou `busca` (aliases `endereco`/`codigo`) |
 | Timeout que o CRM espera | 8 s (o mesmo teto que o Hub já usa na Superlógica) |
 | Ferramenta MCP equivalente | `ler_pacote_imovel` com `readOnlyHint=true` e os mesmos parâmetros no corpo |
 
@@ -57,18 +59,37 @@ Formato alinhado a `consultar_contrato_inquilino` / `buscar_pessoas_superlogica`
     "aluguel_centavos": 200000,
     "condominio_centavos": 50000,
     "iptu_centavos": 12000,
-    "seguro_incendio_centavos": 8000,
     "id_imovel": 77,
     "id_contrato": 358,
     "endereco": "Rua Exemplo, 100",
     "cep": "01310-100"
+  },
+  "proprietario": {
+    "nome": "Nome Fictício",
+    "cpf_cnpj": "00000000000",
+    "id_pessoa": "9",
+    "contato": { "email": "ficticio@exemplo.test", "telefone": "11000000000" }
   }
 }
 ```
 
+`status=candidatos` (sem PII):
+
+```json
+{
+  "status": "candidatos",
+  "candidatos": [
+    { "id_imovel": 11, "codigo": "A-1", "endereco": "Rua Exemplo, 100", "cep": "01310-100" }
+  ],
+  "ha_mais": false
+}
+```
+
+O CRM chama de novo com `id_imovel`.
+
 | Campo | Regra |
 |---|---|
-| `status` | `ok` \| `nao_encontrado` \| `pedido_invalido` \| `multiplos_contratos` \| `indisponivel` \| `nao_permitido` |
+| `status` | `ok` \| `nao_encontrado` \| `pedido_invalido` \| `multiplos_contratos` \| `candidatos` \| `indisponivel` \| `nao_permitido` |
 | `encontrado` | `true` só com `status=ok` e pelo menos um dos quatro valores |
 | `*_centavos` | inteiro ≥ 0, **mensal**. Ausente ou `null` = o Hub não achou aquele componente |
 | `id_imovel` / `id_contrato` | opcionais, só o id numérico |
@@ -124,9 +145,10 @@ Se houver mais de um contrato ativo: `status=multiplos_contratos` e
 ## 4. O que o Hub não faz
 
 - Não grava na Superlógica.
-- Não devolve nome, CPF, telefone nem texto livre. `endereco`/`cep` no
-  pacote são opcionais e só para confronto.
-- Não devolve seguro-fiança.
+- `proprietario` só vem em `status=ok`. `candidatos` não leva nome, CPF
+  nem telefone. `endereco`/`cep` no pacote são opcionais e só para
+  confronto; o CRM **não grava** esses campos na ficha.
+- Não devolve seguro-fiança nem seguro-incêndio.
 - Não exige o CRM mandar `organization_id` no body — a chave Bearer já
   identifica a instalação.
 
@@ -136,7 +158,7 @@ Se houver mais de um contrato ativo: `status=multiplos_contratos` e
 
 A chave nasce desligada. Ligada sem o GET (e sem a ferramenta MCP): o
 leitor devolve o aviso
-«Valores da Superlógica indisponíveis agora; usando os da conversa.»
+«A Superlógica está indisponível agora (o Hub ainda não tem este recurso). O locador e os valores da conversa continuam valendo.»
 e o 3× segue com a ficha/conversa. Nenhum fluxo quebra.
 
 Rollback: gravar `locacao.pacote_superlogica_habilitado=false`. Sem

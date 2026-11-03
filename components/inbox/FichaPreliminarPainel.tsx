@@ -287,6 +287,16 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                 return { ...a, locador: { ...atual, [chave]: campoLocadorDaEdicao(valor) } };
               });
             }}
+            onFichaDaSuperlogica={(proxima) => {
+              mudarFicha((a) => {
+                if (!a) return a;
+                return {
+                  ...a,
+                  locador: proxima.locador ?? a.locador,
+                  pendencias: proxima.pendencias.length > 0 ? proxima.pendencias : a.pendencias,
+                };
+              });
+            }}
           />
           <div className="space-y-1">
             <h4 className="text-[11px] font-semibold">{t("Imóvel")}</h4>

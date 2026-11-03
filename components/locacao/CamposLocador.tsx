@@ -11,6 +11,7 @@ import {
   campoLocadorVisivel,
   type LocadorDoVinculo,
 } from "@/lib/locacao/locador-do-vinculo";
+import { ValidarImovelSuperlogica } from "@/components/locacao/ValidarImovelSuperlogica";
 import {
   mascararContatoLocador,
   mascararDocumentoLocador,
@@ -83,12 +84,14 @@ export function CamposLocadorNaFicha({
   desabilitado = false,
   atualizacao = 0,
   onAlterar,
+  onFichaDaSuperlogica,
 }: {
   conversationId: string;
   locador: FichaPreliminar["locador"];
   desabilitado?: boolean;
   atualizacao?: number;
   onAlterar?: (chave: ChaveLocador, valor: string) => void;
+  onFichaDaSuperlogica?: (ficha: FichaPreliminar) => void;
 }) {
   const [vinculo, setVinculo] = useState<LocadorDoVinculo | null>(null);
 
@@ -108,12 +111,20 @@ export function CamposLocadorNaFicha({
   }, [conversationId, atualizacao]);
 
   return (
-    <CamposLocador
-      locador={locador}
-      vinculo={vinculo}
-      desabilitado={desabilitado}
-      onAlterar={onAlterar}
-    />
+    <div className="space-y-1">
+      <CamposLocador
+        locador={locador}
+        vinculo={vinculo}
+        desabilitado={desabilitado}
+        onAlterar={onAlterar}
+      />
+      <ValidarImovelSuperlogica
+        conversationId={conversationId}
+        desabilitado={desabilitado}
+        onLocador={setVinculo}
+        onFicha={onFichaDaSuperlogica}
+      />
+    </div>
   );
 }
 

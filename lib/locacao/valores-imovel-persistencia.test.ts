@@ -20,6 +20,7 @@ vi.mock("@/lib/locacao/repositorio", () => ({
   listarParticipantes: (...args: unknown[]) => mocks.listarParticipantes(...args),
   lerFichaAtualDoProcesso: (...args: unknown[]) => mocks.lerFichaAtualDoProcesso(...args),
   gravarEvento: (...args: unknown[]) => mocks.gravarEvento(...args),
+  gravarSuperlogicaImovelId: vi.fn(async () => "gravado"),
 }));
 vi.mock("@/lib/locacao/ficha-repositorio", () => ({
   lerFichaAtual: (...args: unknown[]) => mocks.lerFichaAtual(...args),
