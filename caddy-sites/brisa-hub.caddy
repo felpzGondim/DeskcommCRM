@@ -1,5 +1,5 @@
 # Brisa Hub (fase 2b) - aprovado pelo Felipe em 2026-10-18 13h23 (Brasilia).
-# Publica SÓ /mcp (exige Bearer no próprio serviço) e /health. Resto: 404.
+# Publica /mcp, /health, /contrato/preparar e /contrato/confirmar (POST) e /leitura/* (só GET, para o Property Flow v2 do brisa-hub #28). Tudo o mais continua 404.
 # Reverter: apagar este arquivo e rodar caddy validate + caddy reload.
 brisa-hub.srv2017601.hstgr.cloud {
 	log {
@@ -45,6 +45,12 @@ brisa-hub.srv2017601.hstgr.cloud {
 			path /contrato/preparar /contrato/confirmar
 		}
 		reverse_proxy @contrato_post brisa-hub:8080
+		# Property Flow v2: leitura (so GET, Bearer proprio). Aprovado pelo Felipe em 2026-11-03 17h28 (Brasilia).
+		@leitura_get {
+			method GET
+			path /leitura/*
+		}
+		reverse_proxy @leitura_get brisa-hub:8080
 		respond 404
 	}
 }
