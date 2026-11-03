@@ -283,4 +283,43 @@ describe("classificar e preservar escolha humana", () => {
     });
     expect(classificacaoPrecisaPersistir(null, nova)).toBe(true);
   });
+
+  it("reabrir a lista não apaga o automático que o modelo já gravou", () => {
+    expect(classificarAnexoDaConversa({
+      messageId: MSG_OUTRO,
+      salva: {
+        categoria: "documento_pessoal",
+        participante_id: LOC,
+        categoria_origem: "automatico",
+        participante_origem: "automatico",
+        tentou_modelo: true,
+      },
+      sinais: [],
+      participantes: [locatario, fiador],
+    })).toMatchObject({
+      categoria: "documento_pessoal",
+      participante_id: LOC,
+      categoria_origem: "automatico",
+      participante_origem: "automatico",
+      tentou_modelo: true,
+    });
+  });
+
+  it("sinal atual da ficha vence o automático antigo", () => {
+    expect(classificarAnexoDaConversa({
+      messageId: MSG_RENDA,
+      salva: {
+        categoria: "documento_pessoal",
+        participante_id: FIADOR,
+        categoria_origem: "automatico",
+        participante_origem: "automatico",
+      },
+      sinais: sinaisDaFicha(fichaCom({ renda: MSG_RENDA }), [locatario, fiador]),
+      participantes: [locatario, fiador],
+    })).toMatchObject({
+      categoria: "comprovante_renda",
+      participante_id: LOC,
+      categoria_origem: "automatico",
+    });
+  });
 });

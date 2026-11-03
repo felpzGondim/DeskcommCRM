@@ -70,6 +70,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: query
 vi.mock("@/lib/locacao/admin", () => ({ tabelaLocacao: (_a: unknown, tabela: string) => query(tabela) }));
 
 import { GET, PATCH } from "@/app/api/v1/conversations/[id]/locacao/documentos/route";
+import { audit } from "@/lib/audit";
 import { fichaVazia, pessoaVazia } from "@/lib/locacao/ficha-schema";
 
 function listar() {
@@ -87,6 +88,7 @@ function editar(corpo: Record<string, unknown>) {
 
 describe("GET de documentos classifica e grava sem sobrescrever o manual", () => {
   beforeEach(() => {
+    vi.mocked(audit).mockClear();
     estado.gravacoes = [];
     estado.modelo.mockReset().mockResolvedValue(null);
     estado.participantes = [{
@@ -130,6 +132,10 @@ describe("GET de documentos classifica e grava sem sobrescrever o manual", () =>
       categoria_origem: "automatico",
       participante_origem: "automatico",
     });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "locacao.documento_classificado",
+      metadata: expect.objectContaining({ origem: "automatico", quantidade: 1 }),
+    }));
   });
 
   it("não sobrescreve escolha manual já gravada", async () => {
@@ -153,6 +159,34 @@ describe("GET de documentos classifica e grava sem sobrescrever o manual", () =>
       participante_automatico: false,
     });
     expect(estado.gravacoes).toEqual([]);
+    expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("reabrir não chama o modelo nem regrava o automático já persistido", async () => {
+    estado.ficha = { ficha: fichaVazia() };
+    estado.mensagens[0]!.metadata = {
+      media_filename: "anexo.pdf",
+      locacao_documentos: {
+        [estado.processo]: {
+          categoria: "comprovante_renda",
+          participante_id: estado.locatario,
+          categoria_origem: "automatico",
+          participante_origem: "automatico",
+          tentou_modelo: true,
+        },
+      },
+    };
+    estado.mensagens[0]!.media_derived_text = "campos do formulario preenchidos pelo candidato";
+    const r = await listar();
+    const json = await r.json() as { data: { recebidos: Array<Record<string, unknown>> } };
+    expect(estado.modelo).not.toHaveBeenCalled();
+    expect(json.data.recebidos[0]).toMatchObject({
+      categoria: "comprovante_renda",
+      participante_id: estado.locatario,
+      categoria_automatica: true,
+    });
+    expect(estado.gravacoes).toEqual([]);
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it("chama o modelo só no residual e grava o resultado", async () => {

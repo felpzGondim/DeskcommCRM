@@ -82,7 +82,7 @@ async function gravarClassificacaoDaMensagem(
     metadataAtual: unknown;
     classificacao: ClassificacaoDeDocumento;
   },
-): Promise<void> {
+): Promise<boolean> {
   const meta = objeto(input.metadataAtual);
   const novo = {
     ...meta,
@@ -98,7 +98,8 @@ async function gravarClassificacaoDaMensagem(
   update = input.metadataAtual == null
     ? update.is("metadata", null)
     : update.filter("metadata", "eq", JSON.stringify(input.metadataAtual));
-  await update.select("id").maybeSingle();
+  const { data } = await update.select("id").maybeSingle();
+  return Boolean(data);
 }
 
 async function contexto(id: string, requestId: string) {
@@ -230,17 +231,35 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       // Sem credencial ou sem pool: a lista segue com a regra pura; a próxima abertura tenta o modelo.
     }
   }
+  const gravados: string[] = [];
   await Promise.all(trabalho.map(async (item) => {
     if (!classificacaoPrecisaPersistir(item.salva, item.classificacao)) return;
     try {
-      await gravarClassificacaoDaMensagem(c.admin, {
+      const okGravar = await gravarClassificacaoDaMensagem(c.admin, {
         orgId: c.orgId, conversationId: id, mensagemId: item.mensagem.id,
         processoId, metadataAtual: item.mensagem.metadata, classificacao: item.classificacao,
       });
+      if (okGravar) gravados.push(item.mensagem.id);
     } catch {
       // A lista ainda devolve o preenchido; a próxima abertura tenta de novo.
     }
   }));
+  if (gravados.length) {
+    void audit({
+      action: "locacao.documento_classificado",
+      organizationId: c.orgId,
+      actorUserId: c.auth.user.id,
+      resourceType: "conversation",
+      resourceId: id,
+      requestId,
+      metadata: {
+        origem: "automatico",
+        processo_id: processoId,
+        quantidade: gravados.length,
+        documento_ids: gravados,
+      },
+    });
+  }
   const recebidos = trabalho.map((item) => ({
     id: item.mensagem.id, origem: "mensagem", origem_arquivo: "anexo_conversa",
     nome: item.nome,

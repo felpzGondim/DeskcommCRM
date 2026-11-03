@@ -218,9 +218,16 @@ export function classificarAnexoDaConversa(input: {
   const sinal = input.sinais.find((s) => s.message_id === input.messageId);
   const unico = unicoCandidato(input.participantes);
 
+  const categoriaSalvaAutomatica = !categoriaManual ? categoriaValida(salva?.categoria) : null;
   const categoria = categoriaManual
     ? (categoriaValida(salva?.categoria) ?? "outro")
-    : (sinal?.categoria ?? input.categoriaDoTexto ?? "outro");
+    : (sinal?.categoria ?? input.categoriaDoTexto ?? categoriaSalvaAutomatica ?? "outro");
+
+  const participanteSalvoAutomatico = !participanteManual
+    && typeof salva?.participante_id === "string"
+    && input.participantes.some((p) => p.id === salva.participante_id)
+    ? salva.participante_id
+    : null;
 
   let participante_id: string | null;
   if (participanteManual) {
@@ -228,7 +235,8 @@ export function classificarAnexoDaConversa(input: {
   } else {
     participante_id = sinal?.participante_id
       ?? (categoria === "comprovante_renda" ? locatarioPrincipal(input.participantes) : null)
-      ?? unico;
+      ?? unico
+      ?? participanteSalvoAutomatico;
   }
 
   return {

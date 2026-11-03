@@ -12,6 +12,7 @@ import { registrarChamadaDeIa } from "@/lib/ai/usage/registrar-chamada";
 import { resolveOrgLlmConfig } from "@/lib/agent-engine/edge/llm/credentials";
 import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
+import { motivoDaRecusaDeDestino } from "@/lib/automation/destinos-internos-autorizados";
 import { categoriaValida } from "@/lib/locacao/classificar-documento";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -73,9 +74,13 @@ export async function classificarDocumentoComModelo(entrada: {
     if (!par.valido) return null;
     const factory = createDefaultRegistry()[llm.provider];
     if (!factory) return null;
+    const baseUrl = binding?.base_url ?? null;
+    // Decisão 22-a: endereço da organização não leva a chave da instalação.
+    if (baseUrl && llm.origemDaChave === "chave_da_instalacao") return null;
+    if (baseUrl && await motivoDaRecusaDeDestino(baseUrl, "organizacao")) return null;
     const inicio = Date.now();
     const res = await generateText({
-      model: factory(llm.apiKey, modelo, binding?.base_url ?? undefined),
+      model: factory(llm.apiKey, modelo, baseUrl ?? undefined),
       messages: [{
         role: "user",
         content: `${PROMPT_CLASSIFICACAO_DE_DOCUMENTO}\n\n${recorte}`,

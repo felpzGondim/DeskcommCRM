@@ -22,6 +22,9 @@ vi.mock("@/lib/agent-engine/db/request-pool", () => ({
   getRequestPool: () => ({}),
 }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn() } }));
+vi.mock("@/lib/automation/destinos-internos-autorizados", () => ({
+  motivoDaRecusaDeDestino: vi.fn(async () => null),
+}));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
@@ -52,6 +55,7 @@ describe("classificação residual pelo modelo padrão da visão", () => {
     }, error: null });
     resolve.mockReset().mockResolvedValue({
       provider: "google", defaultModel: "gemini-2.5-flash", apiKey: "x",
+      origemDaChave: "credencial_da_organizacao",
     });
     registrar.mockReset();
   });
@@ -85,5 +89,23 @@ describe("classificação residual pelo modelo padrão da visão", () => {
       textoDerivado: "proventos liquidos",
       llmCfg: {} as never,
     })).resolves.toBeNull();
+  });
+
+  it("não envia a chave da instalação para o endereço da organização", async () => {
+    binding.mockResolvedValue({ data: {
+      provider: "google", model_id: "gemini-2.5-flash", credential_id: null,
+      base_url: "https://openrouter.example/v1",
+    }, error: null });
+    resolve.mockResolvedValue({
+      provider: "google", defaultModel: "gemini-2.5-flash", apiKey: "chave-da-instalacao",
+      origemDaChave: "chave_da_instalacao",
+    });
+    await expect(classificarDocumentoComModelo({
+      organizationId: "10000000-0000-4000-8000-000000000001",
+      nomeArquivo: "folha.pdf",
+      textoDerivado: "proventos liquidos",
+      llmCfg: {} as never,
+    })).resolves.toBeNull();
+    expect(generateText).not.toHaveBeenCalled();
   });
 });
