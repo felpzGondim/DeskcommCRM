@@ -73,7 +73,7 @@ describe("bloco de renda do relatório — motor do #31", () => {
     expect(bloco.motivo_nao_comprovacao).toBeNull();
   });
 
-  it("o bloco sai da análise de extrato e do pacote do #31 (com seguro-incêndio)", () => {
+  it("o bloco sai da análise de extrato e do pacote do #31 (sem seguro-incêndio)", () => {
     expect(existsSync("lib/locacao/extrato")).toBe(true);
     const src = readFileSync("lib/locacao/analise/bloco-de-renda.ts", "utf8");
     expect(src).toContain("montarPacote");
@@ -81,7 +81,8 @@ describe("bloco de renda do relatório — motor do #31", () => {
     expect(src).not.toMatch(/comprovada\s*=\s*declarada|comprovada:\s*declarada|comprovada\s*\?\?\s*declarada/);
     expect(src).not.toMatch(/PROMPT_|lancamentosDoTexto|classeDoLancamento|from ["']@\/lib\/locacao\/analise\/regras["']/);
     const relatorio = readFileSync("lib/locacao/analise/relatorio.ts", "utf8");
-    expect(relatorio).toMatch(/aluguel \+ condomínio \+ IPTU \+ seguro-incêndio/);
+    expect(relatorio).toMatch(/aluguel \+ condomínio \+ IPTU/);
+    expect(relatorio).not.toMatch(/seguro-incêndio/);
     expect(relatorio).not.toMatch(/lancamentosDoTexto|PROMPT_RENDA|detectarExtrato|corrigirRendaDaFicha/);
 
     const analise = analisarExtrato(EXTRATO);
@@ -97,13 +98,13 @@ describe("bloco de renda do relatório — motor do #31", () => {
     expect(bloco.comprovada).toBe((analise.rendaComprovadaCentavos ?? 0) / 100);
     expect(bloco.comprovada).not.toBe(9000);
     expect(bloco.declarada).toBe(9000);
-    expect(bloco.pacote).toBe(2800);
-    expect(bloco.tres_vezes_pacote).toBe(8400);
+    expect(bloco.pacote).toBe(2700);
+    expect(bloco.tres_vezes_pacote).toBe(8100);
     expect(bloco.tabela).toMatch(/Renda comprovada/);
 
     const ficha = aplicarRendaNaFicha(fichaVazia(), { analises: [analise], declarada: 9000, pacote });
     const lido = lerBlocoDeRendaSalvo(ficha);
     expect(lido.comprovada).toBe(bloco.comprovada);
-    expect(lido.pacote).toBe(2800);
+    expect(lido.pacote).toBe(2700);
   });
 });

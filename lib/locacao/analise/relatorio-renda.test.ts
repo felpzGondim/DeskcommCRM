@@ -15,7 +15,8 @@ describe("relatório documental de renda", () => {
     expect(relatorio).toContain("Extrato pendente");
     expect(relatorio).toContain("Documentos bancários analisados: 0");
     expect(relatorio).not.toMatch(/risco baixo|aprovado/i);
-    expect(relatorio).toMatch(/3× \(aluguel \+ condomínio \+ IPTU \+ seguro-incêndio\)/);
+    expect(relatorio).toMatch(/3× \(aluguel \+ condomínio \+ IPTU\)/);
+    expect(relatorio).not.toMatch(/seguro-incêndio/);
     expect(relatorio).toContain("A renda comprovada cobre 3× o pacote.");
   });
   it("não calcula comprometimento sem renda positiva e preserva pendências extensas", () => {

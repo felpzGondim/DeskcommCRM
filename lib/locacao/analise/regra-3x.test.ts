@@ -32,7 +32,7 @@ Titular: TITULAR TESTE ALFA
 `.trim();
 
 describe("regra 3×", () => {
-  it("3 × (aluguel + condomínio + IPTU + seguro-incêndio); seguro-fiança não entra", () => {
+  it("3 × (aluguel + condomínio + IPTU); seguro-incêndio e seguro-fiança não entram", () => {
     const { pacote, tres_vezes } = pacoteDaRegra3x({
       aluguel: 2000,
       condominio: 500,
@@ -40,8 +40,8 @@ describe("regra 3×", () => {
       seguro_incendio: 100,
       seguro_fianca: 900,
     });
-    expect(pacote).toBe(2800);
-    expect(tres_vezes).toBe(8400);
+    expect(pacote).toBe(2700);
+    expect(tres_vezes).toBe(8100);
     expect(pacoteDaRegra3x({
       aluguel: null,
       condominio: 500,
@@ -67,7 +67,7 @@ describe("regra 3×", () => {
         familiar_provavel: [{ descricao: "PIX JOAO SOBRENOMECOMUM", valor: 100 }],
       },
     });
-    expect(abaixo.tres_vezes).toBe(8400);
+    expect(abaixo.tres_vezes).toBe(8100);
     expect(abaixo.cobre).toBe(false);
     expect(abaixo.frase).toBe(FRASE_3X_ABAIXO);
     expect(abaixo.exclusoes.map((e) => e.motivo)).toEqual([
@@ -144,7 +144,7 @@ describe("regra 3×", () => {
         emprestimo: ficha.renda.excluida.emprestimos,
       },
     });
-    expect(regra.tres_vezes).toBe(8400);
+    expect(regra.tres_vezes).toBe(8100);
     expect(regra.comprovada).toBe(ficha.renda.bloco_calculado?.comprovada);
     expect(regra.exclusoes.some((e) => e.motivo === "propria" && e.volume > 0)).toBe(true);
     expect(regra.exclusoes.some((e) => e.motivo === "poupanca" && e.volume > 0)).toBe(true);

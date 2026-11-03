@@ -12,7 +12,6 @@ export const CAMPOS_DE_DIVERGENCIA = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
   "endereco",
   "cep",
 ] as const;
@@ -28,7 +27,6 @@ export const PREFIXO_DIVERGENCIA: Record<CampoDeDivergencia, string> = {
   aluguel: "Aluguel diverge",
   condominio: "Condomínio diverge",
   iptu: "IPTU diverge",
-  seguro_incendio: "Seguro-incêndio diverge",
   endereco: "Endereço diverge",
   cep: "CEP diverge",
 };

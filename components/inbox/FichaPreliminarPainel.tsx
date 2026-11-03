@@ -73,7 +73,6 @@ const CAMPOS_DO_PACOTE_PARA_DIVERGENCIA = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
 ] as const satisfies readonly CampoDeDivergencia[];
 
 function divergenciasDoPacoteNasPendencias(pendencias: readonly string[] | undefined) {
@@ -135,7 +134,6 @@ const CAMPOS_DO_PACOTE_NA_FICHA = [
   "aluguel",
   "condominio",
   "iptu",
-  "seguro_incendio",
 ] as const satisfies readonly CampoDoValorDoImovel[];
 
 function valoresDoPacoteNaFicha(ficha: FichaPreliminar): ValoresDoImovel {
@@ -285,6 +283,16 @@ export function FichaPreliminarPainel({ conversationId, desabilitado = false, se
                 if (!a) return a;
                 const atual = a.locador ?? { nome: campo(""), documento: campo(""), contato: campo("") };
                 return { ...a, locador: { ...atual, [chave]: campoLocadorDaEdicao(valor) } };
+              });
+            }}
+            onFichaDaSuperlogica={(proxima) => {
+              mudarFicha((a) => {
+                if (!a) return a;
+                return {
+                  ...a,
+                  locador: proxima.locador ?? a.locador,
+                  pendencias: proxima.pendencias.length > 0 ? proxima.pendencias : a.pendencias,
+                };
               });
             }}
           />

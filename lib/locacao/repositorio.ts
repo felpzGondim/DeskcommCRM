@@ -85,6 +85,33 @@ export async function criarOuReusarImovel(
   return String(asRec(data).id);
 }
 
+/** Grava o id Superlógica no imóvel do CRM. Não sobrescreve um id diferente. Sem PII. */
+export async function gravarSuperlogicaImovelId(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    imovelId: string;
+    superlogicaImovelId: number;
+  },
+): Promise<"gravado" | "ja_tinha" | "conflito"> {
+  const { data } = await tabelaLocacao(admin, "locacao_imoveis")
+    .select("id,superlogica_imovel_id")
+    .eq("organization_id", input.orgId)
+    .eq("id", input.imovelId)
+    .maybeSingle();
+  if (!data) throw new LocacaoErro("imovel_nao_encontrado", "imovel");
+  const atual = asRec(data).superlogica_imovel_id;
+  if (atual === input.superlogicaImovelId) return "ja_tinha";
+  if (atual != null && Number(atual) !== input.superlogicaImovelId) return "conflito";
+  const { error } = await tabelaLocacao(admin, "locacao_imoveis")
+    .update({ superlogica_imovel_id: input.superlogicaImovelId })
+    .eq("organization_id", input.orgId)
+    .eq("id", input.imovelId)
+    .is("superlogica_imovel_id", null);
+  if (error) throw new LocacaoErro("imovel_gravacao", "imovel");
+  return "gravado";
+}
+
 export async function gravarEvento(
   admin: SupabaseClient,
   input: {

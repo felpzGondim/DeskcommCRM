@@ -12,6 +12,7 @@ import { seloDaOrigemDoValor } from "@/lib/locacao/origem-do-campo";
 import {
   CAMPOS_DO_VALOR_DO_IMOVEL,
   CAMPOS_OBRIGATORIOS_DO_PACOTE,
+  CAMPOS_VISIVEIS_DO_IMOVEL,
   camposFaltantesDoPacote,
   valoresVazios,
   type CampoDoValorDoImovel,
@@ -24,14 +25,12 @@ const ROTULO_FALTANTE_PACOTE: Record<CampoObrigatorioDoPacote, string> = {
   aluguel: "aluguel",
   condominio: "condomínio (inclui rateio)",
   iptu: "IPTU",
-  seguro_incendio: "seguro-incêndio",
 };
 
-const ROTULO_CAMPO_TELA: Record<CampoDoValorDoImovel, string> = {
+const ROTULO_CAMPO_TELA: Record<(typeof CAMPOS_VISIVEIS_DO_IMOVEL)[number], string> = {
   aluguel: "Aluguel (R$/mês)",
   condominio: "Condomínio (R$/mês, inclui rateio)",
   iptu: "IPTU (R$/mês)",
-  seguro_incendio: "Seguro-incêndio (R$/mês)",
   seguro_fianca: "Seguro-fiança (R$/mês, informativo)",
 };
 
@@ -70,7 +69,7 @@ export function CamposImovelProcesso({
   async function salvar() {
     if (!onSalvar || desabilitado || salvando) return;
     const patch: Partial<Record<CampoDoValorDoImovel, number>> = {};
-    for (const campo of CAMPOS_DO_VALOR_DO_IMOVEL) {
+    for (const campo of CAMPOS_VISIVEIS_DO_IMOVEL) {
       const bruto = rascunho[campo].trim().replace(",", ".");
       if (!bruto) continue;
       const n = Number(bruto);
@@ -96,7 +95,7 @@ export function CamposImovelProcesso({
     <fieldset className="space-y-2 rounded-md border border-border p-2" data-testid="campos-imovel-processo">
       <legend className="px-1 text-[11px] font-semibold">{t("Valores do imóvel")}</legend>
       <p className="text-[11px] text-muted-foreground">
-        {t("3× usa aluguel + condomínio + IPTU + seguro-incêndio. O seguro-fiança é informativo.")}
+        {t("3× usa aluguel + condomínio + IPTU. O seguro-fiança é informativo.")}
       </p>
       {aviso && <p className="text-[11px] text-muted-foreground">{aviso}</p>}
       {avisoPacote && (
@@ -110,7 +109,7 @@ export function CamposImovelProcesso({
           {d.aviso}
         </p>
       ))}
-      {CAMPOS_DO_VALOR_DO_IMOVEL.map((campo) => {
+      {CAMPOS_VISIVEIS_DO_IMOVEL.map((campo) => {
         const obrigatorio = (CAMPOS_OBRIGATORIOS_DO_PACOTE as readonly string[]).includes(campo);
         const origem = valores[campo].origem;
         const divergencia = divergencias.find((d) => d.campo === campo);
@@ -210,11 +209,13 @@ export function CamposImovelProcessoDoProcesso({
   desabilitado = false,
   valoresIniciais,
   divergenciasIniciais = [],
+  atualizacao = 0,
 }: {
   processoId: string;
   desabilitado?: boolean;
   valoresIniciais?: ValoresDoImovel;
   divergenciasIniciais?: Array<{ campo: CampoDeDivergencia; aviso: string }>;
+  atualizacao?: number;
 }) {
   const t = useT();
   const iniciais = useRef(valoresIniciais);
@@ -247,7 +248,7 @@ export function CamposImovelProcessoDoProcesso({
       if (vivo) setAviso(t("Não foi possível ler os valores do imóvel."));
     });
     return () => { vivo = false; };
-  }, [processoId, t]);
+  }, [processoId, t, atualizacao]);
 
   return (
     <CamposImovelProcesso
@@ -306,6 +307,7 @@ export function CamposImovelProcessoNaFicha({
         desabilitado={desabilitado}
         valoresIniciais={valoresFicha}
         divergenciasIniciais={divergencias}
+        atualizacao={atualizacao}
       />
     );
   }

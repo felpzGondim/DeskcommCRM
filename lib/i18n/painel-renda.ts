@@ -21,6 +21,10 @@ export const TEXTOS_PAINEL_RENDA = {
     es: "Confirme la renta antes de analizar el seguro de fianza o FC.",
   },
   "Renda confirmada.": { es: "Renta confirmada." },
+  "A ficha mudou depois da última confirmação. Confirme a renda de novo.": {
+    es: "La ficha cambió después de la última confirmación. Confirme la renta de nuevo.",
+  },
+  "Confirmar renda de novo": { es: "Confirmar renta de nuevo" },
   "Análise de renda": { es: "Análisis de renta" },
   "Ligar análise de renda (desligada por padrão)": {
     es: "Activar análisis de renta (desactivado por defecto)",

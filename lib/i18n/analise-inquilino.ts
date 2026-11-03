@@ -16,6 +16,16 @@ export const TEXTOS_ANALISE_INQUILINO = {
   "Nome do locador": { es: "Nombre del locador" },
   "CPF/CNPJ do locador": { es: "CPF/CNPJ del locador" },
   "Contato do locador": { es: "Contacto del locador" },
+  "Validar no Superlógica": { es: "Validar en Superlógica" },
+  "Validando…": { es: "Validando…" },
+  "Imóveis na Superlógica": { es: "Inmuebles en Superlógica" },
+  "Usar este imóvel": { es: "Usar este inmueble" },
+  "Há mais resultados. Refine o endereço ou o código.": {
+    es: "Hay más resultados. Refine la dirección o el código.",
+  },
+  "Não foi possível validar o imóvel na Superlógica.": {
+    es: "No fue posible validar el inmueble en Superlógica.",
+  },
   "Vínculo Superlógica": { es: "Vínculo Superlógica" },
   "Pessoa Superlógica": { es: "Persona Superlógica" },
   "Sem vínculo Superlógica neste contato.": { es: "Sin vínculo Superlógica en este contacto." },

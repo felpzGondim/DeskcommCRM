@@ -1,6 +1,6 @@
 /**
- * Leitor SOMENTE LEITURA do pacote 3× (aluguel, condomínio, IPTU,
- * seguro-incêndio) via Brisa Hub. Seguro-fiança fica de fora.
+ * Leitor SOMENTE LEITURA do pacote 3× (aluguel, condomínio, IPTU)
+ * via Brisa Hub. Seguro-incêndio e seguro-fiança ficam de fora.
  *
  * O CRM não fala com a Superlógica: só GET no Hub. Contrato em
  * `docs/planos/hub-pacote-imovel-superlogica.md`. Falha do Hub não
@@ -18,12 +18,22 @@ import { carregarServidorMcpExterno } from "@/lib/mcp/servidor-externo/carregar"
 import { lerEndpointMcpExterno, type ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
 import { abrirChaveMcpExterno } from "@/lib/mcp/servidor-externo/segredo";
 
-import type { LeitorDePacoteSuperlogica, LeituraDePacoteSuperlogica } from "./pacote";
+import {
+  AVISO_HUB_INDISPONIVEL,
+  avisoDoStatusDoPacote,
+} from "@/lib/locacao/locador-do-pacote";
+
+import type {
+  CandidatoImovelHub,
+  LeitorDePacoteSuperlogica,
+  LeituraDePacoteSuperlogica,
+  ProprietarioDoPacote,
+  StatusDoPacoteHub,
+} from "./pacote";
 
 export const NOME_FERRAMENTA_PACOTE_SUPERLOGICA = "ler_pacote_imovel";
 export const CAMINHO_PACOTE_HUB = "/imovel/pacote";
-export const AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL =
-  "Valores da Superlógica indisponíveis agora; usando os da conversa.";
+export const AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL = AVISO_HUB_INDISPONIVEL;
 
 const TIMEOUT_MS = 8_000;
 
@@ -33,6 +43,7 @@ const COLUNAS_DO_SEGREDO =
 export type PedidoPacoteHub = {
   idImovel?: number | null;
   idPessoa?: string | null;
+  busca?: string | null;
 };
 
 export type ClientePacoteHub = {
@@ -46,8 +57,11 @@ export type DepsDoLeitorPacoteHub = {
   fetch?: FetchLike;
 };
 
-function avisoSo(): LeituraDePacoteSuperlogica {
-  return { aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL };
+function avisoSo(status?: StatusDoPacoteHub): LeituraDePacoteSuperlogica {
+  return {
+    ...(status ? { status } : { status: "indisponivel" }),
+    aviso: avisoDoStatusDoPacote(status) ?? AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
+  };
 }
 
 export function numeroImovelSuperlogica(v: unknown): number | null {
@@ -89,21 +103,77 @@ export function urlDoPacoteHub(endpointMcp: string, pedido: PedidoPacoteHub): UR
   url.pathname = url.pathname.replace(/\/mcp\/?$/, CAMINHO_PACOTE_HUB);
   if (pedido.idImovel != null) url.searchParams.set("id_imovel", String(pedido.idImovel));
   if (pedido.idPessoa) url.searchParams.set("id_pessoa", pedido.idPessoa);
+  if (pedido.busca) url.searchParams.set("busca", pedido.busca);
   return url;
+}
+
+function statusDoPacote(v: unknown): StatusDoPacoteHub | "" {
+  if (v === "ok" || v === "nao_encontrado" || v === "pedido_invalido"
+    || v === "multiplos_contratos" || v === "candidatos"
+    || v === "indisponivel" || v === "nao_permitido") {
+    return v;
+  }
+  return "";
+}
+
+function candidatoDoHub(v: unknown): CandidatoImovelHub | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const id = numeroImovelSuperlogica(o.id_imovel ?? o.idImovel);
+  if (id == null) return null;
+  return {
+    id_imovel: id,
+    codigo: textoOpcional(o.codigo),
+    endereco: textoOpcional(o.endereco),
+    cep: textoOpcional(o.cep),
+  };
+}
+
+function proprietarioDoHub(v: unknown): ProprietarioDoPacote | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const contato = o.contato && typeof o.contato === "object" && !Array.isArray(o.contato)
+    ? (o.contato as Record<string, unknown>)
+    : {};
+  const nome = textoOpcional(o.nome);
+  const cpfCnpj = textoOpcional(o.cpf_cnpj ?? o.cpfCnpj ?? o.documento);
+  const idPessoa = textoOpcional(o.id_pessoa ?? o.idPessoa);
+  const email = textoOpcional(contato.email ?? o.email);
+  const telefone = textoOpcional(contato.telefone ?? o.telefone);
+  if (!nome && !cpfCnpj && !idPessoa && !email && !telefone) return null;
+  return { nome, cpfCnpj, idPessoa, email, telefone };
 }
 
 export function interpretarPacoteHub(dados: unknown): LeituraDePacoteSuperlogica {
   if (!dados || typeof dados !== "object" || Array.isArray(dados)) return avisoSo();
   const d = dados as Record<string, unknown>;
-  const status = typeof d.status === "string"
-    ? d.status
-    : typeof d.resultado === "string"
-      ? d.resultado
-      : "";
-  if (status === "indisponivel" || status === "nao_permitido") return avisoSo();
-  if (d.encontrado === false || status === "nao_encontrado" || status === "pedido_invalido") {
-    return avisoSo();
+  const status = statusDoPacote(d.status) || statusDoPacote(d.resultado);
+  if (status === "indisponivel" || status === "nao_permitido") return avisoSo(status || "indisponivel");
+  if (status === "nao_encontrado" || status === "pedido_invalido" || status === "multiplos_contratos") {
+    return avisoSo(status);
   }
+  if (status === "candidatos" || Array.isArray(d.candidatos)) {
+    const lista = (Array.isArray(d.candidatos) ? d.candidatos : [])
+      .map(candidatoDoHub)
+      .filter((c): c is CandidatoImovelHub => c != null)
+      .slice(0, 20);
+    const haMais = d.ha_mais === true || d.haMais === true;
+    if (lista.length === 1 && !haMais) {
+      return {
+        status: "candidatos",
+        idImovel: lista[0]!.id_imovel,
+        candidatos: lista,
+        haMais: false,
+      };
+    }
+    return {
+      status: "candidatos",
+      candidatos: lista,
+      haMais,
+      aviso: avisoDoStatusDoPacote("candidatos") ?? undefined,
+    };
+  }
+  if (d.encontrado === false && !status) return avisoSo("nao_encontrado");
   const pacoteBruto = d.pacote && typeof d.pacote === "object" && !Array.isArray(d.pacote)
     ? (d.pacote as Record<string, unknown>)
     : d;
@@ -117,22 +187,27 @@ export function interpretarPacoteHub(dados: unknown): LeituraDePacoteSuperlogica
   );
   const endereco = textoOpcional(pacoteBruto.endereco ?? pacoteBruto.logradouro);
   const cep = textoOpcional(pacoteBruto.cep);
+  const idImovel = numeroImovelSuperlogica(pacoteBruto.id_imovel ?? d.id_imovel);
+  const idContrato = numeroImovelSuperlogica(pacoteBruto.id_contrato ?? d.id_contrato);
+  const proprietario = proprietarioDoHub(d.proprietario);
+  const base: LeituraDePacoteSuperlogica = {
+    status: status === "ok" || !status ? "ok" : status,
+    ...(idImovel != null ? { idImovel } : {}),
+    ...(idContrato != null ? { idContrato } : {}),
+    ...(proprietario ? { proprietario } : {}),
+    ...(endereco ? { endereco } : {}),
+    ...(cep ? { cep } : {}),
+  };
   if (aluguel == null && condominio == null && iptu == null && seguroIncendio == null) {
-    if (endereco || cep) {
-      return {
-        ...(endereco ? { endereco } : {}),
-        ...(cep ? { cep } : {}),
-      };
-    }
-    return status === "ok" ? {} : avisoSo();
+    if (proprietario || endereco || cep || idImovel != null) return base;
+    return status === "ok" ? base : avisoSo();
   }
   return {
+    ...base,
     ...(aluguel != null ? { aluguelCentavos: aluguel } : {}),
     ...(condominio != null ? { condominioCentavos: condominio } : {}),
     ...(iptu != null ? { iptuCentavos: iptu } : {}),
     ...(seguroIncendio != null ? { seguroIncendioCentavos: seguroIncendio } : {}),
-    ...(endereco ? { endereco } : {}),
-    ...(cep ? { cep } : {}),
   };
 }
 
@@ -149,10 +224,12 @@ export async function resolverIdsDoPacote(
     contactId: string;
     conversationId?: string;
     superlogicaImovelId?: number | null;
+    busca?: string | null;
   },
 ): Promise<PedidoPacoteHub> {
   let idImovel = numeroImovelSuperlogica(input.superlogicaImovelId);
   let idPessoa: string | null = null;
+  const busca = input.busca?.trim() || null;
 
   if (input.contactId) {
     const { data: vinculo } = await admin
@@ -196,7 +273,7 @@ export async function resolverIdsDoPacote(
     }
   }
 
-  return { idImovel, idPessoa };
+  return { idImovel, idPessoa, busca };
 }
 
 async function credencialDoHub(
@@ -274,6 +351,7 @@ async function lerViaMcp(
   const argumentos: Record<string, unknown> = {};
   if (pedido.idImovel != null) argumentos.id_imovel = pedido.idImovel;
   if (pedido.idPessoa) argumentos.id_pessoa = pedido.idPessoa;
+  if (pedido.busca) argumentos.busca = pedido.busca;
   const r = await chamarFerramentaRemota(montado.servidor, ferramenta.name, argumentos, {
     cabecalhos: montado.cabecalhos,
     ...(montado.fetch ? { fetch: montado.fetch } : {}),
@@ -293,8 +371,9 @@ export function criarLeitorPacoteViaHub(deps: DepsDoLeitorPacoteHub): LeitorDePa
           contactId: input.contactId,
           conversationId,
           superlogicaImovelId: input.superlogicaImovelId,
+          busca: input.busca,
         });
-        if (ids.idImovel == null && !ids.idPessoa) return null;
+        if (ids.idImovel == null && !ids.idPessoa && !ids.busca) return null;
         if (deps.cliente) {
           const bruto = await deps.cliente.get(ids);
           return interpretarPacoteHub(bruto);

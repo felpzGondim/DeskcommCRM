@@ -550,6 +550,10 @@ grava processo, pessoas e imóvel; `processo_id` na ficha preliminar passou a te
 opcional. A análise paga usa o celular do inquilino principal da ficha, nunca o de quem
 só conversa. Continuidade: [`docs/decisoes/painel-anexos.md`](docs/decisoes/painel-anexos.md),
 [`docs/decisoes/painel-ficha-preliminar.md`](docs/decisoes/painel-ficha-preliminar.md).
+O locador na aba Dados sai do **imóvel** na Superlógica (`GET /imovel/pacote`,
+`proprietario`), não do contato da conversa ser dono; sem
+`superlogica_imovel_id` busca por endereço e grava o id no CRM.
+[`docs/decisoes/locacao-locador-pelo-imovel.md`](docs/decisoes/locacao-locador-pelo-imovel.md).
 Fase 4.1 (renda), 4.2 (cotação de seguro-fiança), 4.3 (FC Score+) e 4.4
 (manual assistido) ficam atrás de `locacao.analise.{renda,seguro,fc,manual}`
 (desligadas). A 4.2/4.3 chamam Hub H1/H2

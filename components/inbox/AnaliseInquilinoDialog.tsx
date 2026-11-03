@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FormularioGerarContrato } from "@/components/inbox/GerarContratoDialog";
 import { FichaPreliminarPainel } from "@/components/inbox/FichaPreliminarPainel";
@@ -21,6 +21,7 @@ import {
   checklistDaAba,
   execucaoEmAndamento,
   execucoesVazias,
+  rendaConfirmadaNaVersaoAtual,
   type ExecucaoPublica,
 } from "@/lib/locacao/execucao-da-aba";
 import { rotuloDoStatusDoProcesso } from "@/lib/locacao/status";
@@ -42,7 +43,9 @@ type AnaliseLigada = {
 type ProcessoResumo = {
   id: string;
   status: string;
+  ficha_versao?: number | null;
   renda_confirmada_em?: string | null;
+  renda_confirmada_ficha_versao?: number | null;
 };
 
 const SECOES_DA_ABA: Record<AbaDaExecucao, readonly SecaoDoProcessoPainel[]> = {
@@ -91,6 +94,8 @@ export function AnaliseInquilinoDialog({
   const [entradaSuja, setEntradaSuja] = useState(false);
   const [analise, setAnalise] = useState<AnaliseLigada>({});
   const [processo, setProcesso] = useState<ProcessoResumo | null>(null);
+  const [erroImediato, setErroImediato] = useState<Partial<Record<AbaDaExecucao, string>>>({});
+  const emAndamentoAntes = useRef(false);
 
   const recarregarContato = useCallback(() => {
     setEpoch((n) => n + 1);
@@ -153,9 +158,17 @@ export function AnaliseInquilinoDialog({
     return () => window.clearInterval(tick);
   }, [aberto, emAndamento, carregar]);
 
+  useEffect(() => {
+    if (emAndamentoAntes.current && !emAndamento && aberto) {
+      window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
+    }
+    emAndamentoAntes.current = emAndamento;
+  }, [emAndamento, aberto, conversationId]);
+
   async function rodar(alvo: AbaDaExecucao) {
     if (!processo || rodando || desabilitado) return;
     setRodando(true);
+    setErroImediato((atual) => ({ ...atual, [alvo]: undefined }));
     try {
       await rodarAbaDoModal({
         conversationId,
@@ -163,8 +176,13 @@ export function AnaliseInquilinoDialog({
         processoId: processo.id,
         senhasPdf,
       });
-      window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
+    } catch (e) {
+      const msg = e instanceof Error && e.message
+        ? e.message
+        : t("Não foi possível concluir.");
+      setErroImediato((atual) => ({ ...atual, [alvo]: msg }));
     } finally {
+      window.dispatchEvent(new CustomEvent("locacao:atualizada", { detail: { conversationId } }));
       setRodando(false);
     }
   }
@@ -173,7 +191,7 @@ export function AnaliseInquilinoDialog({
     const chave = CHAVE_ANALISE[alvo];
     return {
       temProcesso: !!processo,
-      rendaConfirmada: !!processo?.renda_confirmada_em,
+      rendaConfirmada: rendaConfirmadaNaVersaoAtual(processo),
       analiseLigada: chave ? analise[chave] === true : true,
     };
   }
@@ -241,6 +259,7 @@ export function AnaliseInquilinoDialog({
               onRodar={() => rodar(id)}
               desabilitado={desabilitado}
               ocupado={rodando}
+              erroImediato={erroImediato[id]}
             >
               {SECOES_DA_ABA[id].length > 0 ? (
                 <ProcessoDeLocacaoPainel

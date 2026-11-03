@@ -82,9 +82,10 @@ export const TEXTOS_PAINEL_FICHA = {
   Papel: { es: "Rol" },
   Nome: { es: "Nombre" },
   "Valores do imóvel": { es: "Valores del inmueble" },
-  "3× usa aluguel + condomínio + IPTU + seguro-incêndio. O seguro-fiança é informativo.": {
-    es: "3× usa alquiler + condominio + IPTU + seguro de incendio. El seguro fianza es informativo.",
+  "3× usa aluguel + condomínio + IPTU. O seguro-fiança é informativo.": {
+    es: "3× usa alquiler + condominio + IPTU. El seguro fianza es informativo.",
   },
+  padrão: { es: "estándar" },
   "Informe um valor mensal válido, em reais.": {
     es: "Informe un valor mensual válido, en reales.",
   },

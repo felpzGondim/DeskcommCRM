@@ -17,14 +17,16 @@ const ORG = "00000000-0000-4000-8000-000000000033";
 const CONTATO = "00000000-0000-4000-8000-000000000044";
 
 describe("contrato do pacote no Hub", () => {
-  it("a rota do Hub nasce do /mcp e só aceita ids numéricos", () => {
+  it("a rota do Hub nasce do /mcp e só aceita ids numéricos ou busca", () => {
     const url = urlDoPacoteHub("https://hub.exemplo/mcp", {
       idImovel: 77,
       idPessoa: "1001",
+      busca: "Rua Exemplo, 100",
     });
     expect(url.pathname).toBe(CAMINHO_PACOTE_HUB);
     expect(url.searchParams.get("id_imovel")).toBe("77");
     expect(url.searchParams.get("id_pessoa")).toBe("1001");
+    expect(url.searchParams.get("busca")).toBe("Rua Exemplo, 100");
     expect(url.search).not.toMatch(/token|chave|secret|cpf|telefone/i);
   });
 
@@ -59,6 +61,7 @@ describe("interpretarPacoteHub", () => {
       },
     });
     expect(lido).toEqual({
+      status: "ok",
       aluguelCentavos: 200_000,
       condominioCentavos: 50_000,
       iptuCentavos: 12_000,
@@ -70,7 +73,7 @@ describe("interpretarPacoteHub", () => {
     expect(p.divergencias.map((d) => d.campo)).toContain("aluguel");
     const soSuperlogica = montarPacote({ superlogica: lido, conversa: {} });
     expect(soSuperlogica.aluguel).toEqual({ valorCentavos: 200_000, origem: "superlogica" });
-    expect(soSuperlogica.vezes3Centavos).toBe(3 * 270_000);
+    expect(soSuperlogica.vezes3Centavos).toBe(3 * 262_000);
   });
 
   it("lê endereço e CEP opcionais só para confronto", () => {
@@ -99,16 +102,59 @@ describe("interpretarPacoteHub", () => {
     expect(lido.condominioCentavos).toBe(35_050);
   });
 
+  it("lê o proprietário no ok sem exigir os quatro valores", () => {
+    const lido = interpretarPacoteHub({
+      status: "ok",
+      pacote: { id_imovel: 77, endereco: "Rua Exemplo, 100", cep: "01310-100" },
+      proprietario: {
+        nome: "Maria Locadora",
+        cpf_cnpj: "52998224725",
+        id_pessoa: "9",
+        contato: { email: "maria@exemplo.test", telefone: "11987654321" },
+      },
+    });
+    expect(lido.status).toBe("ok");
+    expect(lido.idImovel).toBe(77);
+    expect(lido.proprietario).toEqual({
+      nome: "Maria Locadora",
+      cpfCnpj: "52998224725",
+      idPessoa: "9",
+      email: "maria@exemplo.test",
+      telefone: "11987654321",
+    });
+  });
+
+  it("vários candidatos não trazem PII e pedem escolha", () => {
+    const lido = interpretarPacoteHub({
+      status: "candidatos",
+      candidatos: [
+        { id_imovel: 11, codigo: "A-1", endereco: "Rua Um, 10", cep: "01310-100" },
+        { id_imovel: 12, codigo: "A-2", endereco: "Rua Dois, 20", cep: "01311-100" },
+      ],
+      ha_mais: true,
+    });
+    expect(lido.status).toBe("candidatos");
+    expect(lido.candidatos).toHaveLength(2);
+    expect(lido.haMais).toBe(true);
+    expect(lido.aviso).toMatch(/Escolha um/);
+    expect(JSON.stringify(lido)).not.toMatch(/cpf|telefone|email|nome/i);
+  });
+
   it("indisponível ou payload inválido vira aviso, sem inventar valor", () => {
     expect(interpretarPacoteHub(null)).toEqual({
+      status: "indisponivel",
       aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
     });
     expect(interpretarPacoteHub({ status: "indisponivel" })).toEqual({
+      status: "indisponivel",
       aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
     });
-    expect(interpretarPacoteHub({ encontrado: false, status: "nao_encontrado" })).toEqual({
-      aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
+    expect(interpretarPacoteHub({ encontrado: false, status: "nao_encontrado" })).toMatchObject({
+      status: "nao_encontrado",
     });
+    expect(interpretarPacoteHub({ encontrado: false, status: "nao_encontrado" }).aviso).toMatch(
+      /Nenhum imóvel encontrado/,
+    );
     const p = montarPacote({
       superlogica: interpretarPacoteHub({ status: "indisponivel" }),
       conversa: { aluguelCentavos: 180_000 },
@@ -145,7 +191,7 @@ describe("resolverIdsDoPacote", () => {
       contactId: CONTATO,
       superlogicaImovelId: 77,
     });
-    expect(ids).toEqual({ idImovel: 77, idPessoa: "1001" });
+    expect(ids).toEqual({ idImovel: 77, idPessoa: "1001", busca: null });
     expect(from).not.toHaveBeenCalledWith("contacts");
   });
 
@@ -202,7 +248,7 @@ describe("criarLeitorPacoteViaHub", () => {
       contactId: CONTATO,
       superlogicaImovelId: 77,
     });
-    expect(lido).toEqual({ aluguelCentavos: 300_000, iptuCentavos: 15_000 });
+    expect(lido).toEqual({ status: "ok", aluguelCentavos: 300_000, iptuCentavos: 15_000 });
 
     const falha = criarLeitorPacoteViaHub({
       admin: adminSemLinhas() as never,
@@ -212,10 +258,13 @@ describe("criarLeitorPacoteViaHub", () => {
       orgId: ORG,
       contactId: CONTATO,
       superlogicaImovelId: 77,
-    })).resolves.toEqual({ aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL });
+    })).resolves.toEqual({
+      status: "indisponivel",
+      aviso: AVISO_PACOTE_SUPERLOGICA_INDISPONIVEL,
+    });
   });
 
-  it("sem id de imóvel e sem pessoa não chama o Hub", async () => {
+  it("sem id, sem pessoa e sem busca não chama o Hub", async () => {
     const get = vi.fn();
     const from = vi.fn(() => {
       const api: Record<string, unknown> = {};
@@ -231,5 +280,23 @@ describe("criarLeitorPacoteViaHub", () => {
     });
     await expect(leitor.ler({ orgId: ORG, contactId: CONTATO })).resolves.toBeNull();
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("com busca e sem id chama o Hub", async () => {
+    const get = vi.fn(async (pedido: { busca?: string | null }) => {
+      expect(pedido.busca).toBe("Rua Exemplo, 100");
+      return { status: "nao_encontrado" };
+    });
+    const leitor = criarLeitorPacoteViaHub({
+      admin: adminSemLinhas() as never,
+      cliente: { get },
+    });
+    const lido = await leitor.ler({
+      orgId: ORG,
+      contactId: CONTATO,
+      busca: "Rua Exemplo, 100",
+    });
+    expect(get).toHaveBeenCalled();
+    expect(lido?.status).toBe("nao_encontrado");
   });
 });

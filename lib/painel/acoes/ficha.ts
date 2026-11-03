@@ -21,9 +21,17 @@ import {
   lerSeguroIncendioNoTexto,
   montarPacote,
 } from "@/lib/locacao/extrato";
+import { aplicarPadroesDoContrato } from "@/lib/locacao/padroes-do-contrato";
 import { preencherRendaDeclaradaInicial, preservarEdicoesHumanas } from "@/lib/locacao/renda-utilizada";
 import { completarFicha } from "@/lib/locacao/ficha-schema";
 import { pacoteSuperlogicaLigado } from "@/lib/locacao/chaves";
+import { processoAtivoDaConversa } from "@/lib/locacao/ficha-compartilhada";
+import {
+  buscaDaFicha,
+  pendenciasDoPacote,
+  validarImovelNoSuperlogica,
+} from "@/lib/locacao/pacote-do-imovel";
+import { preencherLocadorNaFicha } from "@/lib/locacao/locador-do-pacote";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { lerDocumentoPorVisao } from "@/lib/ai/visao/ler-documento";
@@ -136,14 +144,19 @@ export async function gerarRelatorioPreliminarDoPainel(
     }
     const incendio =
       fontes.map((f) => lerSeguroIncendioNoTexto(f.texto)).find((v) => v != null) ?? null;
-    const sl = pacoteSuperlogicaLigado(ctx.settings)
-      ? await criarLeitorPacoteViaHub({
-          admin: ctx.admin,
-          conversationId: ctx.conversationId,
-        }).ler({
+    const processo = await processoAtivoDaConversa(ctx.admin, ctx.orgId, ctx.conversationId).catch(() => null);
+    const imovelId = processo && typeof processo.imovel_id === "string" ? processo.imovel_id : null;
+    const leitor = criarLeitorPacoteViaHub({
+      admin: ctx.admin,
+      conversationId: ctx.conversationId,
+    });
+    const slLigado = pacoteSuperlogicaLigado(ctx.settings);
+    const sl = slLigado
+      ? await leitor.ler({
           orgId: ctx.orgId,
           contactId: ctx.contactId,
           conversationId: ctx.conversationId,
+          busca: buscaDaFicha(fichaPrevia),
         })
       : null;
     const avisoSuperlogica = sl?.aviso;
@@ -184,14 +197,32 @@ export async function gerarRelatorioPreliminarDoPainel(
     const avisos = frasesDosAvisos(enriquecido.avisos, limites.tentativas_senha);
     const inicial = preencherRendaDeclaradaInicial(saida.ficha, rendaDeclaradaNasFontes(fontes));
     const fichaExtraida = fichaPrevia ? preservarEdicoesHumanas(inicial, fichaPrevia) : inicial;
+    const validacao = slLigado
+      ? await validarImovelNoSuperlogica({
+          admin: ctx.admin,
+          orgId: ctx.orgId,
+          contactId: ctx.contactId,
+          conversationId: ctx.conversationId,
+          settings: ctx.settings,
+          ficha: fichaExtraida,
+          imovelId,
+          leitor,
+        })
+      : null;
+    const fichaComLocador = validacao?.ficha
+      ?? (sl?.proprietario ? preencherLocadorNaFicha(fichaExtraida, sl.proprietario) : fichaExtraida);
+    const comPadroes = aplicarPadroesDoContrato(fichaComLocador);
     const ficha = {
-      ...fichaExtraida,
-      pendencias: [...new Set([
-        ...saida.ficha.pendencias,
-        ...avisos,
-        ...(avisoSuperlogica ? [avisoSuperlogica] : []),
-        ...pacote.divergencias.map((d) => d.aviso),
-      ])].slice(0, 20),
+      ...comPadroes,
+      pendencias: pendenciasDoPacote(
+        [
+          ...saida.ficha.pendencias,
+          ...avisos,
+          ...(avisoSuperlogica ? [avisoSuperlogica] : []),
+          ...pacote.divergencias.map((d) => d.aviso),
+        ],
+        [validacao?.aviso],
+      ),
     };
     etapa = "gravacao";
     const linha = await gravarVersaoDaFicha(ctx.admin, {

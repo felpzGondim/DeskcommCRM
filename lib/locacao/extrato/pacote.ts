@@ -1,5 +1,6 @@
 /**
- * Pacote para 3×: aluguel + condomínio + IPTU + seguro-incêndio.
+ * Pacote para 3×: aluguel + condomínio + IPTU.
+ * Seguro-incêndio saiu da regra e do confronto; a coluna no banco permanece.
  * Seguro-fiança NÃO entra. Superlógica só GET via Hub, injetável.
  * A chave `locacao.pacote_superlogica_habilitado` nasce desligada.
  *
@@ -42,7 +43,32 @@ export interface PacoteDoImovel {
   divergencias: DivergenciaDoPacote[];
 }
 
+export type StatusDoPacoteHub =
+  | "ok"
+  | "nao_encontrado"
+  | "pedido_invalido"
+  | "multiplos_contratos"
+  | "candidatos"
+  | "indisponivel"
+  | "nao_permitido";
+
+export type CandidatoImovelHub = {
+  id_imovel: number;
+  codigo: string | null;
+  endereco: string | null;
+  cep: string | null;
+};
+
+export type ProprietarioDoPacote = {
+  nome: string | null;
+  cpfCnpj: string | null;
+  idPessoa: string | null;
+  email: string | null;
+  telefone: string | null;
+};
+
 export type LeituraDePacoteSuperlogica = {
+  status?: StatusDoPacoteHub;
   aluguelCentavos?: number | null;
   condominioCentavos?: number | null;
   iptuCentavos?: number | null;
@@ -50,6 +76,11 @@ export type LeituraDePacoteSuperlogica = {
   /** Opcional: só para confrontar. Nunca grava na ficha. */
   endereco?: string | null;
   cep?: string | null;
+  idImovel?: number | null;
+  idContrato?: number | null;
+  proprietario?: ProprietarioDoPacote | null;
+  candidatos?: CandidatoImovelHub[];
+  haMais?: boolean;
   /** Falha do Hub/Superlógica: o chamador cai na conversa e mostra o aviso. */
   aviso?: string;
 };
@@ -60,6 +91,7 @@ export interface LeitorDePacoteSuperlogica {
     contactId: string;
     superlogicaImovelId?: number | null;
     conversationId?: string;
+    busca?: string | null;
   }): Promise<LeituraDePacoteSuperlogica | null>;
 }
 
@@ -105,12 +137,11 @@ export function montarPacote(input: {
   const aluguel = escolher(cv.aluguelCentavos, sl?.aluguelCentavos);
   const condominio = escolher(cv.condominioCentavos, sl?.condominioCentavos);
   const iptu = escolher(cv.iptuCentavos, sl?.iptuCentavos);
-  const seguroIncendio = escolher(cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos);
+  const seguroIncendio = { valorCentavos: null, origem: "ausente" as const };
   const divergencias = [
     divergenciaDeCentavos("aluguel", cv.aluguelCentavos, sl?.aluguelCentavos),
     divergenciaDeCentavos("condominio", cv.condominioCentavos, sl?.condominioCentavos),
     divergenciaDeCentavos("iptu", cv.iptuCentavos, sl?.iptuCentavos),
-    divergenciaDeCentavos("seguro_incendio", cv.seguroIncendioCentavos, sl?.seguroIncendioCentavos),
     divergenciaDeEndereco(cv.endereco, sl?.endereco),
     divergenciaDeCep(cv.cep, sl?.cep),
   ].filter((d): d is DivergenciaDoPacote => d != null);
@@ -119,7 +150,6 @@ export function montarPacote(input: {
   if (aluguel.origem === "ausente") faltantes.push("aluguel");
   if (condominio.origem === "ausente") faltantes.push("condomínio");
   if (iptu.origem === "ausente") faltantes.push("IPTU");
-  if (seguroIncendio.origem === "ausente") faltantes.push("seguro-incêndio");
 
   if (aluguel.valorCentavos == null) {
     return {
@@ -137,8 +167,7 @@ export function montarPacote(input: {
   const total =
     aluguel.valorCentavos +
     (condominio.valorCentavos ?? 0) +
-    (iptu.valorCentavos ?? 0) +
-    (seguroIncendio.valorCentavos ?? 0);
+    (iptu.valorCentavos ?? 0);
   return {
     aluguel,
     condominio,
@@ -166,13 +195,12 @@ export function textoDoPacote(pacote: PacoteDoImovel): string {
     linha("aluguel", pacote.aluguel),
     linha("condomínio", pacote.condominio),
     linha("IPTU", pacote.iptu),
-    linha("seguro-incêndio", pacote.seguroIncendio),
   ];
   if (pacote.vezes3Centavos == null) {
     partes.push(FRASE_PACOTE_AUSENTE);
   } else {
     partes.push(
-      `Pacote (aluguel+condomínio+IPTU+seguro-incêndio, sem seguro-fiança): ${formatarReais(pacote.totalCentavos ?? 0)}.`,
+      `Pacote (aluguel+condomínio+IPTU, sem seguro-incêndio nem seguro-fiança): ${formatarReais(pacote.totalCentavos ?? 0)}.`,
     );
     partes.push(`3x o pacote: ${formatarReais(pacote.vezes3Centavos)}.`);
     if (pacote.faltantes.length > 0) {
