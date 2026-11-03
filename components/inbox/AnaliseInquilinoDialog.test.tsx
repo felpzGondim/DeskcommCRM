@@ -165,6 +165,75 @@ describe("casca do modal de locação", () => {
     expect(screen.queryByRole("button", { name: "Analisar seguro-fiança" })).toBeNull();
   });
 
+  it("FC concluída hidrata id e status na aba a partir da execução", async () => {
+    get.mockImplementation(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/locacao/documentos")) {
+        return { data: { recebidos: [], documentos: [], participantes: [], pendencias: [], relatorios: [], ha_mais: false } };
+      }
+      if (u.includes("/ficha")) return { data: { atual: null, historico: [] } };
+      if (u.endsWith("/locacao")) {
+        return {
+          data: {
+            ...locacaoOk.data,
+            execucoes: {
+              fc: {
+                id: "e-fc",
+                aba: "fc",
+                estado: "concluido",
+                etapa_texto: null,
+                progresso_atual: 0,
+                progresso_total: 0,
+                erro_motivo: null,
+                entrada_hash: "aaa",
+                ficha_versao: 1,
+                origem: "botao",
+                iniciado_em: "2026-11-01T12:00:00.000Z",
+                terminado_em: "2026-11-01T12:01:00.000Z",
+                created_at: "2026-11-01T12:00:00.000Z",
+                updated_at: "2026-11-01T12:01:00.000Z",
+                resultado: { resumo: "FC Score+ salva.", id_fc: "FC-9", estado: "aguardando_cobranca" },
+              },
+            },
+          },
+        };
+      }
+      return { data: {} };
+    });
+    render(
+      <AnaliseInquilinoDialog
+        aberto
+        onAbertoChange={vi.fn()}
+        conversationId="conv-1"
+        senhasPdf={[]}
+      />,
+    );
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("tab", { name: "Análise FC" }));
+    const bloco = await screen.findByTestId("resultado-da-execucao");
+    expect(bloco).toHaveTextContent("FC Score+ salva.");
+    expect(bloco).toHaveTextContent("ID-FC: FC-9");
+    expect(bloco).toHaveTextContent("Estado: aguardando_cobranca");
+  });
+
+  it("FC recusada mostra o erro do servidor na aba", async () => {
+    post.mockRejectedValue(new Error("Confirme a renda antes de analisar a FC."));
+    render(
+      <AnaliseInquilinoDialog
+        aberto
+        onAbertoChange={vi.fn()}
+        conversationId="conv-1"
+        senhasPdf={[]}
+      />,
+    );
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("tab", { name: "Análise FC" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Analisar FC" }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Confirme a renda antes de analisar a FC.");
+    });
+  });
+
   it("não puxa o cliente MCP do Hub para o bundle do inbox", () => {
     const arquivos = [
       "components/inbox/AnaliseInquilinoDialog.tsx",

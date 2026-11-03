@@ -210,7 +210,7 @@ describe("fontes da ficha preliminar", () => {
       { analises: [], pendencias: [], rendaDeclaradaCentavos: null },
     );
     expect(saida.relatorio).toMatch(/aluguel: R\$\s*2\.000,00 \(conversa\/ficha\)/);
-    expect(saida.relatorio).toMatch(/3x o pacote: R\$\s*7\.890,00/);
+    expect(saida.relatorio).toMatch(/3x o pacote: R\$\s*7\.650,00/);
     expect(saida.relatorio).not.toContain(FRASE_PACOTE_AUSENTE);
   });
 

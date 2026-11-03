@@ -5,13 +5,14 @@
  */
 import type { OrigemDoValorDoImovel } from "@/lib/locacao/vocabulario";
 
-export const SELOS_DE_ORIGEM = ["manual", "superlogica", "conversa", "vazio"] as const;
+export const SELOS_DE_ORIGEM = ["manual", "superlogica", "conversa", "padrao", "vazio"] as const;
 export type SeloDeOrigem = (typeof SELOS_DE_ORIGEM)[number];
 
 export const ROTULO_DO_SELO_DE_ORIGEM: Record<SeloDeOrigem, string> = {
   manual: "manual",
   superlogica: "Superlógica",
   conversa: "conversa",
+  padrao: "padrão",
   vazio: "vazio",
 };
 
@@ -21,6 +22,7 @@ const FONTE_PARA_SELO: Record<string, SeloDeOrigem> = {
   superlogica: "superlogica",
   conversa: "conversa",
   preliminar_ia: "conversa",
+  padrao: "padrao",
 };
 
 export function seloDaFonte(fonte: string | null | undefined, temValor: boolean): SeloDeOrigem {

@@ -41,6 +41,49 @@ export function caminhoDeDocumentoDoProcesso(
   return `${orgId}/processos/${processoId}/${categoria}/${arquivo}`;
 }
 
+/**
+ * Grava o término síncrono de FC/Migra. Falha de escrita não lança — a
+ * resposta da ferramenta continua valendo. Sem senha nem dado pessoal.
+ */
+export async function registrarResultadoDaAba(
+  admin: SupabaseClient,
+  input: {
+    orgId: string;
+    processoId: string;
+    aba: AbaDaExecucao;
+    origem: OrigemDaExecucao;
+    atorUserId: string;
+    estado: "concluido" | "erro";
+    erroCodigo?: string | null;
+    erroMotivo?: string | null;
+    resultado?: Record<string, unknown> | null;
+    callId?: string | null;
+    fichaVersao?: number | null;
+  },
+): Promise<string | null> {
+  const agora = new Date().toISOString();
+  const { data, error } = await tabelaLocacao(admin, "locacao_execucoes")
+    .insert({
+      organization_id: input.orgId,
+      processo_id: input.processoId,
+      aba: input.aba,
+      estado: input.estado,
+      erro_codigo: input.erroCodigo ?? null,
+      erro_motivo: input.erroMotivo ?? null,
+      origem: input.origem,
+      ator_user_id: input.atorUserId,
+      resultado: input.resultado ?? null,
+      call_id: input.callId ?? null,
+      ficha_versao: input.fichaVersao ?? null,
+      iniciado_em: agora,
+      terminado_em: agora,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !data || typeof (data as { id?: unknown }).id !== "string") return null;
+  return (data as { id: string }).id;
+}
+
 export async function abrirExecucao(
   admin: SupabaseClient,
   input: {

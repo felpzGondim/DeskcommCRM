@@ -5,18 +5,23 @@ não expõe a rota** — este arquivo é o pedido. Sem escrita na Superlógica.
 Sem dado pessoal: ids e valores dos exemplos são fictícios.
 
 A chave `locacao.pacote_superlogica_habilitado` continua **desligada**.
-Ligada, o CRM lê aluguel, condomínio, IPTU e seguro-incêndio por este
-endpoint. Seguro-fiança **não entra** no 3× e **não** deve vir na resposta.
-Falhas caem nos valores da conversa com aviso; o fluxo não quebra.
+Ligada, o CRM lê aluguel, condomínio e IPTU por este endpoint. O Hub ainda
+**pode** devolver `seguro_incendio_centavos` (contrato do GET); o CRM
+**ignora** esse campo — não mostra, não confronta, não entra no 3× e não
+bloqueia FC/Migra. Seguro-fiança **não entra** no 3× e **não** deve vir
+na resposta. Falhas caem nos valores da conversa com aviso; o fluxo não
+quebra.
 
-**Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36):**
+**Comportamento no CRM (decisão Felipe, 01/11 10:12, reafirmada 19:36;
+incêndio fora da regra em 03/11):**
 a Superlógica **confronta** a ficha e **só sinaliza** divergência. Não
 sobrescreve. Valores já preenchidos (conversa ou edição manual) continuam
-valendo. O leitor compara aluguel, condomínio, IPTU, seguro-incêndio e, se
+valendo. O leitor compara aluguel, condomínio, IPTU e, se
 vierem, endereço/CEP. Quando diferirem, o modal e a ficha mostram um aviso
 por campo (`ficha … × Superlógica …`). **Só o campo vazio da ficha** pode
 receber o valor da Superlógica, com origem `"superlogica"`. Endereço/CEP
-nunca são gravados da Superlógica — só o aviso.
+nunca são gravados da Superlógica — só o aviso. Seguro-incêndio, se o Hub
+trouxer, é descartado no CRM.
 
 ---
 

@@ -205,6 +205,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         imovel: rotulos.get(String(p.imovel_id ?? "")) ?? "",
         encerrado_em: p.encerrado_em ?? null,
         renda_confirmada_em: p.renda_confirmada_em ?? null,
+        renda_confirmada_ficha_versao: p.renda_confirmada_ficha_versao ?? null,
         renda_mensal: extra?.renda_mensal ?? null,
         renda_proposta_fc: extra?.renda_proposta_fc ?? null,
         alertas: extra?.alertas ?? [],

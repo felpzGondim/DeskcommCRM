@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
   audit: vi.fn(),
   executar: vi.fn(),
+  registrar: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -18,6 +19,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 vi.mock("@/lib/painel/ferramentas/executar", () => ({ executarFerramenta: mocks.executar }));
+vi.mock("@/lib/locacao/execucoes", () => ({
+  registrarResultadoDaAba: (...a: unknown[]) => mocks.registrar(...a),
+}));
 
 import { POST } from "@/app/api/v1/conversations/[id]/painel-agente/seguro/route";
 
@@ -57,6 +61,7 @@ describe("rota da cotação de seguro-fiança", () => {
       texto: "Cotação de seguro-fiança iniciada. Acompanhe o status neste painel.",
       extra: { pedido_id: "p1", estado: "cotando" },
     });
+    mocks.registrar.mockResolvedValue("exec-1");
   });
 
   it("analisar e status passam por executarFerramenta com origem botao", async () => {
@@ -101,5 +106,34 @@ describe("rota da cotação de seguro-fiança", () => {
     expect(confirmar).toContain("pedido_id: input.pedidoId");
     expect(confirmar).not.toContain('acao: "seguro"');
     expect(confirmar).not.toContain("fc_salvar");
+  });
+
+  it("grava a execução e o código de erro no audit quando a Migra recusa", async () => {
+    mocks.executar.mockResolvedValue({
+      ok: false,
+      texto: "Informe o aluguel no processo antes de cotar o seguro.",
+      codigo: "valor_faltando",
+    });
+    await POST(req({
+      etapa: "analisar",
+      processo_id: "00000000-0000-4000-8000-000000000022",
+    }), ctx);
+    expect(mocks.registrar).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        aba: "migra",
+        estado: "erro",
+        erroCodigo: "valor_faltando",
+      }),
+    );
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "locacao.analise_seguro_aberta",
+        metadata: expect.objectContaining({
+          sucesso: false,
+          erro_codigo: "valor_faltando",
+        }),
+      }),
+    );
   });
 });

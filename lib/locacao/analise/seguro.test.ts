@@ -72,6 +72,7 @@ describe("mapeamento da cotação de seguro-fiança", () => {
     expect(motivo).toMatch(/IPTU/);
     valores.iptu = { valor: 200, origem: "conversa", editado_por: null, editado_em: null };
     valores.seguro_fianca = { valor: null, origem: null, editado_por: null, editado_em: null };
+    valores.seguro_incendio = { valor: null, origem: null, editado_por: null, editado_em: null };
     const ok = montarArgumentosSeguro({
       ficha,
       pedidoId: "00000000-0000-4000-8000-000000000099",

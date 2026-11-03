@@ -81,7 +81,14 @@
       "lane": "interface",
       "col": 1,
       "type": "frontend",
-      "label": "AbaComExecucao: checklist, status, Tentar de novo"
+      "label": "AbaComExecucao: checklist, status, resultado ou erro, Tentar de novo"
+    },
+    {
+      "id": "padroes",
+      "lane": "api",
+      "col": 2,
+      "type": "process",
+      "label": "Padrões de contrato só em campo vazio (origem padrão)"
     }
   ],
   "edges": [
@@ -150,6 +157,30 @@
       "from": "ficha",
       "to": "execucoes",
       "label": "salvar campo marca desatualizado"
+    },
+    {
+      "id": "e12",
+      "from": "execucoes",
+      "to": "casca",
+      "label": "resultado ou erro visível na aba"
+    },
+    {
+      "id": "e13",
+      "from": "casca",
+      "to": "modal",
+      "label": "locacao:atualizada recarrega Dados"
+    },
+    {
+      "id": "e14",
+      "from": "modal",
+      "to": "padroes",
+      "label": "Preencher pela conversa"
+    },
+    {
+      "id": "e15",
+      "from": "padroes",
+      "to": "ficha",
+      "label": "D+5, 30 meses, IGPM, 5%, 100% se vazio"
     }
   ]
 }

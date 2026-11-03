@@ -103,6 +103,7 @@ describe("mapeamento da análise FC Score+", () => {
     expect(r.motivo).toMatch(/condomínio \(inclui rateio\)/);
     valores.condominio = { valor: 500, origem: "conversa", editado_por: null, editado_em: null };
     valores.seguro_fianca = { valor: null, origem: null, editado_por: null, editado_em: null };
+    valores.seguro_incendio = { valor: null, origem: null, editado_por: null, editado_em: null };
     const ok = montarArgumentosFc({
       ficha, pessoa, pedidoId: "00000000-0000-4000-8000-000000000099",
       conversaId: "conv-1", orgId: "org-1", telefone: "11987654321", valores,

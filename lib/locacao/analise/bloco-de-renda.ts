@@ -3,7 +3,7 @@
  *
  * Quem calcula é `lib/locacao/extrato` (mesmo motor do #31 / 4.1).
  * Este módulo monta o bloco a partir das análises e do pacote
- * (aluguel+condomínio+IPTU+seguro-incêndio, sem fiança). Sem prompt,
+ * (aluguel+condomínio+IPTU, sem seguro-incêndio nem fiança). Sem prompt,
  * sem regex de `regras.ts`, sem copiar a declarada para a comprovada.
  */
 import { comprovadaDasAnalises } from "@/lib/agent-engine/agent/painel-relatorio-preliminar";

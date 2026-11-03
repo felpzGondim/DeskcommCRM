@@ -9,6 +9,10 @@ import {
   estadoVisivelDaAba,
   execucaoEmAndamento,
   horaDaUltimaExecucao,
+  linhasDoResultadoPublico,
+  rendaConfirmadaNaVersaoAtual,
+  relatorioDeRendaDaExecucao,
+  resultadoPublicoDaExecucao,
   rotuloDoEstadoVisivel,
   type ExecucaoPublica,
 } from "@/lib/locacao/execucao-da-aba";
@@ -111,5 +115,56 @@ describe("checklist do que falta para rodar", () => {
       .toContain("Esta etapa está desligada em Configurações › Locação.");
     expect(checklistDaAba("documentos", { temProcesso: false, rendaConfirmada: false, analiseLigada: false }))
       .toEqual([]);
+  });
+});
+
+describe("resultado público e renda confirmada na versão", () => {
+  it("tira senhas do resultado e hidrata o relatório da renda", () => {
+    expect(resultadoPublicoDaExecucao({ senhas: { a: "x" }, resumo: "ok", id_fc: "FC-1" })).toEqual({
+      resumo: "ok",
+      id_fc: "FC-1",
+    });
+    const rel = relatorioDeRendaDaExecucao(exec({
+      estado: "concluido",
+      erro_motivo: null,
+      resultado: {
+        resumo: "Renda comprovada: R$ 7200.00.",
+        renda_comprovada: 7200,
+        checklist: ["extrato lido"],
+        regra_3x: { frase: "A renda comprovada cobre 3× o pacote." },
+        senhas: { pdf: "segredo" },
+      },
+    }));
+    expect(rel?.resumo).toMatch(/Renda comprovada/);
+    expect(rel?.renda_comprovada).toBe(7200);
+    expect(rel?.checklist).toEqual(["extrato lido"]);
+    expect(rel?.regra_3x?.frase).toMatch(/3×/);
+    expect(JSON.stringify(rel)).not.toMatch(/segredo/);
+    expect(linhasDoResultadoPublico({
+      resumo: "Cotação iniciada.",
+      estado: "cotando",
+      cards: [{ seguradora: "Porto", codigo: "C1", status: "ok" }],
+    })).toEqual([
+      "Cotação iniciada.",
+      "Estado: cotando",
+      "Porto · C1 · ok",
+    ]);
+  });
+
+  it("permite reconfirmar quando a ficha avançou depois da confirmação", () => {
+    expect(rendaConfirmadaNaVersaoAtual({
+      renda_confirmada_em: "2026-11-01T00:00:00.000Z",
+    })).toBe(true);
+    expect(rendaConfirmadaNaVersaoAtual({
+      renda_confirmada_em: "2026-11-01T00:00:00.000Z",
+      renda_confirmada_ficha_versao: 7,
+      ficha_versao: 7,
+    })).toBe(true);
+    expect(rendaConfirmadaNaVersaoAtual({
+      renda_confirmada_em: "2026-11-01T00:00:00.000Z",
+      renda_confirmada_ficha_versao: 7,
+      ficha_versao: 11,
+    })).toBe(false);
+    expect(rendaConfirmadaNaVersaoAtual({ renda_confirmada_em: null, ficha_versao: 2 })).toBe(false);
   });
 });
