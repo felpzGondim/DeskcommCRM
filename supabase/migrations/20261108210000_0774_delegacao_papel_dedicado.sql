@@ -319,12 +319,7 @@ create policy "messages_select" on public.messages
   );
 
 drop policy if exists "tenant_isolation_contacts_read" on public.contacts;
-create policy "tenant_isolation_contacts_read" on public.contacts
-  for select to authenticated
-  using (
-    organization_id in (select public.fn_user_org_ids())
-    or public.fn_is_platform_admin()
-  );
+create policy "tenant_isolation_contacts_read" on public.contacts for select to authenticated using (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
 
 -- FOR ALL inclui SELECT. Sem TO, oauth_delegado avaliava fn_user_org_ids e
 -- morria (ou, se tivesse EXECUTE, via o pessoal). Parte em insert/update/delete.
@@ -332,27 +327,9 @@ drop policy if exists "tenant_isolation_contacts_write" on public.contacts;
 drop policy if exists "tenant_isolation_contacts_write_insert" on public.contacts;
 drop policy if exists "tenant_isolation_contacts_write_update" on public.contacts;
 drop policy if exists "tenant_isolation_contacts_write_delete" on public.contacts;
-create policy "tenant_isolation_contacts_write_insert" on public.contacts
-  for insert to authenticated
-  with check (
-    organization_id in (select public.fn_user_org_ids())
-    or public.fn_is_platform_admin_full()
-  );
-create policy "tenant_isolation_contacts_write_update" on public.contacts
-  for update to authenticated
-  using (
-    organization_id in (select public.fn_user_org_ids())
-    or public.fn_is_platform_admin_full()
-  ) with check (
-    organization_id in (select public.fn_user_org_ids())
-    or public.fn_is_platform_admin_full()
-  );
-create policy "tenant_isolation_contacts_write_delete" on public.contacts
-  for delete to authenticated
-  using (
-    organization_id in (select public.fn_user_org_ids())
-    or public.fn_is_platform_admin_full()
-  );
+create policy "tenant_isolation_contacts_write_insert" on public.contacts for insert to authenticated with check (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+create policy "tenant_isolation_contacts_write_update" on public.contacts for update to authenticated using (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+create policy "tenant_isolation_contacts_write_delete" on public.contacts for delete to authenticated using (organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
 
 drop policy if exists tenant_isolation_locacao_processo_conversas_select
   on public.locacao_processo_conversas;
@@ -425,8 +402,7 @@ create policy messages_select_oauth_delegado
     )
   );
 
-drop policy if exists locacao_processo_conversas_select_oauth_delegado
-  on public.locacao_processo_conversas;
+drop policy if exists locacao_processo_conversas_select_oauth_delegado on public.locacao_processo_conversas;
 create policy locacao_processo_conversas_select_oauth_delegado
   on public.locacao_processo_conversas
   as permissive
@@ -444,8 +420,7 @@ create policy locacao_processo_conversas_select_oauth_delegado
     )
   );
 
-drop policy if exists locacao_processo_documentos_select_oauth_delegado
-  on public.locacao_processo_documentos;
+drop policy if exists locacao_processo_documentos_select_oauth_delegado on public.locacao_processo_documentos;
 create policy locacao_processo_documentos_select_oauth_delegado
   on public.locacao_processo_documentos
   as permissive
@@ -470,12 +445,32 @@ create policy locacao_processo_documentos_select_oauth_delegado
 -- policies sem TO — sem isso elas passam a valer para oauth_delegado.
 do $$
 begin
-  if to_regclass('storage.objects') is not null then
-    execute 'alter table storage.objects enable row level security';
+  if to_regclass('storage.objects') is null then
+    return;
+  end if;
+  -- ENABLE em tabela já com RLS, ou de outro dono (e2e: supabase_storage_admin),
+  -- aborta o baseline com 42501. Stub do CI nasce sem RLS e o postgres é dono.
+  if exists (
+    select 1
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'storage'
+       and c.relname = 'objects'
+       and c.relrowsecurity is not true
+  ) then
+    begin
+      execute 'alter table storage.objects enable row level security';
+    exception
+      when insufficient_privilege then null;
+    end;
+  end if;
+  begin
     execute 'grant usage on schema storage to oauth_delegado';
     execute 'revoke all on storage.objects from oauth_delegado';
     execute 'grant select on storage.objects to oauth_delegado';
-  end if;
+  exception
+    when insufficient_privilege then null;
+  end;
 end
 $$;
 
@@ -629,8 +624,20 @@ begin
 end
 $$;
 
-grant execute on function auth.uid() to oauth_delegado;
-grant execute on function auth.jwt() to oauth_delegado;
+do $$
+begin
+  begin
+    execute 'grant execute on function auth.uid() to oauth_delegado';
+  exception
+    when insufficient_privilege then null;
+  end;
+  begin
+    execute 'grant execute on function auth.jwt() to oauth_delegado';
+  exception
+    when insufficient_privilege then null;
+  end;
+end
+$$;
 
 -- Devolve só o mínimo depois do REVOKE amplo.
 grant select on public.delegacao_visibilidade_corporativa to oauth_delegado;
@@ -650,9 +657,14 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
 do $$
 begin
-  if to_regclass('storage.objects') is not null then
-    execute 'grant select on storage.objects to oauth_delegado';
+  if to_regclass('storage.objects') is null then
+    return;
   end if;
+  begin
+    execute 'grant select on storage.objects to oauth_delegado';
+  exception
+    when insufficient_privilege then null;
+  end;
 end
 $$;
 

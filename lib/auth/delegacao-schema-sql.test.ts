@@ -34,6 +34,13 @@ describe("0774 não é a 0773 experimental", () => {
     expect(ultimo).toBeGreaterThan(0);
   });
 
+  it("apêndice da 0774 entra antes da varredura de anon", () => {
+    const apendice = BASELINE.indexOf("delegação papel dedicado (migration 0774)");
+    const varredura = BASELINE.search(/^-- ---- VARREDURA anon:/m);
+    expect(apendice).toBeGreaterThan(-1);
+    expect(varredura).toBeGreaterThan(apendice);
+  });
+
   it("conta empresarial + vínculo de sessão; herda pelo conta_id, não por telefone", () => {
     expect(sql).toMatch(/delegacao_contas_empresariais/);
     expect(sql).toMatch(/delegacao_sessoes_empresariais/);
