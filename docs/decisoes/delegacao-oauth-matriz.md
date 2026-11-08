@@ -50,18 +50,17 @@ Confinar RPC **e** preservar cookie no mesmo JWT `role=authenticated` não é
 seguro: revogar EXECUTE quebra a Inbox; guardar cada DEFINER é refactor
 amplo; patchar três paths e declarar confinamento global seria mentira.
 
-Alternativas suportadas pelo contrato Auth:
+O Custom Access Token Hook oficial **não** emite `role` fora de
+`anon`|`authenticated` (JSON Schema publicado). Hook inativo com papel
+dedicado seria solução falsa. `GRANT TO PUBLIC` alcança qualquer papel
+`NOINHERIT`. “Não mandar o JWT ao PostgREST” **não** corta `/rest/v1`/`/rpc`
+de quem tem o Bearer. Lei e pedido A/B/C:
+[`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
 
-1. **Custom Access Token Hook** — role Postgres distinto no JWT OAuth
-   (ex. `oauth_delegado`) + GRANT mínimo. Cookie permanece `authenticated`.
-2. **Não apresentar o JWT ao PostgREST** — só o app depois de
-   `verificarSujeitoOAuth`. Quem obtém o Bearer ainda pode chamar `/rest/v1`
-   e `/rpc` se a Data API estiver publicada; a 404 do app não impede.
-3. **Guardar `client_id` no corpo de cada DEFINER volátil** — fora de
-   escopo.
-
-**Decisão (Felipe, ativação futura):** (1) ou (2). Sem isso a homologação
-**não** trata o JWT OAuth como sujeito confinado na RPC.
+**Decisão (Felipe, ativação futura):** A (RLS `client_id`, RPC herdada),
+B (só se o Auth passar a emitir o claim) ou C (REVOKE/rewrite global, não é
+integração). Sem C disfarçada de hook. Sem prova de isolamento RPC, a
+homologação **não** trata o JWT OAuth como sujeito confinado.
 
 ## Spec 21 (cookie) vs esta matriz
 

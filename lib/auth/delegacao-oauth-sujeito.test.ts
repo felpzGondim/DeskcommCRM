@@ -151,6 +151,16 @@ describe("verificarSujeitoOAuth", () => {
     expect(r).toEqual({ ok: false, motivo: "identidade_nao_provada" });
   });
 
+  it("role oauth_delegado recusa — o verificador exige authenticated; o hook oficial também não emite esse claim", async () => {
+    const r = await verificarSujeitoOAuth("Bearer jwt-papel-dedicado", {
+      leitor: leitor({
+        userId: MARINA,
+        claims: claimsMarina({ role: "oauth_delegado" }),
+      }),
+    });
+    expect(r).toEqual({ ok: false, motivo: "identidade_nao_provada" });
+  });
+
   it("session_id ausente recusa", async () => {
     const { session_id: _s, ...sem } = claimsMarina();
     void _s;

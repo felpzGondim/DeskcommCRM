@@ -26,8 +26,11 @@ atendente fala com o Bot. O sujeito OAuth identifica a **usuária do CRM**.
 | **Cursor MCP** | HTTPS remoto, authorization-code + PKCE, RFC 9728, RFC 8707, refresh; DCR **ou** `CLIENT_ID` estático (`CLIENT_SECRET`/scopes opcionais). Contas **individuais** por colega; login compartilhado **não** entra. | [Cursor MCP](https://cursor.com/docs/mcp); [shared bots](https://cursor.com/help/grok-bot/shared-bots) |
 | **Interop Grok Bot ↔ callback GoTrue** | **Não medido.** Callbacks Cursor documentados (`https://www.cursor.com/agents/mcp/oauth/callback`, `http://localhost:8787/callback`) ainda precisam ser testados contra o allowlist do Auth. Não bloqueia as peças offline. | Cursor docs (geral) |
 
-`device_code` **não** é caminho. Custom Access Token Hook (para pôr `aud` =
-resource RFC 8707 no JWT) é config viva do Auth — **não ligada**.
+`device_code` **não** é caminho. Custom Access Token Hook é config viva do
+Auth — **não ligada**. O JSON Schema oficial de `claims.role` é só
+`anon`|`authenticated`; o hook **não** emite papel Postgres terceiro. `aud`
+customizado para URL RFC 8707 **quebra** `verificarSujeitoOAuth`. Avaliação:
+[`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
 
 ---
 

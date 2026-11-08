@@ -25,20 +25,21 @@ export const STORAGE_OAUTH = "default_deny" as const;
 
 /**
  * RPC não é confinada pelo mesmo JWT. Cookie e OAuth compartilham o papel
- * `authenticated`. Revogar EXECUTE desse papel quebra a Inbox. Funções
- * SECURITY DEFINER voláteis do allowlist existente não leem `client_id`.
+ * `authenticated`. O hook oficial **não** emite role fora de anon|authenticated
+ * (docs/decisoes/delegacao-papel-dedicado.md). Revogar EXECUTE de
+ * authenticated quebra a Inbox. DEFINER volátil do allowlist não lê client_id.
  */
 export const RPC_OAUTH = {
   estado: "nao_confinado",
   motivo:
-    "JWT OAuth usa o mesmo papel authenticated da sessão cookie. REVOKE EXECUTE de authenticated quebra a Inbox. SECURITY DEFINER volátil permitida a authenticated não consulta client_id.",
+    "JWT OAuth usa o mesmo papel authenticated da sessão cookie. O JSON Schema do Custom Access Token Hook só admite role anon|authenticated. REVOKE EXECUTE de authenticated quebra a Inbox. SECURITY DEFINER volátil permitida a authenticated não consulta client_id. GRANT TO PUBLIC alcança qualquer papel NOINHERIT.",
   alternativas: [
-    "Custom Access Token Hook do Auth: claim role distinto (ex. oauth_delegado) + GRANT mínimo; cookie permanece authenticated",
-    "Nunca apresentar o JWT OAuth ao PostgREST/Data API — o Bearer ainda funciona contra /rest/v1 se o cliente o enviar; a rota 404 do app não impede isso",
-    "Guardar client_id no corpo de cada SECURITY DEFINER volátil — amplo demais para este PR",
+    "A — ficar em authenticated + client_id na RLS (0773); RPC herdada, documentada",
+    "B — só se o Auth passar a emitir role fora de {anon,authenticated}; hoje a spec do hook recusa",
+    "C — REVOKE/rewrite global das DEFINER voláteis em authenticated (Inbox); não é integração",
   ],
   decisao_fora_de_escopo:
-    "Felipe escolhe role split via Auth hook OU proibir Data API para tokens OAuth. Sem isso não há confinamento uniforme de RPC.",
+    "Felipe escolhe A, B (quando o Auth permitir) ou C. Hook inativo com role dedicado seria solução falsa. Não mandar o JWT ao PostgREST não corta /rest/v1 /rpc de quem tem o Bearer.",
 } as const;
 
 /** Acesso que esta migration INTRODUZ para client_id presente (não existia na cookie policy). */
