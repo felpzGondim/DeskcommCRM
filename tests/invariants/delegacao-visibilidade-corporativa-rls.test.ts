@@ -27,6 +27,10 @@ const convUnknown = "eeeeeeee-4444-4000-8000-000000000003";
 const convB = "eeeeeeee-4444-4000-8000-000000000004";
 const grantMarina = "eeeeeeee-5555-4000-8000-000000000001";
 const grantFelipe = "eeeeeeee-5555-4000-8000-000000000002";
+const msgCorp = "eeeeeeee-6666-4000-8000-000000000001";
+const msgPessoal = "eeeeeeee-6666-4000-8000-000000000002";
+const msgUnknown = "eeeeeeee-6666-4000-8000-000000000003";
+const msgB = "eeeeeeee-6666-4000-8000-000000000004";
 const clientId = "oauth-client-cursor-test";
 
 function countJwt(claims: string, query: string): number {
@@ -49,6 +53,23 @@ function oauth(userId: string, query: string, cid = clientId): number {
     `{"sub":"${userId}","role":"authenticated","client_id":"${cid}"}`,
     query,
   );
+}
+
+function writeJwt(claims: string, dml: string): number {
+  try {
+    const out = sql(`
+      set role authenticated;
+      select set_config('request.jwt.claims', '${claims}', false);
+      with w as (${dml} returning 1) select count(*) from w;
+    `);
+    const last = lastLine(out);
+    if (!/^\d+$/.test(last)) throw new Error(`unexpected psql output: ${out}`);
+    return Number(last);
+  } catch (err) {
+    const stderr = (err as { stderr?: string }).stderr ?? "";
+    if (stderr.includes("row-level security")) return 0;
+    throw err;
+  }
 }
 
 beforeAll(() => {
@@ -103,6 +124,13 @@ beforeAll(() => {
          array['buscar','ler','baixar']::text[], now() + interval '1 day'),
         ('${grantFelipe}', '${orgA}', '${felipe}', 'outro-client',
          array['buscar']::text[], now() + interval '1 day');
+    insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
+      values
+        ('${msgCorp}', '${orgA}', '${convCorp}', '${sessCorp}', '${ctOp}', 'text', 'inbound', 'corp'),
+        ('${msgPessoal}', '${orgA}', '${convPessoal}', '${sessPessoal}', '${ctPessoal}', 'text', 'inbound', 'pessoal'),
+        ('${msgUnknown}', '${orgA}', '${convUnknown}', '${sessUnknown}', '${ctUnknownSess}', 'text', 'inbound', 'unknown'),
+        ('${msgB}', '${orgB}', '${convB}', '${sessB}', '${ctB}', 'text', 'inbound', 'org-b')
+      on conflict do nothing;
   `);
 });
 
@@ -152,15 +180,71 @@ describe.sequential("conversations — cookie Inbox vs OAuth + grant", () => {
     expect(oauth(felipe, `select count(*) from public.conversations where id = '${convPessoal}';`)).toBe(0);
   });
 
-  it("grant expirado ou client_id errado não abre a conversa", () => {
+  it("OAuth+grant lê mensagem da corporativa por id e zero de pessoal, unknown, outra org", () => {
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgPessoal}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgUnknown}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgB}';`)).toBe(0);
+  });
+
+  it("cookie da Inbox não aperta: Felipe admin vê mensagem pessoal; Marina agent own não vê a atribuída ao Felipe", () => {
+    expect(cookie(felipe, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(1);
+    expect(cookie(felipe, `select count(*) from public.messages where id = '${msgPessoal}';`)).toBe(1);
+    expect(cookie(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(0);
+  });
+
+  it("OAuth não escreve conversa nem mensagem; cookie do admin continua escrevendo conversa", () => {
+    expect(
+      writeJwt(
+        `{"sub":"${marina}","role":"authenticated","client_id":"${clientId}"}`,
+        `update public.conversations set tags = array['oauth'] where id = '${convCorp}'`,
+      ),
+    ).toBe(0);
+    expect(
+      writeJwt(
+        `{"sub":"${marina}","role":"authenticated","client_id":"${clientId}"}`,
+        `insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body) values ('eeeeeeee-6666-4000-8000-0000000000aa', '${orgA}', '${convCorp}', '${sessCorp}', '${ctOp}', 'text', 'outbound', 'oauth-write')`,
+      ),
+    ).toBe(0);
+    expect(
+      writeJwt(
+        `{"sub":"${felipe}","role":"authenticated"}`,
+        `update public.conversations set tags = array['cookie'] where id = '${convCorp}'`,
+      ),
+    ).toBe(1);
+  });
+
+  it("fronteira: contacts/channel_sessions seguem org-wide (OAuth lê contato pessoal da própria org; zero da outra)", () => {
+    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctPessoal}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctB}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessPessoal}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessB}';`)).toBe(0);
+  });
+
+  it("storage.objects: authenticated não ganha SELECT no bucket whatsapp-media por esta migration", () => {
+    const priv = sql(
+      `select has_table_privilege('authenticated','storage.objects','select');`,
+    );
+    if (priv === "f") {
+      expect(priv).toBe("f");
+      return;
+    }
+    expect(
+      oauth(marina, `select count(*) from storage.objects where bucket_id = 'whatsapp-media';`),
+    ).toBe(0);
+  });
+
+  it("grant expirado ou client_id errado não abre a conversa nem a mensagem", () => {
     sql(`update public.delegacao_visibilidade_corporativa
            set expires_at = now() - interval '1 minute'
          where id = '${grantMarina}';`);
     expect(oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(0);
     sql(`update public.delegacao_visibilidade_corporativa
            set expires_at = now() + interval '1 day', revoked_at = now()
          where id = '${grantMarina}';`);
     expect(oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(0);
     sql(`update public.delegacao_visibilidade_corporativa
            set revoked_at = null
          where id = '${grantMarina}';`);
@@ -168,5 +252,6 @@ describe.sequential("conversations — cookie Inbox vs OAuth + grant", () => {
       oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`, "client-errado"),
     ).toBe(0);
     expect(oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(1);
   });
 });

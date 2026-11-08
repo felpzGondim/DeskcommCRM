@@ -20,7 +20,7 @@ de `channel_session_id` no produto.
 | Peça | O que faz nesta branch | O que NÃO faz |
 |---|---|---|
 | **Exclusão pessoal (spec 21) nas rotas já autenticadas por cookie** | `GET /api/v1/messages/[id]/media` e `GET|PATCH /api/v1/conversations/[id]/locacao/documentos` recusam a menos que a conversa da org aponte a um contato da mesma org com `is_personal === false` (booleano literal), **antes** de `createSignedUrl` ou fetch do adapter. Erro de consulta, conversa/contato ausente, `contact_id` vazio ou `is_personal` malformado → 404 mudo (fail closed). A Inbox comum segue: cookie + org ativa + RLS. Sessão de canal **não** precisa ser "corporativa". | Não classifica WhatsApp pessoal vs. empresarial. Não aperta viewer/manager org-wide. Não desliga fluxos ordinários (`is_personal === false` continua). |
-| **Integração delegada buscar/ler/baixar** | Verificador `getUser(jwt)` + client anon (`lib/auth/delegacao-oauth-sujeito.ts`, `lib/supabase/jwt-usuario.ts`); superfície `executarSuperficieDelegada` (sem boolean do chamador); rotas `/api/mcp/delegacao` e RFC 9728 **404** com ativação padrão falsa; schema 0773 (grant + `classificacao_empresarial` + policy extra) **só arquivo**. Tools fora do catálogo. | Não emite token. Não registra client. Não grava grant. Não classifica sessão. Não chama `/api/mcp` admin. Não liga GoTrue. |
+| **Integração delegada buscar/ler/baixar** | Verificador `getUser(jwt)` + claims obrigatórias do JWT de usuário; client anon; superfície `executarSuperficieDelegada`; rotas **404**; schema 0773 (grant + classificação + policy extra + `messages_select` restritiva) **só arquivo**. Tools fora do catálogo. | Não emite token. Não registra client. Não grava grant. Não classifica sessão. Não chama `/api/mcp` admin. Não liga GoTrue. Não prova revogação de sessão Auth com mock. |
 
 A operação comum **não** passa pela superfície delegada. Ligar a exclusão
 pessoal nas rotas de cookie **não** ativa o bot.
@@ -97,8 +97,10 @@ imobiliário, com as permissões efetivas de quem delegou:
 6. **Anexo** só depois da associação conversa (e processo, se houver).
 7. Só `buscar` | `ler` | `baixar`. Sem write/send e sem fallback amplo.
 8. Auditoria: ids + motivo, **sem** corpo, preview, telefone, path, URL.
-9. Desconhecido / erro de DB recusa. JWT `exp` não revoga sozinho: grant
-   `revoked_at` / `expires_at` + `getUser` (sessão Auth).
+9. Desconhecido / erro de DB recusa. Três revogações distintas: JWT `exp`
+   (claim); sessão Auth (`getUser` de rede, não provado offline); grant
+   `revoked_at` / `expires_at` (lookup fail-closed, sem fallback). Refresh
+   token não entra nesta superfície.
 
 Ativação (`ativa` ∧ `contratoAprovado`) é argumento do guarda. Produção
 passa `ATIVACAO_DELEGADA_PADRAO` (ambos falsos). **Não há variável de

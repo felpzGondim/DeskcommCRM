@@ -12,13 +12,17 @@
 - Peça 1 **código, não produção:** 404 fail-closed de contato pessoal /
   prova ausente em mídia e documentos, antes de assinar/buscar.
 - Peça 2 **preparada, desligada:**
-  - `lib/auth/delegacao-oauth-sujeito.ts` — `getUser` + claims; recusa `dsk_`.
+  - `lib/auth/delegacao-oauth-sujeito.ts` — `getUser` + claims obrigatórias
+    do JWT de usuário (`exp` futuro finito, `role=authenticated`,
+    `session_id` UUID, `iss` do Auth); recusa `dsk_`. Mock de `getUser`
+    **não** prova revogação no Auth.
   - `lib/supabase/jwt-usuario.ts` — client anon + Bearer; nunca service role.
   - `lib/auth/delegacao-superficie.ts` — grant + classificação + spec 21;
     sem boolean do chamador; sem peer-binding.
   - `app/api/mcp/delegacao` e RFC 9728 **404** (`ATIVACAO_DELEGADA_PADRAO` falsa).
   - Migration `0773` + apêndice do baseline: grant, coluna de classificação,
-    policy extra OAuth; `conversations_select` de cookie exige `client_id` nulo.
+    policy extra OAuth + `messages_select` restritiva; escritas cookie-only.
+    `conversations_select` de cookie exige `client_id` nulo.
     **Não aplicada** a banco de cliente.
 - D3/D5 **alvo decidido, não ativado:** buscar/ler/baixar em todas as
   conversas corporativas da org. WhatsApp = fonte de documentos, não canal
@@ -49,3 +53,9 @@
 - Interop callback Grok Bot × GoTrue (adiado, não bloqueia offline).
 - Escrita da classificação e do grant (Felipe aprova; sem UI neste PR).
 - Irmã notes/media, se o produto quiser o mesmo 404.
+- `contacts` / `channel_sessions` / `locacao_processo_documentos` SELECT
+  org-wide para membro (OAuth de agente da org lê contato pessoal por id);
+  a superfície não usa isso como autorização. Sem patch silencioso.
+- Prova RLS no Postgres efêmero do CI (`invariants-majors`, arquivo
+  `delegacao-visibilidade-corporativa-rls.test.ts`). Docker local ausente
+  neste ambiente — não instalar infra para contornar.

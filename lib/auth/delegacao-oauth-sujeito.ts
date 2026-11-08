@@ -1,21 +1,39 @@
 /**
  * Sujeito OAuth → identidade de usuário do CRM.
  *
- * Contrato documentado (Auth GoTrue OAuth 2.1 Server): o access token É um
- * JWT padrão do Auth (`sub`, `role`, `aud` tipicamente `"authenticated"`,
- * `client_id` presente só em tokens OAuth; sessões cookie têm `client_id`
- * nulo). `getUser(jwt)` valida no Auth (sessão revogada falha mesmo com
- * `exp` futuro). `getClaims(jwt)` lê claims. Não se assina JWT aqui. Não se
- * autoriza por metadado de perfil do Auth. Não se aceita `dsk_`.
+ * Contrato oficial do Auth (GoTrue OAuth 2.1 Server + JWT Claims Reference):
+ * o access token OAuth É um JWT de usuário. Claims sempre presentes no JWT
+ * de usuário: `iss`, `aud`, `exp`, `iat`, `sub`, `role`, `session_id`.
+ * Token OAuth acrescenta `client_id` (sessão cookie tem `client_id` nulo).
+ * `aud` documentado é `"authenticated"` (ou `"anon"`). Recurso RFC 8707 no
+ * `aud` exige Custom Access Token Hook — **não ligado**. Este verificador
+ * NÃO trata `aud` como URL de recurso.
  *
- * Audiência RFC 8707 no JWT (`aud` = resource) exige Custom Access Token
- * Hook no Auth — configuração viva, NÃO ligada neste projeto. Este
- * verificador exige `aud` autenticado + `client_id` não vazio. Recurso da
- * superfície é conferido à parte.
+ * Camadas distintas — não misturar:
+ * 1. `exp` do JWT: depois disto o token não deve ser confiado mesmo assinado.
+ * 2. Sessão Auth: `getClaims` verifica assinatura e expiração; um JWT ainda
+ *    não expirado continua válido depois de sign-out. A guia avançada SSR
+ *    documenta `getUser()` (pedido de rede ao Auth) como o jeito de detectar
+ *    sessão encerrada no servidor. A página de sign-out documenta que o
+ *    access token JWT em si não se revoga até `exp`. Teste offline NÃO prova
+ *    o Auth; prova só fail-closed quando `getUser` devolve erro/usuário nulo.
+ * 3. Refresh token: outro artefato; esta superfície não troca refresh.
+ * 4. Grant da org: `delegacao_visibilidade_corporativa.revoked_at` /
+ *    `expires_at` — independente do JWT e da sessão Auth.
+ *
+ * Não se assina JWT aqui. Não se autoriza por metadado de perfil. Não se
+ * aceita `dsk_`.
  */
 import { createUserClientFromAccessToken } from "@/lib/supabase/jwt-usuario";
 
 export const PREFIXO_TOKEN_ORG = "dsk_";
+
+/** UUID canônico das claims `sub` / `session_id` (documentação de sessões). */
+const UUID_CLAIM =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Folga de relógio só para `iat` no futuro. `exp` passado recusa sem folga. */
+const SKEW_IAT_FUTURO_S = 60;
 
 export type MotivoRecusaSujeitoOAuth =
   | "identidade_nao_provada"
@@ -26,9 +44,9 @@ export type MotivoRecusaSujeitoOAuth =
 export type SujeitoOAuth = {
   userId: string;
   clientId: string;
-  sessionId: string | null;
+  sessionId: string;
   accessToken: string;
-  exp: number | null;
+  exp: number;
 };
 
 export type ResultadoSujeitoOAuth =
@@ -57,13 +75,56 @@ export function extrairBearer(authorizationHeader: string | null | undefined): s
   return token.length > 0 ? token : null;
 }
 
+export function issuerAuthDeUrl(supabaseUrl: string): string | null {
+  try {
+    const u = new URL(supabaseUrl.trim());
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!u.host || u.username || u.password) return null;
+    return `${u.protocol}//${u.host}/auth/v1`;
+  } catch {
+    return null;
+  }
+}
+
+export function issuerAuthConfigurado(): string | null {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (typeof raw !== "string" || raw.trim().length === 0) return null;
+  return issuerAuthDeUrl(raw);
+}
+
 function audAutenticada(aud: unknown): boolean {
   if (aud === "authenticated") return true;
-  return Array.isArray(aud) && aud.includes("authenticated");
+  return Array.isArray(aud) && aud.length === 1 && aud[0] === "authenticated";
 }
 
 function textoNaoVazio(valor: unknown): valor is string {
   return typeof valor === "string" && valor.trim().length > 0;
+}
+
+function uuidClaim(valor: unknown): string | null {
+  if (!textoNaoVazio(valor)) return null;
+  const t = valor.trim();
+  return UUID_CLAIM.test(t) ? t.toLowerCase() : null;
+}
+
+function numeroUnixFinito(valor: unknown): number | null {
+  return typeof valor === "number" && Number.isFinite(valor) ? valor : null;
+}
+
+function issAceito(iss: unknown, esperado: string | null): boolean {
+  if (!textoNaoVazio(iss)) return false;
+  const normalizado = issuerAuthDeUrl(iss);
+  if (!normalizado) return false;
+  try {
+    const u = new URL(iss.trim());
+    const path = u.pathname.replace(/\/+$/, "");
+    if (path !== "/auth/v1") return false;
+    if (u.search || u.hash) return false;
+  } catch {
+    return false;
+  }
+  if (esperado) return normalizado === esperado;
+  return true;
 }
 
 export function leitorAuthOAuthPadrao(accessToken: string): LeitorAuthOAuth {
@@ -103,7 +164,8 @@ export async function verificarSujeitoOAuth(
   if (userRes.error || !userRes.data.user || !textoNaoVazio(userRes.data.user.id)) {
     return { ok: false, motivo: "token_invalido" };
   }
-  const userId = userRes.data.user.id.trim();
+  const userId = uuidClaim(userRes.data.user.id);
+  if (!userId) return { ok: false, motivo: "identidade_nao_provada" };
 
   const claimsRes = await leitor.getClaims(jwt);
   const claims = claimsRes.data?.claims;
@@ -111,16 +173,19 @@ export async function verificarSujeitoOAuth(
     return { ok: false, motivo: "token_invalido" };
   }
 
-  const sub = claims.sub;
-  if (!textoNaoVazio(sub) || sub.trim() !== userId) {
+  const sub = uuidClaim(claims.sub);
+  if (!sub || sub !== userId) {
     return { ok: false, motivo: "identidade_nao_provada" };
   }
 
-  const role = claims.role;
-  if (role === "service_role" || role === "anon") {
-    return { ok: false, motivo: "identidade_nao_provada" };
+  if ("user_id" in claims) {
+    const userIdClaim = uuidClaim(claims.user_id);
+    if (!userIdClaim || userIdClaim !== sub) {
+      return { ok: false, motivo: "identidade_nao_provada" };
+    }
   }
-  if (role !== undefined && role !== "authenticated") {
+
+  if (claims.role !== "authenticated") {
     return { ok: false, motivo: "identidade_nao_provada" };
   }
 
@@ -128,20 +193,39 @@ export async function verificarSujeitoOAuth(
     return { ok: false, motivo: "audiencia_invalida" };
   }
 
+  if (!issAceito(claims.iss, issuerAuthConfigurado())) {
+    return { ok: false, motivo: "token_invalido" };
+  }
+
   const clientId = claims.client_id;
   if (!textoNaoVazio(clientId)) {
     return { ok: false, motivo: "client_id_ausente" };
   }
 
-  const expRaw = claims.exp;
-  const exp = typeof expRaw === "number" && Number.isFinite(expRaw) ? expRaw : null;
-  const agora = deps.agora ?? new Date();
-  if (exp !== null && exp * 1000 <= agora.getTime()) {
+  const sessionId = uuidClaim(claims.session_id);
+  if (!sessionId) {
     return { ok: false, motivo: "token_invalido" };
   }
 
-  const sessionRaw = claims.session_id;
-  const sessionId = textoNaoVazio(sessionRaw) ? sessionRaw.trim() : null;
+  const agora = deps.agora ?? new Date();
+  const agoraS = agora.getTime() / 1000;
+  const exp = numeroUnixFinito(claims.exp);
+  if (exp === null || exp <= agoraS) {
+    return { ok: false, motivo: "token_invalido" };
+  }
+
+  const iat = numeroUnixFinito(claims.iat);
+  if (iat === null || iat > agoraS + SKEW_IAT_FUTURO_S || iat >= exp) {
+    return { ok: false, motivo: "token_invalido" };
+  }
+
+  const nbf = claims.nbf;
+  if (nbf !== undefined) {
+    const nbfN = numeroUnixFinito(nbf);
+    if (nbfN === null || nbfN > agoraS) {
+      return { ok: false, motivo: "token_invalido" };
+    }
+  }
 
   return {
     ok: true,

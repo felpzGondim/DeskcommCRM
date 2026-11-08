@@ -20,7 +20,7 @@ atendente fala com o Bot. O sujeito OAuth identifica a **usuária do CRM**.
 | **Enablement deste projeto** | **Não confirmado.** `GOTRUE_OAUTH_SERVER_ENABLED` e `GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION` são flags do **Auth**, não variáveis de `lib/env.ts`. Este PR **não** as liga e **não** as acrescenta ao `.env.example`. | [OAuth 2.1 Server](https://supabase.com/docs/guides/auth/oauth-server) |
 | **Fluxos suportados pelo Auth** | Só `authorization_code` + PKCE e `refresh_token`. **Não** há `device_code` documentado. | [OAuth flows](https://supabase.com/docs/guides/auth/oauth-server/oauth-flows) |
 | **Token** | Access token OAuth **é** JWT padrão do Auth (`sub`, `role`, `aud` tipicamente `"authenticated"`, `client_id` nos tokens OAuth; sessão cookie tem `client_id` nulo). RLS com `auth.uid()` aplica. | [Token security](https://supabase.com/docs/guides/auth/oauth-server/token-security) |
-| **Verificação** | `getUser(jwt)` no Auth (sessão revogada falha mesmo com `exp` futuro). `getClaims` / JWKS para assimétrico. | [JWTs](https://supabase.com/docs/guides/auth/jwts) |
+| **Verificação** | JWT de usuário exige `iss`, `aud`, `exp`, `iat`, `sub`, `role`, `session_id` ([JWT Claims Reference](https://supabase.com/docs/guides/auth/jwt-fields)). Token OAuth acrescenta `client_id` ([token security](https://supabase.com/docs/guides/auth/oauth-server/token-security)). `getClaims` verifica assinatura e `exp`; JWT não expirado continua válido após sign-out. `getUser(jwt)` é pedido de rede ao Auth — a [guia SSR avançada](https://supabase.com/docs/guides/auth/server-side/advanced-guide) o documenta para detectar sessão encerrada no servidor. [signOut](https://supabase.com/docs/reference/javascript/auth-signout): o access token JWT não se revoga até `exp`. Teste offline não prova o Auth. | [JWTs](https://supabase.com/docs/guides/auth/jwts); [sessões](https://supabase.com/docs/guides/auth/sessions) |
 | **Escopos OIDC** | `openid` / `email` / `profile` / `phone` **não** controlam acesso ao banco. Efeitos `buscar\|ler\|baixar` vivem no grant. | [Token security](https://supabase.com/docs/guides/auth/oauth-server/token-security) |
 | **Terceiros como IdP** | Third-party Auth (Clerk etc.) é a **direção oposta** (confiar JWT estrangeiro). Não é o caminho: o sujeito tem de ser usuário do CRM. | [Third-party overview](https://supabase.com/docs/guides/auth/third-party/overview) |
 | **Cursor MCP** | HTTPS remoto, authorization-code + PKCE, RFC 9728, RFC 8707, refresh; DCR **ou** `CLIENT_ID` estático (`CLIENT_SECRET`/scopes opcionais). Contas **individuais** por colega; login compartilhado **não** entra. | [Cursor MCP](https://cursor.com/docs/mcp); [shared bots](https://cursor.com/help/grok-bot/shared-bots) |
@@ -35,19 +35,26 @@ resource RFC 8707 no JWT) é config viva do Auth — **não ligada**.
 
 1. O conector apresenta `Authorization: Bearer` com JWT **emitido pelo Auth**.
 2. `verificarSujeitoOAuth` (`lib/auth/delegacao-oauth-sujeito.ts`):
-   recusa `dsk_`, Bearer ausente, `getUser` falho, `sub` ≠ `user.id`,
-   `role` `anon`/`service_role`, `aud` ≠ `authenticated`, `client_id` vazio
-   (sessão cookie), `exp` passado. **Não** lê `user_metadata`. **Não** assina.
+   recusa `dsk_`, Bearer ausente, `getUser` com erro/usuário nulo, `sub`
+   ≠ `user.id`, `role` ≠ `"authenticated"` (ausente inclusive), `aud` ≠
+   `"authenticated"` (não é URL de recurso), `iss` ≠ origem do Auth +
+   `/auth/v1`, `client_id` vazio (sessão cookie), `session_id` ausente ou
+   não-UUID, `exp` ausente/não-finito/passado, `iat` ausente. **Não** lê
+   metadado de perfil. **Não** assina.
 3. Client PostgREST com **anon key** + o mesmo Bearer
    (`lib/supabase/jwt-usuario.ts`). RLS vê `auth.uid()` da atendente.
    **Nunca** `createAdminClient`.
 4. Grant vivo em `delegacao_visibilidade_corporativa` (`user_id` = `sub`,
    `oauth_client_id` = `client_id`, `revoked_at` nulo, `expires_at` futuro,
-   efeito pedido ∈ `efeitos`). JWT `exp` **não** basta para revogar.
+   efeito pedido ∈ `efeitos`). Lookup que falha **recusa** (`grant_ausente`);
+   sem fallback de dono/admin. Distinto de JWT `exp` e de sessão Auth.
 5. Policy extra `conversations_select_delegacao_oauth` (migration 0773):
    só token com `client_id` + grant vivo + sessão `corporativa` +
    `contacts.is_personal is false`. A policy de cookie
    (`conversations_select`) exige `client_id IS NULL` — a Inbox não muda.
+   Escritas de `conversations`/`messages` também exigem `client_id IS NULL`.
+   `messages_select_delegacao_oauth` é **restritiva** (AND com a permissiva
+   da 0035) para o token OAuth não herdar mensagem por id direto.
 6. Camada de app ainda recusa classificação NULL/pessoal e contato pessoal
    (`executarSuperficieDelegada`). Manager/admin com OAuth não vê pessoal
    pela policy extra; a Inbox por cookie continua vendo o que já via.
@@ -90,8 +97,16 @@ guarda é da rota.
 1. Enablement do OAuth Server nesta VPS **não confirmado**.
 2. Interop callback Grok Bot × GoTrue **não medido**.
 3. `aud` no JWT continua `"authenticated"` sem o Hook. A superfície exige
-   `aud` autenticado + `client_id` + grant; não exige `aud` = URL do recurso.
-4. Sem client OAuth e sem linha de grant, `ok: true` HTTP é inalcançável
+   `aud` autenticado + `client_id` + grant; **não** afirma audiência de
+   recurso RFC 8707. O documento RFC 9728 (quando servido) declara `resource`
+   à parte — isso não entra no JWT.
+4. Fronteira RLS **não** tapada neste PR: `contacts` e `channel_sessions`
+   continuam SELECT org-wide para membro; `locacao_processo_documentos`
+   idem. A superfície delegada **não** usa essas listagens como autorização.
+   `GET .../notes/[noteId]/media` permanece irmã não patchada.
+5. `whatsapp-media` não tem policy de SELECT para `authenticated`; download
+   vai por URL assinada na app, depois da superfície + spec 21.
+6. Sem client OAuth e sem linha de grant, `ok: true` HTTP é inalcançável
    (rota 404 + ativação padrão falsa).
 
 ---

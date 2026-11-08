@@ -5432,28 +5432,8 @@ drop policy if exists "conversations_agent_insert" on public.conversations;
 drop policy if exists "conversations_agent_update" on public.conversations;
 drop policy if exists "conversations_agent_delete" on public.conversations;
 
-create policy "conversations_agent_insert" on public.conversations
-  for insert with check (
-    public.fn_is_platform_admin_full()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'agent'))
-  );
-create policy "conversations_agent_update" on public.conversations
-  for update using (
-    public.fn_is_platform_admin_full()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'agent'))
-  ) with check (
-    public.fn_is_platform_admin_full()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'agent'))
-  );
-create policy "conversations_agent_delete" on public.conversations
-  for delete using (
-    public.fn_is_platform_admin_full()
-    or ((organization_id in (select public.fn_user_org_ids()))
-        and public.fn_role_at_least(organization_id, 'agent'))
-  );
+-- Escritas finais de conversations exigem client_id nulo (apêndice 0773).
+-- Recriá-las aqui reinstalaria a versão sem o recorte a cada update.sh.
 
 drop policy if exists "messages_tenant_isolation_all" on public.messages;
 drop policy if exists "messages_select" on public.messages;
@@ -5470,24 +5450,8 @@ create policy "messages_select" on public.messages
     )
   );
 
-create policy "messages_insert" on public.messages
-  for insert with check (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
-create policy "messages_update" on public.messages
-  for update using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  ) with check (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
-create policy "messages_delete" on public.messages
-  for delete using (
-    (organization_id in (select public.fn_user_org_ids()))
-    or public.fn_is_platform_admin_full()
-  );
+-- messages insert/update/delete finais exigem client_id nulo (apêndice 0773).
+-- Recriá-las aqui reinstalaria a versão sem o recorte a cada update.sh.
 
 -- Forward-fix do G4-01: fn_conversation_assign (0031/0032) passa a SECURITY
 -- DEFINER. Com o SELECT de conversations visibility-aware, o `update ... returning
@@ -58208,25 +58172,10 @@ $$;
 revoke all on function public.fn_conversation_scope() from public, anon;
 grant execute on function public.fn_conversation_scope() to authenticated, service_role;
 
--- A policy: o mesmo resultado da 0035, sem uma chamada por linha.
+-- A policy final de conversations_select vive no apêndice 0773 (cookie =
+-- client_id nulo + escada 0726). Recriá-la aqui reinstalaria a versão sem o
+-- recorte a cada update.sh; o drop colado no bloco final derruba o clone antigo.
 drop policy if exists "conversations_select" on public.conversations;
-create policy "conversations_select" on public.conversations
-  for select using (
-    (select public.fn_is_platform_admin())
-    or organization_id in (
-         select s.organization_id from public.fn_conversation_scope() s where s.org_wide_read
-       )
-    or (
-         assigned_to_user_id = auth.uid()
-         and organization_id in (select s.organization_id from public.fn_conversation_scope() s)
-       )
-    or (
-         assigned_to_user_id is null
-         and organization_id in (
-              select s.organization_id from public.fn_conversation_scope() s where s.sees_unassigned
-            )
-       )
-  );
 
 -- 0734 — avaliação única de permissões (#3087)
 -- manifest: Avalia papel e contexto de suporte uma vez por verificação RBAC (#3087), preservando regras, grants e limites.
@@ -64935,5 +64884,117 @@ create policy conversations_select_delegacao_oauth on public.conversations
     )
   );
 
-notify pgrst, 'reload schema';
+-- Escritas da Inbox: só sessão cookie (client_id nulo). Token OAuth não é
+-- veículo de insert/update/delete — a superfície delegada é só buscar/ler/baixar.
+drop policy if exists "conversations_agent_insert" on public.conversations;
+create policy "conversations_agent_insert" on public.conversations
+  for insert with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
+drop policy if exists "conversations_agent_update" on public.conversations;
+create policy "conversations_agent_update" on public.conversations
+  for update using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  ) with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
+drop policy if exists "conversations_agent_delete" on public.conversations;
+create policy "conversations_agent_delete" on public.conversations
+  for delete using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
 
+drop policy if exists "messages_insert" on public.messages;
+create policy "messages_insert" on public.messages
+  for insert with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+drop policy if exists "messages_update" on public.messages;
+create policy "messages_update" on public.messages
+  for update using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  ) with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+drop policy if exists "messages_delete" on public.messages;
+create policy "messages_delete" on public.messages
+  for delete using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+
+-- messages_select (0035) é permissiva: platform_admin OR exists(conversations).
+-- Políticas permissivas OR-am. Token OAuth não pode herdar mensagem de conversa
+-- pessoal/unknown/outra-org só porque o EXISTS enxerga a linha. Restritiva AND
+-- com a permissiva: cookie (client_id nulo) inalterado; OAuth exige o mesmo
+-- recorte da policy extra (grant vivo + sessão corporativa + is_personal false).
+drop policy if exists messages_select_delegacao_oauth on public.messages;
+create policy messages_select_delegacao_oauth on public.messages
+  as restrictive
+  for select
+  using (
+    (auth.jwt() ->> 'client_id') is null
+    or (
+      exists (
+        select 1
+        from public.delegacao_visibilidade_corporativa g
+        where g.user_id = auth.uid()
+          and g.organization_id = messages.organization_id
+          and g.oauth_client_id = (auth.jwt() ->> 'client_id')
+          and g.revoked_at is null
+          and g.expires_at > now()
+          and g.efeitos && array['buscar','ler','baixar']::text[]
+      )
+      and exists (
+        select 1
+        from public.conversations c
+        join public.channel_sessions cs
+          on cs.id = c.channel_session_id
+         and cs.organization_id = c.organization_id
+        join public.contacts ct
+          on ct.id = c.contact_id
+         and ct.organization_id = c.organization_id
+        where c.id = messages.conversation_id
+          and c.organization_id = messages.organization_id
+          and cs.classificacao_empresarial = 'corporativa'
+          and ct.is_personal is false
+      )
+    )
+  );
+
+notify pgrst, 'reload schema';

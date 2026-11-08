@@ -157,12 +157,16 @@ export async function executarSuperficieDelegada(
     return recusa(sujeito.motivo, pedido);
   }
 
-  const grant = await deps.buscarGrant({
-    userId: sujeito.sujeito.userId,
-    clientId: sujeito.sujeito.clientId,
-  });
-  if (grant === "erro") return recusa("grant_ausente", pedido);
-  if (!grant) return recusa("grant_ausente", pedido);
+  let grant: GrantDelegacaoCorporativa | null | "erro";
+  try {
+    grant = await deps.buscarGrant({
+      userId: sujeito.sujeito.userId,
+      clientId: sujeito.sujeito.clientId,
+    });
+  } catch {
+    return recusa("grant_ausente", pedido);
+  }
+  if (grant === "erro" || !grant) return recusa("grant_ausente", pedido);
   const motivoGrant = grantVivo(grant, sujeito.sujeito, pedido.efeito, deps.agora ?? new Date());
   if (motivoGrant) return recusa(motivoGrant, pedido, { organization_id: grant.organization_id });
 

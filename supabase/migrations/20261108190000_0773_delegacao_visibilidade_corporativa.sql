@@ -1,4 +1,4 @@
--- manifest: Fonte revisável da delegação corporativa (preparar, não ativar): coluna channel_sessions.classificacao_empresarial (NULL recusa), tabela delegacao_visibilidade_corporativa (grant por usuário+client OAuth, SELECT só do próprio uid, escrita só service_role) e policy extra conversations_select_delegacao_oauth. conversations_select de cookie exige client_id IS NULL para não herdar Inbox em token OAuth. Sem SECURITY DEFINER nova, sem user_metadata, sem linha semeada. Rollback: as estruturas ficam; a superfície HTTP segue 404.
+-- manifest: Fonte revisável da delegação corporativa (preparar, não ativar): coluna channel_sessions.classificacao_empresarial (NULL recusa), tabela delegacao_visibilidade_corporativa (grant por usuário+client OAuth, SELECT só do próprio uid, escrita só service_role), policy extra conversations_select_delegacao_oauth e messages_select restritiva OAuth. Cookie exige client_id IS NULL em SELECT/escrita de conversations e escrita de messages. Sem função nova, sem metadado de perfil, sem linha semeada. Rollback: as estruturas ficam; a superfície HTTP segue 404.
 
 -- ---- delegação visibilidade corporativa (migration 0773, fork) ----
 -- Preparação offline. Nenhuma instalação liga OAuth, grava grant ou classifica
@@ -112,6 +112,119 @@ create policy conversations_select_delegacao_oauth on public.conversations
       where ct.id = conversations.contact_id
         and ct.organization_id = conversations.organization_id
         and ct.is_personal is false
+    )
+  );
+
+-- Escritas da Inbox: só sessão cookie (client_id nulo). Token OAuth não é
+-- veículo de insert/update/delete — a superfície delegada é só buscar/ler/baixar.
+drop policy if exists "conversations_agent_insert" on public.conversations;
+create policy "conversations_agent_insert" on public.conversations
+  for insert with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
+drop policy if exists "conversations_agent_update" on public.conversations;
+create policy "conversations_agent_update" on public.conversations
+  for update using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  ) with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
+drop policy if exists "conversations_agent_delete" on public.conversations;
+create policy "conversations_agent_delete" on public.conversations
+  for delete using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      public.fn_is_platform_admin_full()
+      or ((organization_id in (select public.fn_user_org_ids()))
+          and public.fn_role_at_least(organization_id, 'agent'))
+    )
+  );
+
+drop policy if exists "messages_insert" on public.messages;
+create policy "messages_insert" on public.messages
+  for insert with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+drop policy if exists "messages_update" on public.messages;
+create policy "messages_update" on public.messages
+  for update using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  ) with check (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+drop policy if exists "messages_delete" on public.messages;
+create policy "messages_delete" on public.messages
+  for delete using (
+    (auth.jwt() ->> 'client_id') is null
+    and (
+      (organization_id in (select public.fn_user_org_ids()))
+      or public.fn_is_platform_admin_full()
+    )
+  );
+
+-- messages_select (0035) é permissiva: platform_admin OR exists(conversations).
+-- Políticas permissivas OR-am. Token OAuth não pode herdar mensagem de conversa
+-- pessoal/unknown/outra-org só porque o EXISTS enxerga a linha. Restritiva AND
+-- com a permissiva: cookie (client_id nulo) inalterado; OAuth exige o mesmo
+-- recorte da policy extra (grant vivo + sessão corporativa + is_personal false).
+drop policy if exists messages_select_delegacao_oauth on public.messages;
+create policy messages_select_delegacao_oauth on public.messages
+  as restrictive
+  for select
+  using (
+    (auth.jwt() ->> 'client_id') is null
+    or (
+      exists (
+        select 1
+        from public.delegacao_visibilidade_corporativa g
+        where g.user_id = auth.uid()
+          and g.organization_id = messages.organization_id
+          and g.oauth_client_id = (auth.jwt() ->> 'client_id')
+          and g.revoked_at is null
+          and g.expires_at > now()
+          and g.efeitos && array['buscar','ler','baixar']::text[]
+      )
+      and exists (
+        select 1
+        from public.conversations c
+        join public.channel_sessions cs
+          on cs.id = c.channel_session_id
+         and cs.organization_id = c.organization_id
+        join public.contacts ct
+          on ct.id = c.contact_id
+         and ct.organization_id = c.organization_id
+        where c.id = messages.conversation_id
+          and c.organization_id = messages.organization_id
+          and cs.classificacao_empresarial = 'corporativa'
+          and ct.is_personal is false
+      )
     )
   );
 

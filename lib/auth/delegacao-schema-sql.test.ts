@@ -38,6 +38,9 @@ describe("0773 — contrato SQL (offline, sem aplicar)", () => {
     expect(sql).toMatch(/ct\.is_personal is false/);
     expect(sql).toMatch(/g\.revoked_at is null/);
     expect(sql).toMatch(/g\.expires_at > now\(\)/);
+    expect(sql).toMatch(/as restrictive/);
+    expect(sql).toMatch(/messages_select_delegacao_oauth/);
+    expect(sql).toMatch(/conversations_agent_insert/);
   });
 
   it("apêndice do baseline contém o SQL da migration depois do cabeçalho manifest", () => {

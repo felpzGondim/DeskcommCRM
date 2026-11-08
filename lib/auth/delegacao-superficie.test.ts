@@ -9,7 +9,7 @@ import {
   type DepsSuperficieDelegada,
   type GrantDelegacaoCorporativa,
 } from "./delegacao-superficie";
-import type { LeitorAuthOAuth } from "./delegacao-oauth-sujeito";
+import { issuerAuthConfigurado, issuerAuthDeUrl, type LeitorAuthOAuth } from "./delegacao-oauth-sujeito";
 
 const MARINA = "dddddddd-1111-4111-8111-111111111111";
 const FELIPE = "eeeeeeee-2222-4222-8222-222222222222";
@@ -17,7 +17,11 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const OUTRA_ORG = "22222222-2222-4222-8222-222222222222";
 const CONV = "aaaaaaaa-1111-4111-8111-111111111111";
 const CLIENT = "oauth-client-cursor-test";
+const SESSION = "ffffffff-3333-4333-8333-333333333333";
 const EXP_FUTURO = Math.floor(Date.now() / 1000) + 3600;
+const IAT = Math.floor(Date.now() / 1000) - 30;
+const ISS =
+  issuerAuthConfigurado() ?? issuerAuthDeUrl("https://test-placeholder.invalid") ?? "";
 
 function leitorDe(userId: string, parcial: Record<string, unknown> = {}): LeitorAuthOAuth {
   const claims = {
@@ -25,6 +29,9 @@ function leitorDe(userId: string, parcial: Record<string, unknown> = {}): Leitor
     role: "authenticated",
     aud: "authenticated",
     client_id: CLIENT,
+    session_id: SESSION,
+    iss: ISS,
+    iat: IAT,
     exp: EXP_FUTURO,
     ...parcial,
   };
@@ -255,6 +262,40 @@ describe("executarSuperficieDelegada — duas identidades e recusas", () => {
     );
     expect(r).toMatchObject({ ok: false, motivo: "contato_pessoal" });
     expect(baixarAssinar).not.toHaveBeenCalled();
+  });
+
+  it("lookup de grant que lança recusa sem buscar nem assinar", async () => {
+    const buscar = vi.fn(async () => []);
+    const baixarAssinar = vi.fn(async () => ({ url: "https://storage.example/x" }));
+    const r = await executarSuperficieDelegada(
+      { ativacao: ativada, authorizationHeader: "Bearer jwt-marina", efeito: "buscar" },
+      deps({
+        buscarGrant: async () => {
+          throw new Error("db down");
+        },
+        buscar,
+        baixarAssinar,
+      }),
+    );
+    expect(r).toMatchObject({ ok: false, motivo: "grant_ausente" });
+    expect(buscar).not.toHaveBeenCalled();
+    expect(baixarAssinar).not.toHaveBeenCalled();
+  });
+
+  it("exp ausente no token recusa sem lookup de grant", async () => {
+    const buscarGrant = vi.fn(async () => grantMarina());
+    const buscar = vi.fn(async () => []);
+    const r = await executarSuperficieDelegada(
+      { ativacao: ativada, authorizationHeader: "Bearer jwt-sem-exp", efeito: "buscar" },
+      deps({
+        leitorAuth: leitorDe(MARINA, { exp: undefined }),
+        buscarGrant,
+        buscar,
+      }),
+    );
+    expect(r).toMatchObject({ ok: false, motivo: "token_invalido" });
+    expect(buscarGrant).not.toHaveBeenCalled();
+    expect(buscar).not.toHaveBeenCalled();
   });
 
   it("dsk_ recusa identidade sem lookup de grant", async () => {
