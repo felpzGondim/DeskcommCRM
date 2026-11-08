@@ -52,6 +52,14 @@ export function sql(script: string): string {
   return execFileSync(bin, args, { input: script, encoding: "utf8" }).trim();
 }
 
+/** Última linha do stdout (psql -tA imprime uma linha por SELECT). */
+export function lastLine(out: string): string {
+  const lines = out.split("\n");
+  const last = lines[lines.length - 1];
+  if (last === undefined) throw new Error("empty psql output");
+  return last;
+}
+
 /**
  * Mensagem de erro do psql, juntando `message` e `stderr`.
  *
