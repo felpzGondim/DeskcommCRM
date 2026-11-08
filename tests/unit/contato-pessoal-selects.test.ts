@@ -61,6 +61,11 @@ describe("contato pessoal: a coluna viaja em todo SELECT que lê o contato", () 
     const src = fonte("lib", "types", "contacts.ts");
     expect(src).toMatch(/is_personal: boolean/);
   });
+
+  it("exclusão compartilhada lê is_personal do contato", () => {
+    const src = fonte("lib", "auth", "exclusao-contato-pessoal.ts");
+    expect(src).toMatch(/\.select\("is_personal"\)/);
+  });
 });
 
 describe("contato pessoal: vocabulário próprio de saída de campanha (D7)", () => {

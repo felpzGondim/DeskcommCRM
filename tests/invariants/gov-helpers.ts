@@ -12,15 +12,24 @@ import { execFileSync } from "node:child_process";
  */
 
 const container = process.env.TEST_DB_CONTAINER;
-if (!container) {
+const localPsql = process.env.TEST_DB_PSQL;
+if (!container && !localPsql) {
   throw new Error(
     "TEST_DB_CONTAINER not set — run this suite via `pnpm test:invariants` (scripts/test-db.sh)",
   );
 }
-const containerName: string = container;
+const containerName: string = container ?? "";
+const localDb = process.env.TEST_DB_NAME ?? "postgres";
 
 /** Runs a SQL script in ONE psql session inside the container; returns stdout (tuples-only). */
 export function sql(script: string): string {
+  if (localPsql) {
+    return execFileSync(
+      localPsql,
+      ["-d", localDb, "-v", "ON_ERROR_STOP=1", "-tA", "-f", "-"],
+      { input: script, encoding: "utf8" },
+    ).trim();
+  }
   return execFileSync(
     "docker",
     [

@@ -5,6 +5,7 @@ CLI utilities pra operação local e de produção.
 ## Lista
 
 - `seed-tenant.ts` — Cria um tenant manualmente (modo BPO). Placeholder; implementação na Spec 01.
+- `disposable-delegacao-auth/` — harness M1/M2 **descartável** (GoTrue v2.196.0 + ACL sintético). Não aponta para produção.
 
 ## Convenções
 

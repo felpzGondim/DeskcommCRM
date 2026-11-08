@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Exclusão pessoal em mídia/documentos e delegação OAuth (desligada)",
+    "subtitle": "Cookie+spec 21 fail-closed; superfície /api/mcp/delegacao 404; sujeito GoTrue getUser; grant 0773 vazio; Inbox cookie intacta",
+    "output": "delegacao-analise-inquilinos.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "inbox", "label": "Inbox (cookie)" },
+    { "id": "servidor", "label": "Servidor" },
+    { "id": "guarda", "label": "Delegação (desligada)" },
+    { "id": "registro", "label": "Registro" }
+  ],
+  "mainPath": ["inbox_midia", "exclusao", "assinatura"],
+  "nodes": [
+    { "id": "inbox_midia", "lane": "inbox", "col": 1, "type": "frontend", "label": "Inbox: abrir mídia / documentos da conversa visível" },
+    { "id": "rotas_cookie", "lane": "servidor", "col": 2, "type": "route", "label": "GET messages/media e locacao/documentos: getUser + org, sem auth-dual" },
+    { "id": "exclusao", "lane": "servidor", "col": 2, "type": "process", "label": "avaliarContatoPessoalDaConversa: só is_personal===false; erro/ausente/malformado recusa" },
+    { "id": "assinatura", "lane": "servidor", "col": 2, "type": "process", "label": "createSignedUrl / adapter só depois da exclusão" },
+    { "id": "notas_midia", "lane": "servidor", "col": 2, "type": "route", "label": "PENDENTE (não neste PR): notes/[noteId]/media assina internal-media 60s sem is_personal" },
+    { "id": "rls_cookie", "lane": "registro", "col": 3, "type": "database", "label": "conversations_select: client_id IS NULL + fn_conversation_scope (Inbox)" },
+    { "id": "rls_oauth", "lane": "registro", "col": 3, "type": "database", "label": "conversations extra+restritiva: client_id + grant + corporativa + is_personal false; contacts/sessions grant-aware; oauth_cookie_only no resto + storage" },
+    { "id": "rpc_aberto", "lane": "registro", "col": 3, "type": "database", "label": "RPC não confinada: enum docs ≠ runtime; PUBLIC/NOINHERIT; próximo = M1 Auth descartável" },
+    { "id": "grant", "lane": "registro", "col": 3, "type": "database", "label": "delegacao_visibilidade_corporativa: zero linhas; SELECT só auth.uid(); authenticated não insere" },
+    { "id": "classif", "lane": "registro", "col": 3, "type": "database", "label": "channel_sessions.classificacao_empresarial NULL|pessoal|corporativa; NULL recusa na delegação" },
+    { "id": "mcp_org", "lane": "guarda", "col": 4, "type": "process", "label": "MCP /api/mcp dsk_ + admin client: org, não identidade individual" },
+    { "id": "mcp_del", "lane": "guarda", "col": 4, "type": "route", "label": "/api/mcp/delegacao e RFC 9728: 404 (ATIVACAO_DELEGADA_PADRAO falsa)" },
+    { "id": "sujeito", "lane": "guarda", "col": 4, "type": "process", "label": "verificarSujeitoOAuth: getUser(jwt)+claims; recusa dsk_, aud, client_id vazio, exp, sessão Auth morta" },
+    { "id": "superficie", "lane": "guarda", "col": 4, "type": "process", "label": "executarSuperficieDelegada: grant+classificação+spec 21; sem boolean do chamador; client anon" },
+    { "id": "alvo", "lane": "guarda", "col": 4, "type": "process", "label": "D3/D5 alvo: buscar/ler/baixar todas conversas corporativas da org; não assigned-only; não turno-só" },
+    { "id": "catalogo", "lane": "guarda", "col": 4, "type": "process", "label": "search/read/download corporativos FORA de allTools / TOOL_CATALOG" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "inbox_midia", "to": "rotas_cookie", "label": "cookie SameSite, não bearer de org" },
+    { "id": "e2", "from": "rotas_cookie", "to": "exclusao", "label": "defesa spec 21 fail-closed" },
+    { "id": "e3", "from": "exclusao", "to": "assinatura", "label": "só se is_personal===false provado" },
+    { "id": "e4", "from": "rotas_cookie", "to": "rls_cookie", "label": "client de sessão cookie" },
+    { "id": "e5", "from": "rls_cookie", "to": "exclusao", "label": "linha visível ainda pode ser pessoal" },
+    { "id": "e6", "from": "mcp_org", "to": "mcp_del", "label": "isolado: dsk_ não entra na delegação" },
+    { "id": "e7", "from": "mcp_del", "to": "sujeito", "label": "só depois de ativar; hoje 404 antes" },
+    { "id": "e8", "from": "sujeito", "to": "superficie", "label": "sub da atendente, não par WhatsApp" },
+    { "id": "e9", "from": "superficie", "to": "grant", "label": "linha viva user+client; sem fallback dono" },
+    { "id": "e10", "from": "superficie", "to": "classif", "label": "NULL/pessoal recusa" },
+    { "id": "e11", "from": "superficie", "to": "rls_oauth", "label": "client anon + JWT OAuth" },
+    { "id": "e12", "from": "catalogo", "to": "mcp_del", "label": "ausência no catálogo é a trava" },
+    { "id": "e13", "from": "inbox_midia", "to": "notas_midia", "label": "anexo de nota: outro bucket, sem este helper" },
+    { "id": "e14", "from": "superficie", "to": "alvo", "label": "escopo escrito, grant ao vivo não" },
+    { "id": "e15", "from": "notas_midia", "to": "rls_cookie", "label": "conversa da org; sem corte is_personal" },
+    { "id": "e16", "from": "grant", "to": "rls_oauth", "label": "EXISTS grant na policy extra" },
+    { "id": "e17", "from": "classif", "to": "rls_oauth", "label": "EXISTS sessão corporativa" },
+    { "id": "e18", "from": "rls_oauth", "to": "rpc_aberto", "label": "mesmo papel authenticated: tabelas restritas, RPC herdada" }
+  ],
+  "cards": [
+    {
+      "id": "nao_assume_corporativa",
+      "title": "Não-ligação: sessão sem classificação",
+      "body": "A coluna existe (0773) e nasce NULL. Inventar allowlist de session id ou default corporativo está fora. A Inbox cookie não lê a coluna."
+    },
+    {
+      "id": "entitlement_separado",
+      "title": "Não-ligação: D3/D5 não alarga a Inbox",
+      "body": "conversations_select de cookie exige client_id IS NULL. Token OAuth só entra pela policy extra + grant. Zero linhas na tabela. Enablement GoTrue nesta instalação não confirmado."
+    },
+    {
+      "id": "rpc_nao_confinada",
+      "title": "Não-ligação: RPC no mesmo JWT authenticated",
+      "body": "oauth_cookie_only fecha tabelas e Storage. DEFINER volátil authenticated não lê client_id. Enum das docs ≠ schema runtime GoTrue (role type string). PUBLIC alcança NOINHERIT. 404 não cobre /rpc. Sem M1 (Auth descartável) não homologar RPC. Sem hook/CREATE ROLE neste PR."
+    }
+  ]
+}

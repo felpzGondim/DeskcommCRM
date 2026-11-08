@@ -62,6 +62,7 @@ que vieram da raiz estão igualmente indexados.
 | [`HANDOFF-sistema-vivo-consertos.md`](HANDOFF-sistema-vivo-consertos.md) | HANDOFF — Consertos sob a doutrina do Sistema Vivo |
 | [`HANDOFF-tres-papeis.md`](HANDOFF-tres-papeis.md) | HANDOFF — Os três papéis do agente (Conversador · Operador · Segurança) |
 | [`HANDOFF-wave1-devvivo.md`](HANDOFF-wave1-devvivo.md) | Waves 1 e 2 — DevVivo · 2026-07-24 |
+| [`HANDOFF-delegacao-analise-inquilinos.md`](HANDOFF-delegacao-analise-inquilinos.md) | HANDOFF — exclusão pessoal + delegação OAuth GoTrue (revisão; superfície 404; grant 0773 vazio) |
 
 Também aqui: [`BRIEFING-*.md`](.) e [`CONTRATO-wave5.md`](CONTRATO-wave5.md) (briefing e contrato de onda), [`waves/`](waves/) (um arquivo por onda) e
 [`2026-08-24-historico-de-captacao-e-abordagem-por-ia.md`](2026-08-24-historico-de-captacao-e-abordagem-por-ia.md).

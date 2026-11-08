@@ -17,7 +17,12 @@ vi.mock("@/lib/api/wrappers", () => ({
   fail: (code: string, message: string, status: number) => Response.json({error: {code, message}}, {status}),
 }));
 function query(tabela: string) {
-  let rows: Array<Record<string, unknown>> = tabela === "conversations" ? [{id: estado.conversa, organization_id: estado.org}] : estado.linhas;
+  let rows: Array<Record<string, unknown>> =
+    tabela === "conversations"
+      ? [{id: estado.conversa, organization_id: estado.org, contact_id: "contato-1"}]
+      : tabela === "contacts"
+        ? [{id: "contato-1", organization_id: estado.org, is_personal: false}]
+        : estado.linhas;
   const q = {
     select: () => q,
     eq: (k: string, v: unknown) => {rows = rows.filter((r) => r[k] === v); return q;},

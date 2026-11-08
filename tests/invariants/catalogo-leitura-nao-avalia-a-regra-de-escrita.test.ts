@@ -88,7 +88,9 @@ describe("catalog_products — a leitura não avalia a regra de escrita", () => 
     const n = noBanco(`
       select count(*) from pg_policies
        where schemaname = 'public' and tablename = 'catalog_products'
-         and cmd in ('ALL', 'SELECT') and policyname <> 'catalog_products_select';
+         and cmd in ('ALL', 'SELECT')
+         and policyname <> 'catalog_products_select'
+         and policyname <> 'oauth_cookie_only';
     `);
     expect(n).toBe("0");
   });

@@ -78,6 +78,12 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/api\/v1\/integrations\/nuvemshop\/callback$/,
   /^\/api\/internal\//,
   /^\/api\/mcp(\/.*)?$/,
+  // RFC 9728 da superfície delegada (`/api/mcp/delegacao`). Sem cookie: o
+  // conector MCP busca o documento antes de qualquer sessão. A rota responde
+  // 404 enquanto a ativação padrão está desligada — "público" aqui é o proxy
+  // não decidir, não anunciar OAuth. Âncora no path completo: um irmão sob
+  // `oauth-protected-resource` não nasce público de carona.
+  /^\/\.well-known\/oauth-protected-resource\/api\/mcp\/delegacao$/,
   // GET /api/v1/contacts aceita SESSÃO ou Bearer `dsk_...` (api_tokens) — a
   // MESMA dualidade de `/api/mcp` acima. Sem esta entrada, o proxy responde
   // 401 antes de o Bearer chegar à rota, porque `getUser()` aqui só enxerga

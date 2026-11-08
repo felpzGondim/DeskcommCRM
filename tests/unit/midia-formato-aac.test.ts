@@ -36,14 +36,20 @@ vi.mock("@/lib/supabase/server", () => ({
         error: estado.usuario ? null : { message: "sem sessão" },
       }),
     },
-    from: () => {
+    from: (tabela: string) => {
+      const operacional =
+        tabela === "conversations"
+          ? { id: "conv-1", organization_id: "org-1", contact_id: "contato-1" }
+          : tabela === "contacts"
+            ? { id: "contato-1", organization_id: "org-1", is_personal: false }
+            : estado.mensagem;
       const cadeia = {
         select: () => cadeia,
         eq: (coluna: string, valor: unknown) => {
           estado.eqs.push([coluna, valor]);
           return cadeia;
         },
-        maybeSingle: async () => ({ data: estado.mensagem, error: null }),
+        maybeSingle: async () => ({ data: operacional, error: null }),
       };
       return cadeia;
     },
@@ -84,6 +90,7 @@ import { GET } from "@/app/api/v1/messages/[id]/media/route";
 
 const audio = {
   id: "mensagem-1",
+  conversation_id: "conv-1",
   media_url: null,
   media_mime: "audio/ogg; codecs=opus",
   media_size_bytes: 9,

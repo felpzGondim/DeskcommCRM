@@ -580,6 +580,21 @@ pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superl
 (Drive compartilhado Aluguéis). A chave antiga ficou exposta e será revogada; não a
 use. O código nunca apaga no Drive. Rollback: desligar as chaves; as tabelas ficam.
 
+Revisão (sem merge/deploy): mídia e documentos de contato pessoal passam a
+404 como a conversa (spec 21; fail-closed se a prova falhar). Um bot
+compartilhado de análise de inquilinos **não está ligado**. Alvo D3/D5
+(preparar, não ativar): buscar/ler/baixar em todas as conversas corporativas
+da org imobiliária — contrato em
+[`docs/decisoes/delegacao-analise-inquilinos.md`](docs/decisoes/delegacao-analise-inquilinos.md),
+transporte (GoTrue OAuth 2.1, `getUser(jwt)`, sem `device_code`) em
+[`docs/decisoes/delegacao-transporte-identidade.md`](docs/decisoes/delegacao-transporte-identidade.md),
+handoff em
+[`docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md`](docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md).
+`/api/mcp/delegacao` responde 404. Schema 0773 só em arquivo. Token de
+organização não substitui a identidade da atendente; sessão sem
+classificação não vira corporativa; grant corporativo não está concedido.
+Enablement do OAuth Server nesta instalação não está confirmado.
+
 ## Release deste fork
 
 O `release.yml` oficial está desligado aqui. A revisão `vX.Y.Z-felpz.N` data o

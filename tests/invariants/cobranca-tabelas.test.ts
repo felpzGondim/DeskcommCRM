@@ -132,13 +132,15 @@ describe("RLS, grants e o que sai de organizations", () => {
     ).toBe("cobranca_assinaturas:true,cobranca_planos:true");
   });
 
-  it("planos sem policy; assinaturas com UMA, de leitura, para authenticated", () => {
+  it("planos sem policy; assinaturas com a leitura authenticated + restritiva OAuth", () => {
     expect(numero(`select count(*) from pg_policy where polrelid = 'public.cobranca_planos'::regclass;`)).toBe(0);
     expect(
       valor(`select string_agg(p.polname || '|' || p.polcmd::text || '|' ||
-                     (select string_agg(r.rolname, ',') from pg_roles r where r.oid = any(p.polroles)), ' ## ')
+                     (select string_agg(r.rolname, ',') from pg_roles r where r.oid = any(p.polroles)), ' ## ' order by p.polname)
                from pg_policy p where p.polrelid = 'public.cobranca_assinaturas'::regclass;`),
-    ).toBe("tenant_isolation_cobranca_assinaturas_select|r|authenticated");
+    ).toBe(
+      "oauth_cookie_only|r|authenticated ## tenant_isolation_cobranca_assinaturas_select|r|authenticated",
+    );
   });
 
   it("⭐ anon e authenticated não escrevem em nenhuma das duas (nem TRUNCATE)", () => {
