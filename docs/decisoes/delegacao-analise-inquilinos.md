@@ -1,15 +1,15 @@
 # Delegação restrita para análise de inquilinos — contrato proposto (NÃO ativado)
 
-**Status:** revisão. Sem merge, tag, release, deploy, migration, credencial ou
-alteração de papéis. **CONFIRMADO** abaixo é o que o código desta branch mede.
-**INFERIDO** / **EM ABERTO** não é produto.
+**Status:** revisão / preparação. Sem merge, tag, release, deploy, migration,
+credencial ou alteração de papéis. **CONFIRMADO** abaixo é o que o código
+desta branch mede. **INFERIDO** / **EM ABERTO** não é produto ao vivo.
 
-**Autorização de preparar a correção:** Felipe, na sessão que pediu este PR de
-revisão. Quem atualiza produção é o operador, não este PR.
+**Autorização de preparar:** Felipe. Quem atualiza produção é o operador,
+não este PR. Preparar **não** concede visibilidade ao vivo.
 
 Org de referência da imobiliária (contexto da revisão, **não** hardcoded no
 código): fora deste arquivo de propósito. Não há papel "Marina" nem allowlist
-de sessão corporativa no produto — não foram inventados.
+de `channel_session_id` no produto.
 
 ---
 
@@ -17,11 +17,14 @@ de sessão corporativa no produto — não foram inventados.
 
 | Peça | O que faz nesta branch | O que NÃO faz |
 |---|---|---|
-| **Exclusão pessoal (spec 21) nas rotas já autenticadas por cookie** | `GET /api/v1/messages/[id]/media` e `GET /api/v1/conversations/[id]/locacao/documentos` recusam `contacts.is_personal === true` com 404 mudo, **antes** de `createSignedUrl` ou fetch do adapter. A Inbox comum segue: cookie + org ativa + RLS. Sessão de canal **não** precisa ser "corporativa". | Não classifica WhatsApp pessoal vs. empresarial. Não aperta viewer/manager org-wide. Não desliga fluxos ordinários. |
-| **Integração delegada buscar/ler/baixar** | Guarda puro fail-closed em `lib/auth/delegacao-empresarial.ts`. Sem rota nova, sem tool no catálogo MCP, sem `auth-dual`, sem path público. Ativação padrão: desligada. | Não emite `dsk_`. Não usa cookie de outra pessoa. Não assume sessão corporativa. Não escreve nem envia. |
+| **Exclusão pessoal (spec 21) nas rotas já autenticadas por cookie** | `GET /api/v1/messages/[id]/media` e `GET|PATCH /api/v1/conversations/[id]/locacao/documentos` recusam a menos que a conversa da org aponte a um contato da mesma org com `is_personal === false` (booleano literal), **antes** de `createSignedUrl` ou fetch do adapter. Erro de consulta, conversa/contato ausente, `contact_id` vazio ou `is_personal` malformado → 404 mudo (fail closed). A Inbox comum segue: cookie + org ativa + RLS. Sessão de canal **não** precisa ser "corporativa". | Não classifica WhatsApp pessoal vs. empresarial. Não aperta viewer/manager org-wide. Não desliga fluxos ordinários (`is_personal === false` continua). |
+| **Integração delegada buscar/ler/baixar** | Guarda puro fail-closed em `lib/auth/delegacao-empresarial.ts`. Sem rota nova, sem tool no catálogo MCP, sem `auth-dual`, sem path público. Ativação padrão: desligada. Entitlement de visibilidade corporativa: **nenhum concedido**. | Não emite `dsk_`. Não usa cookie de outra pessoa. Não assume sessão corporativa. Não escreve nem envia. Não altera RLS da Inbox. |
 
 A operação comum **não** passa pelo guarda delegado. Ligar a exclusão pessoal
 nas rotas de cookie **não** ativa o bot compartilhado.
+
+Transporte de identidade (proposta, não código):
+[`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md).
 
 ---
 
@@ -35,16 +38,16 @@ do branch):
 2. `GET /api/v1/messages/[id]/media` autenticava cookie + org e lia a mensagem
    com client de sessão (RLS + `organization_id`). **Não** lia `is_personal`.
    Persistida → `createSignedUrl` 3600s no bucket `whatsapp-media`; senão fetch
-   pelo adapter. **Corrigido nesta branch:** recusa pessoal / sem
-   `conversation_id` antes de assinar ou ir ao provedor.
-3. `GET .../locacao/documentos` pedia `requireRole("agent", { resource: "locacao" })`,
+   pelo adapter. **Corrigido nesta branch:** recusa pessoal / não provado /
+   sem `conversation_id` antes de assinar ou ir ao provedor.
+3. `GET|PATCH .../locacao/documentos` pedia `requireRole("agent", { resource: "locacao" })`,
    conversa via RLS, prefixo de storage da org, assina 300s. **Não** lia
-   `is_personal`. **Corrigido nesta branch.**
+   `is_personal`. **Corrigido nesta branch** no `contexto()` compartilhado.
 4. RLS `conversations_select` (migration 0726 / `fn_conversation_scope`):
-   viewer/manager/admin (e `visibility_mode = 'all'`) vêem a org inteira;
-   agente vê a própria + fila conforme o modo. `organization_id` +
-   `channel_session_id` **não** são autorização por usuário de sessão
-   corporativa.
+   `org_wide_read` se viewer/manager/admin **ou** `visibility_mode = 'all'`;
+   senão só atribuídas (+ não atribuídas se `own_and_unassigned`).
+   `organization_id` + `channel_session_id` **não** são autorização por
+   sessão corporativa.
 5. MCP `/api/mcp` Bearer `dsk_` → `lib/mcp/auth.ts`; `createMcpServer` usa
    `createAdminClient()` (bypassa RLS). `crm_get_conversation_history` exige
    `agent` + `mcp:read`. `ctx.contatoDoTurno` estreita; **ausente** (MCP
@@ -53,36 +56,60 @@ do branch):
 6. As rotas de mídia/documentos desta correção **continuam cookie-only**.
    Não receberam `auth-dual` nem entrada em `lib/auth/public-paths.ts`.
 
+**Irmã não patchada (exposição documentada, fora deste PR):**
+`GET /api/v1/conversations/[id]/notes/[noteId]/media` — cookie +
+`requireRole("agent", conversation_notes)`, conversa da org, assina
+`internal-media` 60s. **Não** chama `conversaTemContatoPessoal`. Anexo de
+nota interna, bucket distinto. Não estender em silêncio.
+
 **Não medido:** imagem de runtime em produção, policies efetivas no Postgres
 da VPS, equivalência build ↔ `f52855339`. Este PR não fala com servidor vivo.
 
 ---
 
-## Contrato proposto da delegação (EM ABERTO — não implementar sem aprovação)
+## Contrato proposto da delegação (NÃO ativado)
 
-Para o bot compartilhado pedir triagem **só** de conversas/documentos do
-negócio imobiliário, com as permissões efetivas de quem delegou:
+Resposta de produto **CONFIRMADA** (Felipe, 08/11/2026 13:12 São Paulo),
+escopo-alvo para **preparar**. Não é grant ao vivo.
 
-1. **Identidade** = usuário autenticado (`ator.type === "user"` + id). Token
-   `dsk_` de organização, service role, cookie de outra conta e "admin no
-   lugar de" recusam (`identidade_nao_provada`).
-2. **Organização** do ator = organização do recurso.
-3. **Conversa** autorizada para **esse** usuário (RLS do client de sessão,
-   não admin). Viewer org-wide continua sendo decisão de visibilidade da
-   org — a delegação não alarga isso.
-4. **Contato** com `is_personal === true` recusa.
+Para o bot compartilhado pedir triagem nas conversas/documentos do negócio
+imobiliário, com as permissões efetivas de quem delegou:
+
+1. **Identidade** = usuário autenticado (`ator.type === "user"` + id), via
+   transporte em [`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md).
+   Token `dsk_` de organização, service role, cookie de outra conta e
+   "admin no lugar de" recusam (`identidade_nao_provada`).
+2. **Organização** do ator = organização do recurso. Outras empresas recusam.
+3. **Visibilidade (D3/D5 — alvo decidido):** buscar / ler / baixar em
+   **todas** as conversas corporativas da org imobiliária. **Não** é
+   assigned-only. **Não** é só a conversa do turno. Implementação e
+   entitlement auditável **faltam**; o guarda recusa
+   `visibilidade_nao_ativada` enquanto
+   `ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS` estiver vazio. Não alargar
+   `conversations_select` neste PR. Se a RLS da pessoa já for org-wide
+   (viewer/manager/admin ou `visibility_mode=all`), o client de sessão
+   basta como teto; os filtros 4–6 continuam. Se for `agent` em `own` /
+   `own_and_unassigned`, a proposta é tabela
+   `delegacao_visibilidade_corporativa` usada **só** na superfície
+   delegada — ver transporte §6.
+4. **Contato** só segue com prova `is_personal === false`. Pessoal, erro,
+   ausência e malformado recusam.
 5. **Sessão de canal** com classificação **provada** `corporativa`. Pessoal
-   recusa. `nao_classificada` recusa. Hoje **não existe** fonte no schema
-   (sem allowlist, sem coluna, sem papel). O provedor embarcado devolve
+   recusa. `nao_classificada` recusa. WhatsApp pessoal do Felipe está
+   neste recorte. Hoje **não existe** fonte no schema (sem allowlist de
+   session id, sem coluna, sem papel). O provedor embarcado devolve
    `nao_classificada`. Não se assume que toda sessão é da empresa.
-6. **Anexo** só depois da associação conversa (e processo, se houver).
-7. Só `buscar` | `ler` | `baixar`. Sem write/send e sem fallback amplo.
-8. Auditoria: ids + motivo, **sem** corpo, preview, telefone, path, URL.
-9. Desconhecido recusa.
+6. **Chat privado do bot** recusa (`true` ou `nao_provado`). Fonte ainda
+   não existe.
+7. **Anexo** só depois da associação conversa (e processo, se houver).
+8. Só `buscar` | `ler` | `baixar`. Sem write/send e sem fallback amplo.
+9. Auditoria: ids + motivo, **sem** corpo, preview, telefone, path, URL.
+10. Desconhecido / erro de DB recusa.
 
 Ativação (`ativa` ∧ `contratoAprovado`) é argumento do guarda. Produção
 passa `ATIVACAO_DELEGADA_PADRAO` (ambos falsos). **Não há variável de
-ambiente que ligue isto.**
+ambiente que ligue isto.** O entitlement de visibilidade é **outro**
+portão, também falso.
 
 Ferramentas candidatas (nomes, não contrato de wire — **fora** de
 `allTools` / `TOOL_CATALOG`):
@@ -91,37 +118,48 @@ Ferramentas candidatas (nomes, não contrato de wire — **fora** de
 - `crm_read_corporate_conversation`
 - `crm_download_corporate_attachment`
 
+A entrega pretendida é comando simples no bot → busca/leitura/download
+corporativo autorizado. Navegar a Inbox com cookie **não** é essa entrega.
+
 ---
 
-## Decisões de produto ainda sem dono
+## Decisões de produto
 
-Não foram inventadas. Precisam de aprovação **antes** de qualquer schema,
-token ou registro no catálogo:
-
-| # | Pergunta | Risco se inventarmos agora |
+| # | Estado | Conteúdo |
 |---|---|---|
-| D1 | Como a identidade da atendente chega ao bot compartilhado (sessão dela, token **ligado a user**, outro)? | Org token + admin = leitura org-wide. |
-| D2 | Onde mora a classificação corporativa da sessão de canal? | Sem fonte, "todas corporativas" vaza WhatsApp pessoal. |
-| D3 | A visibilidade org-wide de viewer/manager vale para o bot ou só conversa atribuída? | Alargar é mudança de política, não bugfix. |
-| D4 | Quem aprova a ativação na org (admin da org? dono da VPS?) | Ligar no código sem superfície é config invisível. |
-| D5 | O bot pode buscar em várias conversas da empresa ou só a do turno? | Busca ampla × `contatoDoTurno`. |
+| D1 | **EM ABERTO** (proposta técnica) | Transporte: AS próprio, auth-code+PKCE se o conector tiver browser; senão device_code. Client de RLS com `sub` da atendente. Sem copiar cookie, sem `dsk_`. Ver [`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md). Capacidades do Bot Análise **não** medidas. |
+| D2 | **EM ABERTO** (proposta) | Fonte da classificação corporativa da sessão. Sem allowlist de ids neste PR. Unknown deny. |
+| D3 | **ALVO DECIDIDO — não ativado** | Todas as conversas corporativas da org imobiliária (não assigned-only). Entitlement explícito, auditável, aprovação separada para conceder. RLS existente não é bypassada com admin/org token. |
+| D4 | **EM ABERTO** | Quem grava o entitlement e quem liga a integração na org (admin da org? dono da VPS?). |
+| D5 | **ALVO DECIDIDO — não ativado** | Buscar / ler / baixar nesse conjunto (não só o turno). Tools candidatas acima, fora do catálogo. |
 
-**Proposta de schema (não aplicada):** tabela ou settings versionados com
-allowlist de `channel_session_id` corporativos **por organização**, escrita
-só por admin, lida pelo guarda. Migration + baseline + `-- manifest:` só
-depois desta aprovação. Não entra neste PR.
+**Proposta de schema (não aplicada):** (a) classificação corporativa de
+`channel_session_id` **por organização**, escrita só por admin; (b)
+`delegacao_visibilidade_corporativa` por `user_id`+org, usada só na
+superfície delegada até decisão extra sobre a Inbox. Migration + baseline
++ `-- manifest:` só depois de D1/D2/D4 e da aprovação do grant. Não entra
+neste PR.
+
+Boolean de `PedidoDelegado` **não** é integração de auth completa: o
+caminho `ok: true` do guarda permanece inalcançável enquanto o entitlement
+concedido for lista vazia.
 
 ---
 
 ## Checklist de ativação (aprovação à parte)
 
-- [ ] D1–D5 respondidos por escrito.
+- [ ] D1 medido no conector (§7 do transporte) e Via A ou B escolhida.
+- [ ] D2 com fonte no banco (tripla de migration).
+- [ ] Entitlement da atendente gravado de forma auditável (D3/D5); sem
+      linha = recusa. Sem alterar `conversations_select` salvo decisão extra.
+- [ ] D4 respondido (quem grava / quem liga).
 - [ ] Identidade individual provada; org token sozinho continua recusado.
-- [ ] Fonte de classificação corporativa no banco (tripla de migration).
-- [ ] Sem credencial nova emitida por agente; o operador cria se quiser.
-- [ ] Tools no catálogo MCP só depois do guarda verde nos casos sintéticos.
-- [ ] Sem `auth-dual` nas rotas de mídia/documentos só para "facilitar o bot".
+- [ ] Sem credencial nova emitida por agente; o operador cria `client_id`.
+- [ ] Superfície `/api/v1/delegacao/*` (ou equivalente) com JWT de sessão;
+      MCP `dsk_` + admin **não** é o veículo.
+- [ ] Sem `auth-dual` nas rotas cookie de mídia/documentos só para "facilitar o bot".
 - [ ] Auditoria sem conteúdo. Sem dado real de cliente nos testes.
+- [ ] Irmã `notes/.../media` revista à parte se o produto quiser o mesmo 404.
 - [ ] Quem atualiza a VPS é o operador (`update.sh`), não o merge deste PR.
 
 ---

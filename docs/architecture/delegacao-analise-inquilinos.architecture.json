@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "Exclusão pessoal em mídia/documentos e delegação (desligada)",
-    "subtitle": "Cookie+spec 21 nas rotas atuais; guarda delegada fail-closed, fora do catálogo",
+    "subtitle": "Cookie+spec 21 fail-closed nas rotas atuais; guarda delegada com alvo D3/D5 org-wide corporativo, entitlement ausente, fora do catálogo",
     "output": "delegacao-analise-inquilinos.html",
     "quality_profile": "standard"
   },
@@ -17,30 +17,43 @@
   "nodes": [
     { "id": "inbox_midia", "lane": "inbox", "col": 1, "type": "frontend", "label": "Inbox: abrir mídia / documentos da conversa visível" },
     { "id": "rotas_cookie", "lane": "servidor", "col": 2, "type": "route", "label": "GET messages/media e locacao/documentos: getUser + org, sem auth-dual" },
-    { "id": "exclusao", "lane": "servidor", "col": 2, "type": "process", "label": "conversaTemContatoPessoal: is_personal true → 404 mudo" },
+    { "id": "exclusao", "lane": "servidor", "col": 2, "type": "process", "label": "avaliarContatoPessoalDaConversa: só is_personal===false; erro/ausente/malformado recusa" },
     { "id": "assinatura", "lane": "servidor", "col": 2, "type": "process", "label": "createSignedUrl / adapter só depois da exclusão" },
-    { "id": "rls", "lane": "registro", "col": 3, "type": "database", "label": "conversations_select: org-wide para viewer/manager/admin; não é sessão corporativa" },
+    { "id": "notas_midia", "lane": "servidor", "col": 2, "type": "route", "label": "PENDENTE (não neste PR): notes/[noteId]/media assina internal-media 60s sem is_personal" },
+    { "id": "rls", "lane": "registro", "col": 3, "type": "database", "label": "conversations_select: org-wide só viewer/manager/admin ou visibility_mode=all; não alterar aqui" },
     { "id": "mcp_org", "lane": "guarda", "col": 4, "type": "process", "label": "MCP dsk_ + admin client: org, não identidade individual" },
-    { "id": "guarda", "lane": "guarda", "col": 4, "type": "process", "label": "autorizarDelegacaoEmpresarial: fail closed, ativação falsa" },
-    { "id": "catalogo", "lane": "guarda", "col": 4, "type": "process", "label": "Ferramentas propostas FORA de allTools / TOOL_CATALOG" },
+    { "id": "guarda", "lane": "guarda", "col": 4, "type": "process", "label": "autorizarDelegacaoEmpresarial: fail closed; entitlement vazio → visibilidade_nao_ativada" },
+    { "id": "alvo", "lane": "guarda", "col": 4, "type": "process", "label": "D3/D5 alvo: buscar/ler/baixar todas conversas corporativas da org; não assigned-only; não turno-só" },
+    { "id": "transporte", "lane": "guarda", "col": 4, "type": "process", "label": "PROPOSTA: AS PKCE/device + JWT de sessão; não copiar cookie; não implementado" },
+    { "id": "catalogo", "lane": "guarda", "col": 4, "type": "process", "label": "search/read/download corporativos FORA de allTools / TOOL_CATALOG" },
     { "id": "audit", "lane": "registro", "col": 3, "type": "database", "label": "Recibo delegado: ids e motivo, sem corpo/URL" }
   ],
   "edges": [
     { "id": "e1", "from": "inbox_midia", "to": "rotas_cookie", "label": "cookie SameSite, não bearer de org" },
-    { "id": "e2", "from": "rotas_cookie", "to": "exclusao", "label": "defesa spec 21" },
-    { "id": "e3", "from": "exclusao", "to": "assinatura", "label": "só se não for pessoal" },
+    { "id": "e2", "from": "rotas_cookie", "to": "exclusao", "label": "defesa spec 21 fail-closed" },
+    { "id": "e3", "from": "exclusao", "to": "assinatura", "label": "só se is_personal===false provado" },
     { "id": "e4", "from": "rotas_cookie", "to": "rls", "label": "client de sessão" },
     { "id": "e5", "from": "rls", "to": "exclusao", "label": "linha visível ainda pode ser pessoal" },
     { "id": "e6", "from": "mcp_org", "to": "guarda", "label": "token de org recusa identidade" },
-    { "id": "e7", "from": "guarda", "to": "catalogo", "label": "não registra até D1–D5" },
+    { "id": "e7", "from": "guarda", "to": "catalogo", "label": "não registra até ativar" },
     { "id": "e8", "from": "guarda", "to": "audit", "label": "recusa sem conteúdo" },
-    { "id": "e9", "from": "catalogo", "to": "guarda", "label": "ausência no catálogo é a trava" }
+    { "id": "e9", "from": "catalogo", "to": "guarda", "label": "ausência no catálogo é a trava" },
+    { "id": "e10", "from": "inbox_midia", "to": "notas_midia", "label": "anexo de nota: outro bucket, sem este helper" },
+    { "id": "e11", "from": "guarda", "to": "alvo", "label": "escopo escrito, grant ao vivo não" },
+    { "id": "e12", "from": "alvo", "to": "transporte", "label": "precisa identidade individual" },
+    { "id": "e13", "from": "transporte", "to": "rls", "label": "JWT sub=atendente; sem admin nas queries" },
+    { "id": "e14", "from": "notas_midia", "to": "rls", "label": "conversa da org; sem corte is_personal" }
   ],
   "cards": [
     {
       "id": "nao_assume_corporativa",
       "title": "Não-ligação: sessão sem classificação",
-      "body": "Não há aresta de channel_sessions para 'corporativa'. O provedor atual devolve nao_classificada. Inventar allowlist ou default corporativo está fora deste PR."
+      "body": "Não há aresta de channel_sessions para 'corporativa'. O provedor atual devolve nao_classificada. Inventar allowlist de session id ou default corporativo está fora deste PR."
+    },
+    {
+      "id": "entitlement_separado",
+      "title": "Não-ligação: D3/D5 não alarga conversations_select",
+      "body": "Alvo = todas as conversas corporativas da org. Grant auditável (delegacao_visibilidade_corporativa) é proposta; lista de entitlements concedidos no código está vazia. Não bypassar com service role."
     }
   ]
 }

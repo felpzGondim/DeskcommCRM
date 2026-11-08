@@ -581,12 +581,18 @@ pedir FC novo automático; fiador só recebe FC quando o atendente pedir. Superl
 use. O código nunca apaga no Drive. Rollback: desligar as chaves; as tabelas ficam.
 
 Revisão (sem merge/deploy): mídia e documentos de contato pessoal passam a
-404 como a conversa (spec 21). Um bot compartilhado de análise de inquilinos
-**não está ligado** — o guarda fail-closed e o contrato proposto estão em
-[`docs/decisoes/delegacao-analise-inquilinos.md`](docs/decisoes/delegacao-analise-inquilinos.md)
-e [`docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md`](docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md).
+404 como a conversa (spec 21; fail-closed se a prova falhar). Um bot
+compartilhado de análise de inquilinos **não está ligado**. Alvo D3/D5
+(preparar, não ativar): buscar/ler/baixar em todas as conversas corporativas
+da org imobiliária — contrato em
+[`docs/decisoes/delegacao-analise-inquilinos.md`](docs/decisoes/delegacao-analise-inquilinos.md),
+transporte proposto em
+[`docs/decisoes/delegacao-transporte-identidade.md`](docs/decisoes/delegacao-transporte-identidade.md),
+handoff em
+[`docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md`](docs/handoffs/HANDOFF-delegacao-analise-inquilinos.md).
 Token de organização não substitui a identidade da atendente; sessão de canal
-sem classificação não vira corporativa. Ativação pede aprovação à parte.
+sem classificação não vira corporativa; entitlement corporativo não está
+concedido. Ativação pede aprovação à parte.
 
 ## Release deste fork
 
