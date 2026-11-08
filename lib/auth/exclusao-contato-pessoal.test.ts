@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { conversaTemContatoPessoal } from "./exclusao-contato-pessoal";
+import {
+  avaliarContatoPessoalDaConversa,
+  conversaTemContatoPessoal,
+} from "./exclusao-contato-pessoal";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const OUTRA = "22222222-2222-4222-8222-222222222222";
@@ -10,6 +13,8 @@ const CONTATO = "bbbbbbbb-1111-4111-8111-111111111111";
 function banco(linhas: {
   conversations?: Array<Record<string, unknown>>;
   contacts?: Array<Record<string, unknown>>;
+  erroConversas?: unknown;
+  erroContatos?: unknown;
 }) {
   return {
     from(tabela: string) {
@@ -20,43 +25,123 @@ function banco(linhas: {
           rows = rows.filter((r) => r[coluna] === valor);
           return q;
         },
-        maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+        maybeSingle: async () => {
+          if (tabela === "conversations" && linhas.erroConversas) {
+            return { data: null, error: linhas.erroConversas };
+          }
+          if (tabela === "contacts" && linhas.erroContatos) {
+            return { data: null, error: linhas.erroContatos };
+          }
+          return { data: rows[0] ?? null, error: null };
+        },
       };
       return q;
     },
   };
 }
 
-describe("conversaTemContatoPessoal (rotas autenticadas por cookie)", () => {
-  it("recusa só quando is_personal é true na mesma organização", async () => {
-    const db = banco({
-      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
-      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: true }],
-    });
-    expect(await conversaTemContatoPessoal(db, ORG, CONV)).toBe(true);
-  });
-
-  it("não recusa contato operacional (is_personal false)", async () => {
+describe("avaliarContatoPessoalDaConversa — fail closed", () => {
+  it("permite só is_personal === false na mesma organização", async () => {
     const db = banco({
       conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
       contacts: [{ id: CONTATO, organization_id: ORG, is_personal: false }],
     });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({ recusar: false });
     expect(await conversaTemContatoPessoal(db, ORG, CONV)).toBe(false);
   });
 
-  it("não recusa quando a marca não veio — operação comum segue", async () => {
+  it("recusa is_personal true", async () => {
     const db = banco({
+      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
+      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: true }],
+    });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "contato_pessoal",
+    });
+    expect(await conversaTemContatoPessoal(db, ORG, CONV)).toBe(true);
+  });
+
+  it("erro na consulta da conversa não vira operacional", async () => {
+    const db = banco({
+      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
+      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: false }],
+      erroConversas: { message: "db" },
+    });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+  });
+
+  it("erro na consulta do contato não vira operacional", async () => {
+    const db = banco({
+      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
+      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: false }],
+      erroContatos: { message: "db" },
+    });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+  });
+
+  it("conversa ausente recusa", async () => {
+    const db = banco({ contacts: [{ id: CONTATO, organization_id: ORG, is_personal: false }] });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+  });
+
+  it("contact_id ausente recusa", async () => {
+    const db = banco({
+      conversations: [{ id: CONV, organization_id: ORG }],
+      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: false }],
+    });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+  });
+
+  it("contato sem linha recusa", async () => {
+    const db = banco({
+      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
+    });
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+  });
+
+  it("is_personal ausente ou malformado recusa", async () => {
+    const semMarca = banco({
       conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
       contacts: [{ id: CONTATO, organization_id: ORG }],
     });
-    expect(await conversaTemContatoPessoal(db, ORG, CONV)).toBe(false);
+    const malformado = banco({
+      conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
+      contacts: [{ id: CONTATO, organization_id: ORG, is_personal: "true" }],
+    });
+    expect(await avaliarContatoPessoalDaConversa(semMarca, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
+    expect(await avaliarContatoPessoalDaConversa(malformado, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
   });
 
-  it("não trata contato de outra organização como pessoal desta", async () => {
+  it("contato de outra organização não prova esta", async () => {
     const db = banco({
       conversations: [{ id: CONV, organization_id: ORG, contact_id: CONTATO }],
-      contacts: [{ id: CONTATO, organization_id: OUTRA, is_personal: true }],
+      contacts: [{ id: CONTATO, organization_id: OUTRA, is_personal: false }],
     });
-    expect(await conversaTemContatoPessoal(db, ORG, CONV)).toBe(false);
+    expect(await avaliarContatoPessoalDaConversa(db, ORG, CONV)).toEqual({
+      recusar: true,
+      motivo: "nao_provado",
+    });
   });
 });

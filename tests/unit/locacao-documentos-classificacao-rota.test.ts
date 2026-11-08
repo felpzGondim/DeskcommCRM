@@ -7,6 +7,7 @@ const estado = vi.hoisted(() => ({
   mensagem: "30000000-0000-4000-8000-000000000001",
   processo: "50000000-0000-4000-8000-000000000001",
   locatario: "60000000-0000-4000-8000-000000000001",
+  pessoal: false,
   gravacoes: [] as Array<Record<string, unknown>>,
   mensagens: [] as Array<Record<string, unknown>>,
   participantes: [] as Array<Record<string, unknown>>,
@@ -41,7 +42,7 @@ vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
 function query(tabela: string) {
   let rows: Array<Record<string, unknown>> =
     tabela === "conversations" ? [{ id: estado.conversa, organization_id: estado.org, contact_id: "contato-1" }]
-    : tabela === "contacts" ? [{ id: "contato-1", organization_id: estado.org, is_personal: false }]
+    : tabela === "contacts" ? [{ id: "contato-1", organization_id: estado.org, is_personal: estado.pessoal }]
     : tabela === "messages" ? estado.mensagens
     : tabela === "locacao_processo_participantes" ? estado.participantes
     : tabela === "locacao_processo_documentos" ? estado.documentos
@@ -89,6 +90,7 @@ function editar(corpo: Record<string, unknown>) {
 
 describe("GET de documentos classifica e grava sem sobrescrever o manual", () => {
   beforeEach(() => {
+    estado.pessoal = false;
     vi.mocked(audit).mockClear();
     estado.gravacoes = [];
     estado.modelo.mockReset().mockResolvedValue(null);
@@ -236,5 +238,16 @@ describe("GET de documentos classifica e grava sem sobrescrever o manual", () =>
       categoria_origem: "manual",
       participante_origem: "automatico",
     });
+  });
+
+  it("PATCH de conversa pessoal 404 e não grava (mesmo contexto da GET)", async () => {
+    estado.pessoal = true;
+    const antes = estado.gravacoes.length;
+    const r = await editar({
+      id: estado.mensagem, origem: "mensagem",
+      categoria: "documento_pessoal", participante_id: estado.locatario,
+    });
+    expect(r.status).toBe(404);
+    expect(estado.gravacoes.length).toBe(antes);
   });
 });

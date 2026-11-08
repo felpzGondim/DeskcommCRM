@@ -160,4 +160,13 @@ describe("link direto e histórico recusam (defesa em profundidade)", () => {
     expect(midia).toMatch(/createSignedUrl/);
     expect(midia.indexOf("conversaTemContatoPessoal")).toBeLessThan(midia.indexOf("createSignedUrl"));
   });
+
+  it("irmã notes/[noteId]/media NÃO está neste PR (exposição documentada)", () => {
+    const notas = semComentarios(
+      fonte("app", "api", "v1", "conversations", "[id]", "notes", "[noteId]", "media", "route.ts"),
+    );
+    expect(notas).toMatch(/createSignedUrl/);
+    expect(notas).not.toMatch(/conversaTemContatoPessoal/);
+    expect(notas).toMatch(/internal-media/);
+  });
 });
