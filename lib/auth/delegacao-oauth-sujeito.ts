@@ -6,7 +6,7 @@
  * cookie (`client_id` vazio) e NÃO aceita `role=authenticated` — a cookie
  * continua no caminho de sessão. Recusa `role` diferente de `oauth_delegado`.
  */
-import { createUserClientFromAccessToken } from "@/lib/supabase/jwt-usuario";
+import { createAnonAuthLeitor } from "@/lib/supabase/jwt-usuario";
 
 export const PREFIXO_TOKEN_ORG = "dsk_";
 
@@ -108,8 +108,8 @@ function issAceito(iss: unknown, esperado: string | null): boolean {
   return true;
 }
 
-export function leitorAuthOAuthPadrao(accessToken: string): LeitorAuthOAuth {
-  const client = createUserClientFromAccessToken(accessToken);
+export function leitorAuthOAuthPadrao(): LeitorAuthOAuth {
+  const client = createAnonAuthLeitor();
   return {
     getUser: (jwt) => client.auth.getUser(jwt),
     getClaims: async (jwt) => {
@@ -143,7 +143,7 @@ export async function verificarSujeitoOAuth(
     return { ok: false, motivo: "identidade_nao_provada" };
   }
 
-  const leitor = deps.leitor ?? leitorAuthOAuthPadrao(jwt);
+  const leitor = deps.leitor ?? leitorAuthOAuthPadrao();
   const userRes = await leitor.getUser(jwt);
   if (userRes.error || !userRes.data.user || !textoNaoVazio(userRes.data.user.id)) {
     return { ok: false, motivo: "token_invalido" };

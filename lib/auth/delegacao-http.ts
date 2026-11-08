@@ -193,7 +193,9 @@ export async function handleDelegacaoHttp(
     },
   );
 
-  logger.info("delegacao.mcp", resumoOpacoDelegado(r));
+  const recuo = resumoOpacoDelegado(r);
+  if (r.ok) logger.info("delegacao.mcp", recuo);
+  else logger.warn("delegacao.mcp", recuo);
 
   if (!r.ok) {
     const status =

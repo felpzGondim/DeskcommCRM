@@ -19,6 +19,7 @@ import * as path from "node:path";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SignJWT, decodeJwt } from "jose";
+import pg from "pg";
 
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 import { test, expect, type APIRequestContext, type Page } from "./helpers/test";
@@ -115,10 +116,72 @@ async function jwtDedicado(
     throw new Error(`signIn: ${error?.message ?? "sem access_token"}`);
   }
   const claims = decodeJwt(data.session.access_token) as Record<string, unknown>;
+  const sub = typeof claims.sub === "string" ? claims.sub : "";
+  const iss = typeof claims.iss === "string" ? claims.iss : "";
+  const exp = typeof claims.exp === "number" ? claims.exp : 0;
+  const iat = typeof claims.iat === "number" ? claims.iat : 0;
+  if (!sub || !iss || exp <= 0 || iat <= 0) {
+    throw new Error("access_token do Auth sem sub/iss/exp/iat");
+  }
   const secret = new TextEncoder().encode(jwtSecretDoAuthLocal());
-  return new SignJWT({ ...claims, role: "oauth_delegado", client_id: clientId })
+  return new SignJWT({
+    ...claims,
+    role: "oauth_delegado",
+    client_id: clientId,
+    session_id: claims.session_id,
+  })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(sub)
+    .setIssuer(iss)
+    .setAudience("authenticated")
+    .setIssuedAt(iat)
+    .setExpirationTime(exp)
     .sign(secret);
+}
+
+function opacoHttp(texto: string): string {
+  return texto
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "uuid")
+    .replace(/https?:\/\/[^\s"]+/g, "url")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "jwt")
+    .slice(0, 220);
+}
+
+async function restComJwt(
+  supabaseUrl: string,
+  anonKey: string,
+  token: string,
+  caminho: string,
+): Promise<{ status: number; body: string }> {
+  const r = await fetch(`${supabaseUrl.replace(/\/+$/, "")}${caminho}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      Accept: "application/json",
+    },
+  });
+  return { status: r.status, body: opacoHttp(await r.text()) };
+}
+
+async function diagnosticoCadeia(q: {
+  appGetStatus: number;
+  supabaseUrl: string;
+  anonKey: string;
+  token: string;
+}): Promise<string> {
+  const grant = await restComJwt(
+    q.supabaseUrl,
+    q.anonKey,
+    q.token,
+    "/rest/v1/delegacao_visibilidade_corporativa?select=efeitos&limit=1",
+  );
+  const conv = await restComJwt(
+    q.supabaseUrl,
+    q.anonKey,
+    q.token,
+    "/rest/v1/conversations?select=id&limit=3",
+  );
+  return `ident=${q.appGetStatus} grant=${grant.status}:${grant.body} conv=${conv.status}:${conv.body}`;
 }
 
 type Rpc = {
@@ -431,6 +494,42 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
     if (payloadA.role !== "oauth_delegado" || payloadA.client_id !== CLIENT_ID) {
       throw new Error("JWT A não ficou com papel dedicado");
     }
+    if (typeof payloadA.sub !== "string" || payloadA.sub !== userA) {
+      throw new Error("JWT A sem sub do usuário");
+    }
+
+    if (c.dbUrl) {
+      const pool = new pg.Pool({ connectionString: c.dbUrl, max: 1 });
+      try {
+        const { rows } = await pool.query<{
+          member: boolean;
+          sel: boolean;
+          prereq: boolean;
+        }>(
+          `select
+             pg_has_role('authenticator', 'oauth_delegado', 'member') as member,
+             has_table_privilege(
+               'oauth_delegado',
+               'public.delegacao_visibilidade_corporativa',
+               'select'
+             ) as sel,
+             has_function_privilege(
+               'oauth_delegado',
+               'public.fn_pgrst_recusar_replay_do_gateway()',
+               'execute'
+             ) as prereq`,
+        );
+        const row = rows[0];
+        if (!row?.member || !row.sel || !row.prereq) {
+          throw new Error(
+            `catalogo oauth_delegado: member=${String(row?.member)} sel=${String(row?.sel)} prereq=${String(row?.prereq)}`,
+          );
+        }
+        await pool.query("notify pgrst, 'reload schema'");
+      } finally {
+        await pool.end();
+      }
+    }
   });
 
   test.afterAll(async () => {
@@ -447,8 +546,23 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
   test("A busca/lê/baixa bytes corporativos; pessoal e desconhecida recusam", async ({
     request,
   }) => {
+    const ident = await request.get("/api/mcp/delegacao", {
+      headers: { authorization: `Bearer ${tokenA}` },
+    });
+    expect(ident.status(), "GET com JWT dedicado (identidade Next)").toBe(200);
+    const identBody = opacoHttp(await ident.text());
+    expect(identBody).toMatch(/delegacao_buscar/);
+
     const buscar = await toolsCall(request, tokenA, "delegacao_buscar");
-    expect(buscar.status, JSON.stringify(buscar.rpc).slice(0, 400)).toBe(200);
+    if (buscar.status !== 200) {
+      const diag = await diagnosticoCadeia({
+        appGetStatus: ident.status(),
+        supabaseUrl: url,
+        anonKey,
+        token: tokenA,
+      });
+      expect(buscar.status, `${diag} rpc=${opacoHttp(JSON.stringify(buscar.rpc))}`).toBe(200);
+    }
     const ids = (buscar.rpc.result?.structuredContent?.conversations ?? []).map((c) => c.id);
     expect(ids).toContain(convCorpA);
     expect(ids).not.toContain(convPessA);

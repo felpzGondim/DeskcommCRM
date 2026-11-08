@@ -27,6 +27,7 @@ de `/api/mcp` (dsk_ + admin).
 | Policies `TO oauth_delegado` | `conversations`, `messages`, `contacts`, `locacao_processo_*`, `storage.objects` |
 | Cookie | USING das policies de SELECT nas tabelas concedidas ao papel é o mesmo; só ganham `TO authenticated` |
 | HTTP | `GET/POST /api/mcp/delegacao` + RFC 9728 `/.well-known/oauth-protected-resource[/api/mcp/delegacao]` |
+| Client JWT | `createUserClientFromAccessToken` usa `accessToken` do SDK (PostgREST/Storage). `createAnonAuthLeitor` é o getUser — o mesmo client com `accessToken` **não** expõe `auth` |
 | Cadastro | `PUT/DELETE /api/v1/channel-sessions/:id/conta-empresarial` (admin + suporte de escrita). POST que cria o número **não** classifica |
 | Verifier | `verificarSujeitoOAuth` exige `role=oauth_delegado` + `client_id`; recusa `dsk_` e cookie |
 | TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE |
@@ -64,6 +65,13 @@ HTTP hook `v1,whsec_` + `host.docker.internal`; PKCE com consent API, não UI).
 O hook SQL deste PR **não está ligado** no Auth da instalação. Ligá-lo é
 `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN` apontando para `fn_delegacao_access_token_hook` (ou
 URI HTTP equivalente), config do Auth, não variável de `lib/env.ts`.
+
+O processo Next do Bot (`/api/mcp/delegacao`) **não** reescreve path. `proxy.ts`
+trata `/api/mcp/delegacao` como público (Bearer chega; cookie não autentica essa
+superfície). O verifier recusa `dsk_` e `role=authenticated`. GET 401 / well-known
+200 / cookie 401 **não** provam tools/call. tools/call atravessa Auth `getUser` +
+PostgREST (SET ROLE `oauth_delegado`) + Storage; o client de dado usa
+`accessToken` do SDK, senão o fetch cai na anon key e a RLS recusa.
 
 **Consent / token revoke (CONFIRMADO no harness vivo, GoTrue v2.197.0):**
 `POST /oauth/revoke` (RFC 7009, `token_type_hint=refresh_token`) e `POST /logout`
