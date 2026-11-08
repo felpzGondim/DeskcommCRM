@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ENTITLEMENT_VISIBILIDADE_PADRAO,
+  VISIBILIDADE_CONVERSA_ALVO,
   autorizarDelegacaoEmpresarial,
   type PedidoDelegado,
 } from "./delegacao-empresarial";
@@ -21,9 +23,12 @@ function base(parcial: Partial<PedidoDelegado> = {}): PedidoDelegado {
     clienteEhServiceRole: false,
     organizationIdDoAtor: ORG,
     organizationIdDoRecurso: ORG,
+    visibilidadeDaConversa: VISIBILIDADE_CONVERSA_ALVO,
+    entitlementDeVisibilidade: ENTITLEMENT_VISIBILIDADE_PADRAO,
     conversaAutorizadaParaOUsuario: true,
     contatoEhPessoal: false,
     classificacaoDaSessao: "corporativa",
+    chatPrivadoDoBot: false,
     efeito: "baixar",
     anexo: { conversaIdDoPedido: CONV, conversaIdDoAnexo: CONV },
     ...parcial,
@@ -88,19 +93,19 @@ describe("executarLeituraDelegada não toca storage/provedor na recusa", () => {
     expect(baixarAssinar).not.toHaveBeenCalled();
   });
 
-  it("caso corporativo autorizado chama só o efeito pedido", async () => {
+  it("alvo corporativo com entitlement ausente não busca, não lê, não assina", async () => {
     const buscar = vi.fn(async () => [{ id: CONV }]);
     const ler = vi.fn(async () => ({ id: CONV }));
     const baixarAssinar = vi.fn(async () => ({ url: "https://storage.test/ok" }));
-    const r = await executarLeituraDelegada(base({ efeito: "baixar" }), {
+    const r = await executarLeituraDelegada(base({ efeito: "buscar" }), {
       buscar,
       ler,
       baixarAssinar,
     });
-    expect(r).toMatchObject({ ok: true, efeito: "baixar" });
-    expect(baixarAssinar).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ ok: false, motivo: "visibilidade_nao_ativada" });
     expect(buscar).not.toHaveBeenCalled();
     expect(ler).not.toHaveBeenCalled();
+    expect(baixarAssinar).not.toHaveBeenCalled();
   });
 });
 
@@ -112,6 +117,16 @@ describe("entrada externa", () => {
         efeito: "enviar",
       }).success,
     ).toBe(false);
+  });
+
+  it("buscar corporativo aceita sem conversation_id (alvo D5); ler/baixar exigem", () => {
+    expect(entradaDelegadaExternaSchema.safeParse({ efeito: "buscar" }).success).toBe(true);
+    expect(
+      entradaDelegadaExternaSchema.safeParse({ efeito: "ler" }).success,
+    ).toBe(false);
+    expect(
+      entradaDelegadaExternaSchema.safeParse({ efeito: "baixar", conversation_id: CONV }).success,
+    ).toBe(true);
   });
 
   it("pedido desligado usa o guarda e recusa", () => {

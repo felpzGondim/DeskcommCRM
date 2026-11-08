@@ -5,8 +5,16 @@
  * passa por aqui. Ativação exige aprovação à parte — ver
  * `docs/decisoes/delegacao-analise-inquilinos.md`.
  *
+ * Alvo D3/D5 (Felipe, 08/11/2026 13:12 São Paulo — preparar, NÃO ativar):
+ * buscar/ler/baixar em TODAS as conversas corporativas da org imobiliária.
+ * Não é assigned-only nem só o turno. Exclui outras empresas, WhatsApp/sessão
+ * pessoal e chats privados do bot. Identidade individual + org + sessão
+ * corporativa + exclusão pessoal continuam obrigatórios. Desconhecido/erro
+ * recusa. Este guarda NÃO concede visibilidade ao vivo.
+ *
  * Fail closed: qualquer prova ausente recusa. Token de organização, cliente
  * administrative e sessão de canal sem classificação NÃO viram "corporativo".
+ * Boolean do chamador NÃO é integração de auth completa.
  *
  * Efeitos permitidos: só buscar, ler e baixar. Escrever ou enviar recusa.
  * Recusa não devolve metadado do recurso (sem path, preview, URL, corpo).
@@ -22,8 +30,10 @@ export const MOTIVOS_RECUSA_DELEGADA = [
   "contato_pessoal",
   "sessao_pessoal",
   "sessao_nao_classificada",
+  "chat_privado_do_bot",
   "anexo_fora_do_recurso",
   "efeito_nao_permitido",
+  "visibilidade_nao_ativada",
 ] as const;
 export type MotivoRecusaDelegada = (typeof MOTIVOS_RECUSA_DELEGADA)[number];
 
@@ -49,11 +59,32 @@ export const ATIVACAO_DELEGADA_PADRAO: AtivacaoDelegada = {
 };
 
 /**
- * Classificação de sessão de canal: sem allowlist, sem coluna, sem default
- * corporativo. Enquanto o produto não decidir a fonte, isto é o provedor.
+ * Classificação de sessão de canal: sem allowlist de session id, sem coluna,
+ * sem default corporativo. Enquanto D2 não tiver fonte, isto é o provedor.
  */
 export function classificacaoDeSessaoNaoDisponivel(): ClassificacaoDeSessaoCanal {
   return "nao_classificada";
+}
+
+/**
+ * D3/D5 — alvo DECIDIDO (preparar, não conceder): todas as conversas
+ * corporativas da org imobiliária. Assigned-only e turno-atual não são o alvo.
+ */
+export const VISIBILIDADE_CONVERSA_ALVO = "todas_conversas_corporativas_da_org" as const;
+export type VisibilidadeConversaDelegada = typeof VISIBILIDADE_CONVERSA_ALVO;
+
+/**
+ * Entitlement auditável de visibilidade corporativa. Nenhum valor concedido
+ * existe neste tipo. Uma string no pedido NÃO é grant. Conceder exige
+ * aprovação à parte (não este PR, sem migration, sem RLS alargada).
+ */
+export const ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS = [] as const;
+export type EntitlementVisibilidadeDelegada = "ausente";
+
+export const ENTITLEMENT_VISIBILIDADE_PADRAO: EntitlementVisibilidadeDelegada = "ausente";
+
+function entitlementConcedido(valor: string): boolean {
+  return (ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS as readonly string[]).includes(valor);
 }
 
 export interface AnexoDelegado {
@@ -70,9 +101,29 @@ export interface PedidoDelegado {
   clienteEhServiceRole: boolean;
   organizationIdDoAtor: string | null;
   organizationIdDoRecurso: string;
+  /** Alvo D3/D5. Não substitui entitlement nem RLS. */
+  visibilidadeDaConversa: VisibilidadeConversaDelegada;
+  /**
+   * Grant auditável. Hoje só `"ausente"`. `true` em outro campo não emite isto.
+   */
+  entitlementDeVisibilidade: EntitlementVisibilidadeDelegada;
+  /**
+   * Afirmação do chamador: a linha passou no client de sessão da pessoa
+   * (quando a superfície estiver ligada). NÃO é grant org-wide. NÃO bypassa
+   * RLS via admin/org token.
+   */
   conversaAutorizadaParaOUsuario: boolean;
+  /**
+   * Afirmação do chamador. Na ligação a prova é
+   * `avaliarContatoPessoalDaConversa`, não este boolean.
+   */
   contatoEhPessoal: boolean;
   classificacaoDaSessao: ClassificacaoDeSessaoCanal;
+  /**
+   * Chat privado do bot compartilhado. Só `false` literal segue; `true` e
+   * `nao_provado` recusam. Fonte ainda não existe no schema.
+   */
+  chatPrivadoDoBot: true | false | "nao_provado";
   efeito: string;
   anexo?: AnexoDelegado | null;
 }
@@ -114,11 +165,17 @@ export function autorizarDelegacaoEmpresarial(pedido: PedidoDelegado): DecisaoDe
   ) {
     return { ok: false, motivo: "org_nao_autorizada" };
   }
+  if (pedido.visibilidadeDaConversa !== VISIBILIDADE_CONVERSA_ALVO) {
+    return { ok: false, motivo: "conversa_nao_autorizada" };
+  }
   if (!pedido.conversaAutorizadaParaOUsuario) {
     return { ok: false, motivo: "conversa_nao_autorizada" };
   }
   if (pedido.contatoEhPessoal) {
     return { ok: false, motivo: "contato_pessoal" };
+  }
+  if (pedido.chatPrivadoDoBot !== false) {
+    return { ok: false, motivo: "chat_privado_do_bot" };
   }
   if (pedido.classificacaoDaSessao === "pessoal") {
     return { ok: false, motivo: "sessao_pessoal" };
@@ -130,6 +187,11 @@ export function autorizarDelegacaoEmpresarial(pedido: PedidoDelegado): DecisaoDe
     if (!pedido.anexo || !anexoAssociado(pedido.anexo)) {
       return { ok: false, motivo: "anexo_fora_do_recurso" };
     }
+  }
+  // Último portão: o alvo D3/D5 está escrito; o grant ao vivo não. Boolean
+  // dos campos acima NÃO completa a integração de auth.
+  if (!entitlementConcedido(pedido.entitlementDeVisibilidade)) {
+    return { ok: false, motivo: "visibilidade_nao_ativada" };
   }
   return { ok: true, efeito: pedido.efeito as EfeitoDelegado };
 }
@@ -158,7 +220,10 @@ export function reciboAuditoriaDelegada(entrada: Record<string, unknown>): Recib
   return saida;
 }
 
-/** Nomes candidatos. Ausentes do catálogo MCP até aprovação. */
+/**
+ * Nomes candidatos (D5): busca/leitura/download corporativos da org.
+ * Ausentes de allTools / TOOL_CATALOG até ativação aprovada.
+ */
 export const FERRAMENTAS_DELEGADAS_PROPOSTAS = [
   "crm_search_corporate_conversations",
   "crm_read_corporate_conversation",

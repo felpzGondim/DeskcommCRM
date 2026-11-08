@@ -8,7 +8,10 @@ import { TOOL_CATALOG } from "@/lib/mcp/tools/catalog";
 
 import {
   ATIVACAO_DELEGADA_PADRAO,
+  ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS,
+  ENTITLEMENT_VISIBILIDADE_PADRAO,
   FERRAMENTAS_DELEGADAS_PROPOSTAS,
+  VISIBILIDADE_CONVERSA_ALVO,
   autorizarDelegacaoEmpresarial,
   classificacaoDeSessaoNaoDisponivel,
   reciboAuditoriaDelegada,
@@ -29,9 +32,12 @@ function corporativo(parcial: Partial<PedidoDelegado> = {}): PedidoDelegado {
     clienteEhServiceRole: false,
     organizationIdDoAtor: ORG,
     organizationIdDoRecurso: ORG,
+    visibilidadeDaConversa: VISIBILIDADE_CONVERSA_ALVO,
+    entitlementDeVisibilidade: ENTITLEMENT_VISIBILIDADE_PADRAO,
     conversaAutorizadaParaOUsuario: true,
     contatoEhPessoal: false,
     classificacaoDaSessao: "corporativa",
+    chatPrivadoDoBot: false,
     efeito: "ler",
     anexo: {
       conversaIdDoPedido: CONV,
@@ -44,9 +50,13 @@ function corporativo(parcial: Partial<PedidoDelegado> = {}): PedidoDelegado {
 }
 
 describe("autorizarDelegacaoEmpresarial — fail closed", () => {
-  it("caso corporativo autorizado (só no contrato; produção não liga a ativação)", () => {
-    const r = autorizarDelegacaoEmpresarial(corporativo({ efeito: "baixar" }));
-    expect(r).toEqual({ ok: true, efeito: "baixar" });
+  it("alvo D3/D5 preenchido ainda recusa: entitlement corporativo não está concedido", () => {
+    expect(VISIBILIDADE_CONVERSA_ALVO).toBe("todas_conversas_corporativas_da_org");
+    expect(ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS).toEqual([]);
+    const r = autorizarDelegacaoEmpresarial(corporativo({ efeito: "buscar" }));
+    expect(r).toEqual({ ok: false, motivo: "visibilidade_nao_ativada" });
+    const baixar = autorizarDelegacaoEmpresarial(corporativo({ efeito: "baixar" }));
+    expect(baixar).toEqual({ ok: false, motivo: "visibilidade_nao_ativada" });
   });
 
   it("ativação padrão recusa mesmo com o resto perfeito", () => {
@@ -138,6 +148,15 @@ describe("autorizarDelegacaoEmpresarial — fail closed", () => {
     expect(r).toEqual({ ok: false, motivo: "anexo_fora_do_recurso" });
   });
 
+  it("chat privado do bot recusa, inclusive quando não provado", () => {
+    expect(
+      autorizarDelegacaoEmpresarial(corporativo({ chatPrivadoDoBot: true })),
+    ).toEqual({ ok: false, motivo: "chat_privado_do_bot" });
+    expect(
+      autorizarDelegacaoEmpresarial(corporativo({ chatPrivadoDoBot: "nao_provado" })),
+    ).toEqual({ ok: false, motivo: "chat_privado_do_bot" });
+  });
+
   it("escrever ou enviar não é efeito da integração", () => {
     expect(autorizarDelegacaoEmpresarial(corporativo({ efeito: "enviar" }))).toEqual({
       ok: false,
@@ -177,6 +196,11 @@ describe("ferramentas propostas não estão no MCP servido", () => {
   it("nenhum nome candidato está em allTools nem no catálogo", () => {
     const servidas = new Set(allTools.map((t) => t.name));
     const catalogo = new Set(TOOL_CATALOG.map((t) => t.name));
+    expect(FERRAMENTAS_DELEGADAS_PROPOSTAS).toEqual([
+      "crm_search_corporate_conversations",
+      "crm_read_corporate_conversation",
+      "crm_download_corporate_attachment",
+    ]);
     for (const nome of FERRAMENTAS_DELEGADAS_PROPOSTAS) {
       expect(servidas.has(nome)).toBe(false);
       expect(catalogo.has(nome)).toBe(false);
