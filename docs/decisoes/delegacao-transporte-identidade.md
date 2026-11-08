@@ -27,10 +27,10 @@ atendente fala com o Bot. O sujeito OAuth identifica a **usuária do CRM**.
 | **Interop Grok Bot ↔ callback GoTrue** | **Não medido.** Callbacks Cursor documentados (`https://www.cursor.com/agents/mcp/oauth/callback`, `http://localhost:8787/callback`) ainda precisam ser testados contra o allowlist do Auth. Não bloqueia as peças offline. | Cursor docs (geral) |
 
 `device_code` **não** é caminho. Custom Access Token Hook é config viva do
-Auth — **não ligada**. O JSON Schema oficial de `claims.role` é só
-`anon`|`authenticated`; o hook **não** emite papel Postgres terceiro. `aud`
-customizado para URL RFC 8707 **quebra** `verificarSujeitoOAuth`. Avaliação:
-[`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
+Auth — **não ligada**. O enum das docs (`anon`|`authenticated`) **não** é o
+schema de runtime (GoTrue v2.196.0: `role` type string). `aud` customizado
+para URL RFC 8707 **quebra** o verificador **desta app** (escolha local).
+Avaliação e M1: [`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
 
 ---
 

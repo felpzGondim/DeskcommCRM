@@ -1,9 +1,11 @@
 /**
- * Recorte congelado da spec oficial do Custom Access Token Hook
+ * Recorte congelado do JSON Schema de **input** na página de docs
  * (2026-11-08, https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook).
  *
- * `claims.role` no JSON Schema publicado: enum só `anon` | `authenticated`.
- * O Auth recusa o token se as claims depois do hook saírem da spec.
+ * `claims.role` nessa página: enum `anon` | `authenticated`. A **mesma** página
+ * tem exemplo HTTP que copia `app_metadata.role` para `claims.role` (valor
+ * arbitrário). O schema de **runtime** do GoTrue v2.196.0 é `role: { type:
+ * "string" }` sem enum — ver docs/decisoes/delegacao-papel-dedicado.md.
  * Isto NÃO é um hook ligado. Nenhum CREATE FUNCTION de hook neste PR.
  */
 export const HOOK_ACCESS_TOKEN_ROLE_ENUM_OFICIAL = ["anon", "authenticated"] as const;

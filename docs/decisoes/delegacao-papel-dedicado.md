@@ -1,148 +1,161 @@
-# Papel Postgres dedicado via Custom Access Token Hook — avaliação (STOP)
+# Papel Postgres dedicado via Custom Access Token Hook — evidência (não ativado)
 
-**Status:** consolidação **antes** de mais RLS. Preparação continua desligada.
-Nenhum hook configurado, nenhum papel concedido, nenhum token, nenhum apply.
-Lido em 2026-11-08 nas páginas oficiais (não é memória de modelo).
+**Status:** consolidação. Preparação continua desligada. Nenhum hook configurado,
+nenhum papel concedido, nenhum token, nenhum apply, nenhum merge/deploy.
 
-**Veredito:** isolamento RPC por papel dedicado **não** é arquitetura suportada
-com o Auth atual. Este PR **não** acrescenta hook, `CREATE ROLE` nem
-`REVOKE` global. A spec 21 (cookie) segue útil sozinha.
+**Pin do kit (CONFIRMADO no repositório):** imagem `supabase/gotrue:v2.196.0`
+(`tests/shell/supabase-imagens-plataforma.test.sh`). Tag Git pública
+[`v2.196.0`](https://github.com/supabase/auth/releases/tag/v2.196.0) =
+commit [`0204331ca41a5b49f076b6fa3dc6c0d20b996590`](https://github.com/supabase/auth/commit/0204331ca41a5b49f076b6fa3dc6c0d20b996590)
+no repo open-source [`supabase/auth`](https://github.com/supabase/auth).
+**Runtime desta instalação:** não inspecionado (digest da imagem ≠ SHA Git até
+alguém puxar o manifesto). Fonte abaixo = Git tag, não o binário em produção.
 
----
-
-## O que as docs oficiais comprovam
-
-### Custom Access Token Hook
-
-Fonte: [Custom Access Token Hook](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook).
-
-- O hook corre **antes** de todo access token (cookie, OAuth, refresh).
-- Claims devolvidas **têm** de passar na especificação do Auth; senão o Auth
-  **erra** e não emite o token.
-- No JSON Schema publicado, `claims.role` é `"enum": ["anon", "authenticated"]`.
-- `sub` / `user_id` entram no input; o exemplo oficial **não** os troca.
-- Input de OAuth inclui `claims.client_id`. `authentication_method` inclui
-  `oauth_provider/authorization_code` e `token_refresh`.
-- Exemplos oficiais de “admin” põem flag em `app_metadata`, **não** um papel
-  Postgres novo. O exemplo HTTP que copia `app_metadata.role` para
-  `claims.role` só sobrevive se o valor continuar `anon`|`authenticated`.
-
-**CONFIRMADO:** o hook oficial **não** pode emitir `role=oauth_delegado`.
-Cookie e outros clients continuam `authenticated` se o hook só acrescentar
-claims quando `client_id` está presente — mas isso **não** muda o papel
-Postgres do JWT OAuth.
-
-### OAuth 2.1 Server + RLS
-
-Fontes: [OAuth 2.1 Server](https://supabase.com/docs/guides/auth/oauth-server),
-[Token security](https://supabase.com/docs/guides/auth/oauth-server/token-security),
-[Getting started](https://supabase.com/docs/guides/auth/oauth-server/getting-started).
-
-- Access token OAuth **é** JWT padrão: `role: "authenticated"`, `aud:
-  "authenticated"`, `sub`, `client_id`.
-- RLS oficial diferencia OAuth por `auth.jwt() ->> 'client_id'`, inclusive
-  restritiva `client_id IS NULL` (é o padrão que a 0773 já usa em tabelas).
-- Escopos OIDC **não** controlam o banco.
-- Hook aplica a tokens OAuth para **claims extras** (`aud`, metadado), não
-  para papel Postgres terceiro.
-- Teste oficial: `SET request.jwt.claims = '{..., "role":"authenticated",
-  "client_id":"..."}'` — o papel permanece `authenticated`.
-
-**CONFIRMADO:** o contrato suportado é JWT `authenticated` + `client_id` na
-RLS. Não há caminho documentado “SET ROLE oauth_delegado” no Auth.
-
-### Este repositório (SDK / PostgREST)
-
-- `verificarSujeitoOAuth` recusa `claims.role !== "authenticated"`
-  (`lib/auth/delegacao-oauth-sujeito.ts`). Um JWT com papel dedicado seria
-  recusado **pela app** mesmo que o Auth o emitisse.
-- `aud` tem de ser exatamente `"authenticated"` (não URL RFC 8707). Hook que
-  personaliza `aud` para o client **quebra** este verificador.
-- Cookie: `createClient` de sessão; JWT sem `client_id`.
-- PostgREST: `authenticator` faz `SET ROLE` para o claim `role`. Papéis
-  conhecidos no dump: `anon`, `authenticated`, `service_role`. `GRANT USAGE
-  ON SCHEMA public` vai a esses três + `postgres`, **não** a `PUBLIC` nem a
-  um quarto papel. Sem `GRANT <papel> TO authenticator`, o switch falha.
+**Veredito:** isolamento RPC **não está provado**. O enum das docs **não** é a
+validação de runtime. `verificarSujeitoOAuth` exigir `role=authenticated` é
+**escolha local**, não limite do Auth. Mesmo se o Auth emitir um `role` string
+terceiro, PUBLIC / membership / `SET ROLE` / policies `TO authenticated`
+continuam. Este PR **não** acrescenta hook, `CREATE ROLE` nem REVOKE global.
+Spec 21 (cookie) segue útil sozinha.
 
 ---
 
-## PUBLIC, NOINHERIT e default privileges (Postgres, não Auth)
+## Contradição nas docs vs implementação (pública)
 
-Mesmo **se** o Auth emitisse um papel novo `NOINHERIT`:
+Página ao vivo (2026-11-08):
+[Custom Access Token Hook](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook).
 
-1. `GRANT … TO PUBLIC` aplica-se a **todo** papel, inclusive `NOINHERIT` e
-   sem membership. Papel dedicado **não** isola o que está em PUBLIC.
-2. `GRANT … TO authenticated` **não** cai em papel que não é membro, e
-   `NOINHERIT` impede herdar membership. DEFINER volátil do allowlist está
-   em `authenticated` (varredura `hardening-definer-varredura`); `anon` está
-   zerado — o `REVOKE FROM PUBLIC` dessas funções **já** foi feito (issue
-   #128). Um papel terceiro **sem** GRANT próprio **não** herdaria esses
-   EXECUTE — **se** o Auth permitisse o claim. Não permite.
-3. `ALTER DEFAULT PRIVILEGES … GRANT ALL ON FUNCTIONS/TABLES TO anon,
-   authenticated` (baseline, dump). Função/tabela **nova** nasce concedida a
-   `authenticated` (cookie + OAuth atual), não a um papel inventado, e **não**
-   a PUBLIC por essas linhas. Drift futuro: tabela nova com RLS precisa da
-   restritiva `oauth_cookie_only` (já há invariante); função nova DEFINER
-   precisa do par revoke — **global**, já é doutrina, não é desta integração.
-4. Isolar RPC **no papel `authenticated`** exige `REVOKE EXECUTE FROM
-   authenticated` nas DEFINER voláteis **ou** reescrever o corpo de cada uma
-   com `client_id`. As duas mexem na Inbox (cookie chama essas funções com o
-   client de sessão). Isso **não** é patch da delegação.
-
-Prova sintética (Postgres efêmero, papel e função **descartáveis**, sem
-baseline): `tests/invariants/delegacao-papel-publico-nao-isola.test.ts`.
-
----
-
-## “Não mandar o JWT ao PostgREST”
-
-**Não é solução.** O Bearer legitimamente emitido chama `/rest/v1` e `/rpc`
-se a Data API estiver publicada. 404 da rota Next **não** corta isso. A
-própria superfície delegada, quando ligada, **usa** anon+Bearer no
-PostgREST para o SELECT. Bloquear Data API no JWT OAuth ou bloqueia a
-leitura corporativa pretendida, ou deixa `/rpc` no mesmo token.
-
-`pgrst.db_pre_request` que recusasse path `/rpc` quando `client_id` existe
-seria mudança **global** de PostgREST para **todo** client OAuth, não só o
-Bot. Fora desta preparação. Não implementado. Não é “alternativa completa”
-sem o Felipe aceitar esse blast.
-
----
-
-## Helpers realmente necessários (se um dia houver papel suportado)
-
-Só então, e só com Auth que emita o claim (hoje **não** emite):
-
-| Precisa | Por quê |
+| Na mesma página | O que diz |
 |---|---|
-| `USAGE` em `public` | o dump não dá USAGE a PUBLIC |
-| `SELECT` em `conversations`, `messages`, `contacts`, `channel_sessions`, `delegacao_visibilidade_corporativa` | superfície D3/D5 |
-| EXECUTE dos DEFINER **estáveis** de RLS (`fn_user_org_ids`, `fn_conversation_scope`, `fn_role_at_least`, …) | policies avaliam com o papel do JWT |
-| `GRANT papel TO authenticator` | PostgREST `SET ROLE` |
-| policies `TO papel` (as `TO authenticated` não o vêem) | senão SELECT zero |
+| JSON Schema de **input** `claims.role` | `"enum": ["anon", "authenticated"]` |
+| Exemplo HTTP «Add claim» | `if (claims.app_metadata && claims.app_metadata.role) claims['role'] = claims.app_metadata.role` — valor **arbitrário** de `app_metadata` |
+| Prosa | “Claims returned must conform to our specification” |
 
-**Não** precisa: EXECUTE de DEFINER volátil (`fn_mesclar_contatos`,
-`fn_lgpd_anonymize_contact`, `fn_conversation_assign`, `emit_event`, …).
-
-Isto é inventário. **Não** há migration que crie o papel.
+**INFERIDO a partir das docs sozinhas:** o enum **não prova** que o Auth recusa
+`role=oauth_delegado`. O exemplo HTTP contradiz o enum. Não extrapolar o
+exemplo nem o nosso verificador para restrição de produto.
 
 ---
 
-## Decisão pedida ao Felipe (ativação futura, fora deste PR)
+## Implementação GoTrue v2.196.0 (CONFIRMADO no fonte público)
 
-Há **três** caminhos reais. Nenhum cabe em “só ficheiros de hook inativos”
-com o Auth de hoje.
+### Schema que o runtime usa depois do hook
 
-| # | Caminho | Blast | Cookie | RPC |
-|---|---|---|---|---|
-| A | Ficar em `authenticated` + `client_id` na RLS (0773) | já no schema preparado, não aplicado | intacta | **aberta** (mesmo EXECUTE) |
-| B | Esperar/exigir Auth que aceite `role` fora de `{anon,authenticated}` + papel `NOINHERIT` + GRANT mínimo + `GRANT TO authenticator` + policies `TO` esse papel | schema de papéis, membership, policies novas; **não** é config de um hook | intacta se o hook só mexe com `client_id` presente | fechada para o papel novo **exceto** o que for GRANT explícito **e** o que restar em PUBLIC |
-| C | `REVOKE EXECUTE` das DEFINER voláteis em `authenticated` **ou** guarda `client_id` no corpo de cada uma | **global**, Inbox e telas que chamam essas RPC | **quebra** ou exige rewrite de cada call site | fechada |
+[`internal/tokens/service.go`](https://github.com/supabase/auth/blob/v2.196.0/internal/tokens/service.go)
+`MinimumViableTokenSchema` L1019–L1081, aplicado em `validateTokenClaims` L992–L1016
+depois de `InvokeHook` (L721–L738):
 
-**Pedido:** escolher A (delegação com RPC herdada, documentada), B (só se o
-Auth passar a emitir o claim — hoje a doc diz que não), ou C (mudança
-global, não é integração). Sem C disfarçada de hook.
+```json
+"role": { "type": "string" }
+```
 
-Este PR **pára** de alargar RLS/RPC. Spec 21 (mídia/documentos cookie)
-permanece. Delegação HTTP 404. Sem prova de isolamento RPC, a integração
-**não** se homologa como sujeito confinado.
+`required`: `aud`, `exp`, `iat`, `sub`, `email`, `phone`, `role`, `aal`,
+`session_id`, `is_anonymous`.
+
+`client_id` está em `properties` (L1076–L1078) e **não** em `required`.
+Não há `enum` de `role` neste schema.
+
+Struct de claims do hook: [`internal/hooks/v0hooks/v0hooks.go`](https://github.com/supabase/auth/blob/v2.196.0/internal/hooks/v0hooks/v0hooks.go)
+L100–L113 — `Role string`, `ClientID string` (`json:"client_id,omitempty"`).
+
+Saída do hook **substitui** as claims: `gotrueClaims = jwt.MapClaims(output.Claims)`
+(service.go L738). Hook que omite `client_id` no output **perde** o claim
+(INFERIDO do replace; teste oficial não cobre omissão de `client_id`).
+
+### Testes oficiais do hook (CONFIRMADO)
+
+[`internal/api/token_test.go`](https://github.com/supabase/auth/blob/v2.196.0/internal/api/token_test.go)
+`TestCustomAccessToken` L697+:
+
+- “Add a new claim” — passa (claim extra).
+- “Delete the Role claim” — `shouldError: true` (role **obrigatório** como campo).
+- Remove `user_metadata` — passa.
+- **Não há** caso que ponha `role` fora de `anon`/`authenticated`.
+- Os casos usam `grant_type=refresh_token` no endpoint `/token` **não-OAuth**
+  (L803). Não exercitam `/oauth/token` authorization_code.
+
+**Runtime untested:** JWT com `role=oauth_delegado` aceito ou recusado.
+
+Papel default **sem** hook: `Role: params.User.Role` (service.go L711) — em
+geral `authenticated` em `auth.users.role` (INFERIDO do produto; não medido
+nesta instalação).
+
+### OAuth authorization_code e refresh invocam o mesmo `GenerateAccessToken`
+
+| Passo | Fonte v2.196.0 |
+|---|---|
+| `POST /oauth/token` `authorization_code` | [`handlers.go`](https://github.com/supabase/auth/blob/v2.196.0/internal/api/oauthserver/handlers.go) L307, L390 `grantParams.OAuthClientID = &client.ID`, L404 `models.OAuthProviderAuthorizationCode`, L416 `IssueRefreshToken` |
+| `IssueRefreshToken` passa `ClientID: oAuthClientID` | service.go L921–L934 |
+| `GenerateAccessToken` escreve `claims.ClientID` se UUID não nulo | service.go L688–L716 |
+| Hook, se `CustomAccessToken.Enabled` | service.go L721–L726 — input = claims **já com** `client_id` + `authentication_method.String()` |
+| Método OAuth | [`factor.go`](https://github.com/supabase/auth/blob/v2.196.0/internal/models/factor.go) L103–L104 → `"oauth_provider/authorization_code"` |
+| Refresh OAuth | handlers.go L479–L497 `RefreshTokenGrant` com `ClientID` do client autenticado; service.go L293–L301 exige match com `session.OAuthClientID`; L596 `GenerateAccessToken` com esse ClientID; método `"token_refresh"` (factor.go L93–L94) |
+
+**CONFIRMADO no fonte:** com hook **ligado**, authorization_code e refresh
+passam pelo hook com `client_id` no **input** (quando a sessão OAuth tem
+client). Cookie/password não passa `ClientID` (generateAccessToken em
+`internal/api/token.go` não preenche ClientID).
+
+**Runtime untested:** Auth desta instalação com hook enabled; preservação de
+`client_id` no **output** do hook; emissão com `role` string terceiro.
+
+Cookie/outros clients: o hook corre em **todo** `GenerateAccessToken` se
+Enabled (service.go L721). Isolar cookie exige o hook **não** alterar `role`
+quando `client_id` está vazio. Isso é lógica do hook, não default do Auth.
+**Não implementado. Não ligado.**
+
+---
+
+## Isolamento Postgres (junto com o claim, não em vez dele)
+
+Mesmo **se** M1 (abaixo) mostrar JWT `role=oauth_delegado` + `sub` + `client_id`:
+
+| Camada | Estado |
+|---|---|
+| `GRANT … TO PUBLIC` | alcança **todo** papel, inclusive `NOINHERIT`. Papel dedicado **não** isola o que está em PUBLIC. Sintético local: `tests/invariants/delegacao-papel-publico-nao-isola.test.ts` (escrito; **não executado** aqui — Docker ausente; CI pg15/17 no HEAD ainda sem conclusão). |
+| `GRANT … TO authenticated` | **não** cai em papel que não é membro. DEFINER volátil do allowlist está em `authenticated` (issue #128; `anon` zerado). |
+| `USAGE ON SCHEMA public` | dump: postgres/anon/authenticated/service_role — **não** PUBLIC. Papel novo sem GRANT não entra no schema. |
+| PostgREST `authenticator` `SET ROLE` | precisa `GRANT <papel> TO authenticator`. Sem isso o switch falha. |
+| Policies `TO authenticated` | papel terceiro **não** as vê; precisa policies `TO` esse papel. |
+| “Não mandar JWT ao PostgREST” | **insuficiente.** Bearer chama `/rest/v1` e `/rpc` se a Data API estiver publicada. |
+
+`verificarSujeitoOAuth` recusar `role !== "authenticated"` é **código desta
+app**, não o Auth. Dá para mudar depois; **não** é prova de que o Auth recusa.
+
+---
+
+## O que este PR não faz (de propósito)
+
+Nenhum ficheiro de hook SQL, nenhum `CREATE ROLE`, nenhum GRANT a
+`authenticator`, nenhum REVOKE global de DEFINER, nenhum rewrite de RPC,
+nenhum `pgrst.db_pre_request`. 0773 (tabelas) permanece **não aplicada**.
+
+---
+
+## Próxima medição autorizada (uma, não um menu)
+
+Não há escolha A/B/C que feche RPC sem medição. O que falta e **não cabe** no
+Postgres efêmero de `test:db` (não sobe GoTrue):
+
+**M1 — emissão de JWT pelo Auth pinado, ambiente descartável, aprovação
+posterior.** Sem isto, não afirmar que o Auth aceita ou recusa `role`
+terceiro.
+
+| | |
+|---|---|
+| **Recurso** | Um Auth descartável da **mesma tag de imagem** `supabase/gotrue:v2.196.0` (ou binário do commit `0204331`) + Postgres só do Auth. **Não** a VPS de cliente. **Não** ligar o hook na instalação viva. |
+| **Efeito** | Liga `Hook.CustomAccessToken` **só nesse Auth**. Função/HTTP que **copia** `event.claims` e, se `client_id` presente, põe `claims.role = "oauth_delegado"`; se ausente, devolve claims intactas. Emite 2–3 tokens de teste e apaga o ambiente. Zero GRANT no schema do CRM. Zero client OAuth de produção. |
+| **Asserções** | (1) `authorization_code` → JWT com `sub` = user id, `client_id` = client do teste, `role` = `oauth_delegado` **ou** HTTP 500 com erro de schema (os dois resultados são evidência). (2) `refresh_token` do mesmo client: mesmas claims. (3) grant password/cookie no mesmo Auth: `role` continua o de `auth.users` (tipicamente `authenticated`) e **sem** `client_id`. (4) variante: hook que omite `client_id` no output → JWT **sem** `client_id` (replace). |
+| **Não é** | CREATE ROLE no CRM, GRANT, policies, PostgREST, Inbox, merge, deploy. |
+
+**M2 só depois de M1 aceitar o claim** (aprovação à parte, blast de schema):
+`CREATE ROLE` NOINHERIT, `GRANT TO authenticator`, `USAGE` em `public`,
+policies `TO` o papel, inventário PUBLIC restante. **Não agora.**
+
+---
+
+## Spec 21 vs delegação
+
+A exclusão `is_personal === false` nas rotas cookie de mídia/documentos é
+independente e continua. Delegação HTTP 404. Sem M1, **não** homologar JWT
+OAuth como sujeito confinado na RPC.

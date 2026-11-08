@@ -50,17 +50,15 @@ Confinar RPC **e** preservar cookie no mesmo JWT `role=authenticated` não é
 seguro: revogar EXECUTE quebra a Inbox; guardar cada DEFINER é refactor
 amplo; patchar três paths e declarar confinamento global seria mentira.
 
-O Custom Access Token Hook oficial **não** emite `role` fora de
-`anon`|`authenticated` (JSON Schema publicado). Hook inativo com papel
-dedicado seria solução falsa. `GRANT TO PUBLIC` alcança qualquer papel
-`NOINHERIT`. “Não mandar o JWT ao PostgREST” **não** corta `/rest/v1`/`/rpc`
-de quem tem o Bearer. Lei e pedido A/B/C:
-[`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
+O enum `anon`|`authenticated` na **página de docs** do hook **não** é o
+schema de runtime. GoTrue v2.196.0 valida `role` como `type: string`
+(`MinimumViableTokenSchema`). Emissão com papel terceiro: **runtime
+untested** (M1). `GRANT TO PUBLIC` alcança qualquer papel `NOINHERIT`.
+“Não mandar o JWT ao PostgREST” **não** corta `/rest/v1`/`/rpc`. Lei e
+próxima medição: [`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
 
-**Decisão (Felipe, ativação futura):** A (RLS `client_id`, RPC herdada),
-B (só se o Auth passar a emitir o claim) ou C (REVOKE/rewrite global, não é
-integração). Sem C disfarçada de hook. Sem prova de isolamento RPC, a
-homologação **não** trata o JWT OAuth como sujeito confinado.
+**Sem M1** a homologação **não** trata o JWT OAuth como sujeito confinado
+na RPC. Sem hook/CREATE ROLE neste PR.
 
 ## Spec 21 (cookie) vs esta matriz
 

@@ -56,14 +56,11 @@
 - Escrita da classificação e do grant (Felipe aprova; sem UI neste PR).
 - Irmã notes/media, se o produto quiser o mesmo 404 (default-deny OAuth no
   banco não altera o cookie; a rota irmã segue sem `is_personal`).
-- **RPC / Data API — STOP de papel dedicado:** o JSON Schema oficial do
-  Custom Access Token Hook só admite `role` `anon`|`authenticated`. Hook
-  inativo com `oauth_delegado` seria solução falsa. `GRANT TO PUBLIC`
-  alcança qualquer papel `NOINHERIT`. “Não mandar o JWT ao PostgREST”
-  não corta `/rest/v1`/`/rpc`. Ver
-  `docs/decisoes/delegacao-papel-dedicado.md`. Felipe escolhe A (RLS
-  `client_id`, RPC herdada), B (só se o Auth passar a emitir o claim) ou
-  C (REVOKE/rewrite global — não é integração).
+- **RPC / Data API:** o enum das docs **não** é o schema de runtime
+  (GoTrue v2.196.0: `role` type string). `verificarSujeitoOAuth` exigir
+  `authenticated` é escolha local. PUBLIC alcança NOINHERIT. Sem M1
+  (Auth descartável pinado) não homologar RPC confinada. Sem hook/CREATE
+  ROLE neste PR. Ver `docs/decisoes/delegacao-papel-dedicado.md`.
 - Prova RLS no Postgres efêmero do CI (`invariants-majors`, arquivos
   `delegacao-visibilidade-corporativa-rls.test.ts` e
   `delegacao-oauth-deriva-rls.test.ts`). Docker local ausente neste

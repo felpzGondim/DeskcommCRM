@@ -8,8 +8,8 @@ import {
 } from "./delegacao-hook-papel-oficial";
 import { RPC_OAUTH } from "./delegacao-oauth-matriz";
 
-describe("Custom Access Token Hook — role oficial (offline)", () => {
-  it("enum publicado só admite anon e authenticated", () => {
+describe("Custom Access Token Hook — enum das docs (não é schema de runtime)", () => {
+  it("página de docs lista enum anon|authenticated — não prova recusa do Auth", () => {
     expect(HOOK_ACCESS_TOKEN_ROLE_ENUM_OFICIAL).toEqual(["anon", "authenticated"]);
     expect(roleClaimPermitidaPeloHookOficial("authenticated")).toBe(true);
     expect(roleClaimPermitidaPeloHookOficial("anon")).toBe(true);

@@ -151,7 +151,7 @@ describe("verificarSujeitoOAuth", () => {
     expect(r).toEqual({ ok: false, motivo: "identidade_nao_provada" });
   });
 
-  it("role oauth_delegado recusa — o verificador exige authenticated; o hook oficial também não emite esse claim", async () => {
+  it("role oauth_delegado recusa — escolha local do verificador (não é prova de que o Auth recusa)", async () => {
     const r = await verificarSujeitoOAuth("Bearer jwt-papel-dedicado", {
       leitor: leitor({
         userId: MARINA,

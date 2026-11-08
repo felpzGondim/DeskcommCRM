@@ -25,21 +25,23 @@ export const STORAGE_OAUTH = "default_deny" as const;
 
 /**
  * RPC não é confinada pelo mesmo JWT. Cookie e OAuth compartilham o papel
- * `authenticated`. O hook oficial **não** emite role fora de anon|authenticated
- * (docs/decisoes/delegacao-papel-dedicado.md). Revogar EXECUTE de
- * authenticated quebra a Inbox. DEFINER volátil do allowlist não lê client_id.
+ * `authenticated` até M1 medir o Auth. O enum das docs **não** é o schema de
+ * runtime (GoTrue v2.196.0: role type string). Ver
+ * docs/decisoes/delegacao-papel-dedicado.md. Revogar EXECUTE de authenticated
+ * quebra a Inbox. DEFINER volátil do allowlist não lê client_id. PUBLIC
+ * alcança NOINHERIT.
  */
 export const RPC_OAUTH = {
   estado: "nao_confinado",
   motivo:
-    "JWT OAuth usa o mesmo papel authenticated da sessão cookie. O JSON Schema do Custom Access Token Hook só admite role anon|authenticated. REVOKE EXECUTE de authenticated quebra a Inbox. SECURITY DEFINER volátil permitida a authenticated não consulta client_id. GRANT TO PUBLIC alcança qualquer papel NOINHERIT.",
+    "JWT OAuth e cookie compartilham authenticated até medição M1. O enum das docs não é o schema de runtime (role type string). verificarSujeitoOAuth exigir authenticated é escolha local. REVOKE EXECUTE de authenticated quebra a Inbox. DEFINER volátil não consulta client_id. GRANT TO PUBLIC alcança qualquer papel NOINHERIT.",
   alternativas: [
-    "A — ficar em authenticated + client_id na RLS (0773); RPC herdada, documentada",
-    "B — só se o Auth passar a emitir role fora de {anon,authenticated}; hoje a spec do hook recusa",
-    "C — REVOKE/rewrite global das DEFINER voláteis em authenticated (Inbox); não é integração",
+    "M1 — Auth descartável pin v2.196.0: hook copia claims e põe role string terceiro só com client_id; medir emissão authorization_code/refresh vs cookie (aprovação posterior)",
+    "M2 — só se M1 aceitar o claim: CREATE ROLE + GRANT authenticator + USAGE + policies TO (blast de schema, aprovação à parte)",
+    "0773 permanece tabelas/Storage; não isola RPC",
   ],
   decisao_fora_de_escopo:
-    "Felipe escolhe A, B (quando o Auth permitir) ou C. Hook inativo com role dedicado seria solução falsa. Não mandar o JWT ao PostgREST não corta /rest/v1 /rpc de quem tem o Bearer.",
+    "Felipe autoriza M1 (Auth descartável) antes de qualquer hook/CREATE ROLE no CRM. Sem M1 não homologar RPC confinada. Não mandar o JWT ao PostgREST não corta /rest/v1 /rpc de quem tem o Bearer.",
 } as const;
 
 /** Acesso que esta migration INTRODUZ para client_id presente (não existia na cookie policy). */
