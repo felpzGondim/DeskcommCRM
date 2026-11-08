@@ -65,20 +65,34 @@ select jsonb_build_object(
   'acl', (
     select coalesce(jsonb_agg(jsonb_build_object(
       'rel', format('%I.%I', n.nspname, c.relname),
-      'oauth_select', has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'select'),
-      'oauth_insert', has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'insert'),
-      'oauth_truncate', has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'truncate'),
+      'oauth_select', case when exists (select 1 from pg_roles where rolname = 'oauth_delegado')
+        then has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'select')
+        else false end,
+      'oauth_insert', case when exists (select 1 from pg_roles where rolname = 'oauth_delegado')
+        then has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'insert')
+        else false end,
+      'oauth_truncate', case when exists (select 1 from pg_roles where rolname = 'oauth_delegado')
+        then has_table_privilege('oauth_delegado', format('%I.%I', n.nspname, c.relname), 'truncate')
+        else false end,
       'authenticated_select', has_table_privilege('authenticated', format('%I.%I', n.nspname, c.relname), 'select'),
       'anon_select', has_table_privilege('anon', format('%I.%I', n.nspname, c.relname), 'select')
     ) order by n.nspname, c.relname), '[]'::jsonb)
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
+    where (n.nspname = 'public'
       and c.relkind = 'r'
       and c.relname in (
         'conversations', 'messages', 'contacts',
         'locacao_processo_conversas', 'locacao_processo_documentos'
-      )
+      ))
+       or (n.nspname = 'storage' and c.relname = 'objects')
+  ),
+  'hook_sql', (
+    select pg_get_functiondef(p.oid)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'fn_delegacao_access_token_hook'
+    limit 1
   ),
   'funcoes', (
     select coalesce(jsonb_agg(p.proname order by p.proname), '[]'::jsonb)

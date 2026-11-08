@@ -168,7 +168,28 @@ export async function handleDelegacaoHttp(
       agora: deps.agora,
       clientDoUsuario: deps.clientDoUsuario,
       buscarGrant: deps.buscarGrant ?? buscarGrantViaClient,
-      assinarAposRls: deps.assinarAposRls,
+      assinarAposRls:
+        deps.assinarAposRls ??
+        (async (q) => {
+          const client = deps.clientDoUsuario(sujeito.sujeito.accessToken) as unknown as {
+            storage?: {
+              from: (bucket: string) => {
+                createSignedUrl: (
+                  path: string,
+                  expires: number,
+                ) => Promise<{ data: { signedUrl?: string } | null; error: unknown }>;
+              };
+            };
+          };
+          if (typeof client.storage?.from !== "function") return null;
+          try {
+            const { data, error } = await client.storage.from(q.bucket).createSignedUrl(q.path, 60);
+            if (error || !data?.signedUrl) return null;
+            return { signed_url: data.signedUrl, expires_in: 60 };
+          } catch {
+            return null;
+          }
+        }),
     },
   );
 

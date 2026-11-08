@@ -9,7 +9,9 @@ import { randomBytes, createHash } from "node:crypto";
 import { SignJWT } from "jose";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { handleDelegacaoHttp } from "@/lib/auth/delegacao-http";
 import { GOTRUE_PROVA_VIVO } from "@/lib/auth/delegacao-gotrue-prova";
+import type { ClienteLeitura } from "@/lib/auth/delegacao-superficie";
 import { lastLine, sql } from "./psql-transporte";
 
 const JWT_SECRET = "delegacao-vivo-secret-min-32-chars!!";
@@ -34,6 +36,10 @@ const CT_CORP_B = "dddddddd-3333-4000-8000-0000000000c2";
 const CONV_CORP_A = "dddddddd-4444-4000-8000-0000000000c1";
 const CONV_PESS_A = "dddddddd-4444-4000-8000-0000000000a1";
 const CONV_CORP_B = "dddddddd-4444-4000-8000-0000000000c2";
+const MSG_CORP_A = "dddddddd-5555-4000-8000-0000000000c1";
+const MSG_PESS_A = "dddddddd-5555-4000-8000-0000000000a1";
+const PATH_CORP = `${ORG_A}/midia/corp.bin`;
+const PATH_PESS = `${ORG_A}/midia/pess.bin`;
 
 const limpar: string[] = [];
 let hookServer: ReturnType<typeof createServer> | null = null;
@@ -209,6 +215,19 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
           ('${CONV_PESS_A}', '${ORG_A}', '${CT_PESS_A}', '${SESS_A}', 'open', false),
           ('${CONV_CORP_B}', '${ORG_B}', '${CT_CORP_B}', '${SESS_B}', 'open', false)
         on conflict (id) do nothing;
+        insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body, media_storage_path) values
+          ('${MSG_CORP_A}', '${ORG_A}', '${CONV_CORP_A}', '${SESS_A}', '${CT_CORP_A}', 'image', 'inbound', 'corp', '${PATH_CORP}'),
+          ('${MSG_PESS_A}', '${ORG_A}', '${CONV_PESS_A}', '${SESS_A}', '${CT_PESS_A}', 'image', 'inbound', 'pess', '${PATH_PESS}')
+        on conflict (id) do nothing;
+        insert into storage.buckets (id, name, public) values
+          ('whatsapp-media', 'whatsapp-media', false)
+        on conflict (id) do nothing;
+        insert into storage.objects (bucket_id, name)
+        select 'whatsapp-media', x.name
+          from (values ('${PATH_CORP}'), ('${PATH_PESS}')) as x(name)
+         where not exists (
+           select 1 from storage.objects o where o.bucket_id = 'whatsapp-media' and o.name = x.name
+         );
       `);
 
       psqlDb(
@@ -306,6 +325,8 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI=http://host.docker.internal:${hookPort}/`,
         "-e",
         `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_SECRETS=${HOOK_SECRET}`,
+        "-e",
+        `GOTRUE_JWT_ISSUER=${API_EXTERNAL_URL}/auth/v1`,
         GOTRUE_PROVA_VIVO.imagem,
       ]);
       limpar.push(GOTRUE_NOME);
@@ -560,9 +581,24 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       expect(tokA.role).toBe("oauth_delegado");
       expect(tokB.role).toBe("oauth_delegado");
 
-      async function rest(token: string, path: string): Promise<{ status: number; body: unknown }> {
+      async function rest(
+        token: string,
+        path: string,
+        opts: { method?: string; schema?: string; body?: unknown } = {},
+      ): Promise<{ status: number; body: unknown }> {
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        };
+        if (opts.schema) {
+          headers["Accept-Profile"] = opts.schema;
+          headers["Content-Profile"] = opts.schema;
+        }
+        if (opts.body !== undefined) headers["Content-Type"] = "application/json";
         const r = await fetch(`http://127.0.0.1:${pgrstPort}${path}`, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          method: opts.method ?? "GET",
+          headers,
+          body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
         });
         const text = await r.text();
         let body: unknown = text;
@@ -572,6 +608,81 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
           /* texto */
         }
         return { status: r.status, body };
+      }
+
+      function clientePostgrest(token: string): ClienteLeitura {
+        const cadeia = (schema: string, table: string) => {
+          const state = {
+            cols: "*",
+            eqs: [] as Array<[string, string]>,
+            isNull: [] as string[],
+            limit: 100,
+            single: false,
+          };
+          const self: Record<string, unknown> = {};
+          const run = async () => {
+            const qs = new URLSearchParams();
+            qs.set("select", state.cols);
+            for (const [col, val] of state.eqs) qs.set(col, `eq.${val}`);
+            for (const col of state.isNull) qs.set(col, "is.null");
+            qs.set("limit", String(state.limit));
+            const r = await rest(token, `/${table}?${qs.toString()}`, { schema });
+            if (r.status >= 400) return { data: null, error: { status: r.status, body: r.body } };
+            const rows = Array.isArray(r.body) ? r.body : [];
+            return { data: state.single ? (rows[0] ?? null) : rows, error: null };
+          };
+          self.select = (cols: string) => {
+            state.cols = cols;
+            return self;
+          };
+          self.eq = (col: string, val: string) => {
+            state.eqs.push([col, val]);
+            return self;
+          };
+          self.in = () => self;
+          self.is = (col: string, val: null) => {
+            if (val === null) state.isNull.push(col);
+            return self;
+          };
+          self.limit = (n: number) => {
+            state.limit = n;
+            return self;
+          };
+          self.maybeSingle = async () => {
+            state.single = true;
+            return run();
+          };
+          self.then = (
+            resolve: (v: { data: unknown; error: unknown }) => unknown,
+            reject?: (e: unknown) => unknown,
+          ) => run().then(resolve, reject);
+          return self;
+        };
+        return {
+          from: (tabela: string) => cadeia("public", tabela),
+          schema: (nome: string) => ({ from: (tabela: string) => cadeia(nome, tabela) }),
+        };
+      }
+
+      async function leitorGoTrue(jwt: string) {
+        const r = await fetch(`http://127.0.0.1:${gotruePort}/user`, {
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const text = await r.text();
+        let json: { id?: string } = {};
+        try {
+          json = JSON.parse(text) as { id?: string };
+        } catch {
+          json = {};
+        }
+        const payload = jwtPayload(jwt) as Record<string, unknown>;
+        return {
+          getUser: async () => ({
+            data: { user: r.ok && json.id ? { id: json.id } : null },
+            error: r.ok ? null : { message: text.slice(0, 200) },
+          }),
+          getClaims: async () => ({ data: { claims: payload }, error: null }),
+        };
       }
 
       const aCorp = await rest(tokA.access, `/conversations?id=eq.${CONV_CORP_A}&select=id`);
@@ -608,6 +719,147 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       expect(
         (await rest(cookieJson.access_token, `/conversations?id=eq.${CONV_PESS_A}&select=id`)).body,
       ).toEqual([{ id: CONV_PESS_A }]);
+
+      const objA = await rest(
+        tokA.access,
+        `/objects?name=eq.${encodeURIComponent(PATH_CORP)}&select=name,bucket_id`,
+        { schema: "storage" },
+      );
+      expect(objA.status).toBe(200);
+      expect(objA.body).toEqual([{ name: PATH_CORP, bucket_id: "whatsapp-media" }]);
+      expect(
+        (
+          await rest(
+            tokA.access,
+            `/objects?name=eq.${encodeURIComponent(PATH_PESS)}&select=name`,
+            { schema: "storage" },
+          )
+        ).body,
+      ).toEqual([]);
+      expect(
+        (
+          await rest(
+            tokB.access,
+            `/objects?name=eq.${encodeURIComponent(PATH_CORP)}&select=name`,
+            { schema: "storage" },
+          )
+        ).body,
+      ).toEqual([]);
+
+      const escrita = await rest(tokA.access, "/conversations", {
+        method: "POST",
+        body: {
+          id: "dddddddd-4444-4000-8000-000000000099",
+          organization_id: ORG_A,
+          contact_id: CT_CORP_A,
+          channel_session_id: SESS_A,
+          status: "open",
+          is_group: false,
+        },
+      });
+      expect(escrita.status).toBeGreaterThanOrEqual(400);
+
+      const objWrite = await rest(tokA.access, "/objects", {
+        method: "POST",
+        schema: "storage",
+        body: { bucket_id: "whatsapp-media", name: `${ORG_A}/midia/injected.bin` },
+      });
+      expect(objWrite.status).toBeGreaterThanOrEqual(400);
+
+      const rpc = await rest(tokA.access, "/rpc/fn_conversation_scope", { method: "POST", body: {} });
+      expect(rpc.status).toBeGreaterThanOrEqual(400);
+
+      const vista = await rest(tokA.access, "/external_db_connections_safe?select=*");
+      expect(vista.status === 200 ? vista.body : []).toEqual([]);
+
+      const urlAntiga = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      process.env.NEXT_PUBLIC_SUPABASE_URL = API_EXTERNAL_URL;
+      try {
+        const mcpBuscar = await handleDelegacaoHttp(
+          new Request("http://app.test/api/mcp/delegacao", {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${tokA.access}`,
+              host: "app.test",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: { name: "delegacao_buscar", arguments: {} },
+            }),
+          }),
+          {
+            leitorAuth: await leitorGoTrue(tokA.access),
+            clientDoUsuario: (t) => clientePostgrest(t),
+          },
+        );
+        expect(mcpBuscar.status).toBe(200);
+        const buscarJson = (await mcpBuscar.json()) as {
+          result?: { structuredContent?: { conversations?: Array<{ id: string }> } };
+        };
+        const ids = (buscarJson.result?.structuredContent?.conversations ?? []).map((c) => c.id);
+        expect(ids).toContain(CONV_CORP_A);
+        expect(ids).not.toContain(CONV_PESS_A);
+        expect(ids).not.toContain(CONV_CORP_B);
+
+        const mcpBaixar = await handleDelegacaoHttp(
+          new Request("http://app.test/api/mcp/delegacao", {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${tokA.access}`,
+              host: "app.test",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 2,
+              method: "tools/call",
+              params: {
+                name: "delegacao_baixar",
+                arguments: {
+                  conversation_id: CONV_CORP_A,
+                  bucket: "whatsapp-media",
+                  path: PATH_CORP,
+                },
+              },
+            }),
+          }),
+          {
+            leitorAuth: await leitorGoTrue(tokA.access),
+            clientDoUsuario: (t) => clientePostgrest(t),
+          },
+        );
+        expect(mcpBaixar.status).toBe(200);
+        const baixarJson = (await mcpBaixar.json()) as {
+          result?: { structuredContent?: { visivel?: boolean; path?: string } };
+        };
+        expect(baixarJson.result?.structuredContent?.visivel).toBe(true);
+        expect(baixarJson.result?.structuredContent?.path).toBe(PATH_CORP);
+      } finally {
+        if (urlAntiga === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+        else process.env.NEXT_PUBLIC_SUPABASE_URL = urlAntiga;
+      }
+
+      sql(`update public.delegacao_visibilidade_corporativa
+             set revoked_at = now()
+           where user_id = '${USER_A}';`);
+      expect(
+        (await rest(tokA.access, `/conversations?id=eq.${CONV_CORP_A}&select=id`)).body,
+      ).toEqual([]);
+      expect(
+        (
+          await rest(
+            tokA.access,
+            `/objects?name=eq.${encodeURIComponent(PATH_CORP)}&select=name`,
+            { schema: "storage" },
+          )
+        ).body,
+      ).toEqual([]);
+      sql(`update public.delegacao_visibilidade_corporativa
+             set revoked_at = null
+           where user_id = '${USER_A}';`);
 
       expect(
         lastLine(

@@ -69,8 +69,39 @@ describe("0774 não é a 0773 experimental", () => {
     );
   });
 
+  it("is_personal existe antes das funções/policies da 0774", () => {
+    const col = sql.search(/add column if not exists is_personal/);
+    const fn = sql.search(/fn_delegacao_contato_corporativo/);
+    expect(col).toBeGreaterThan(-1);
+    expect(fn).toBeGreaterThan(col);
+  });
+
   it("WORKING/created_by/nome não classificam origem", () => {
     expect(sql).toMatch(/Não olha status\/created_by\/nome\/telefone/);
     expect(sql).toMatch(/WORKING\/STOPPED\/created_by\/display_name\/org NÃO autorizam origem/);
+  });
+
+  it("ENABLE RLS off+42501 aborta antes de GRANT SELECT; já ON não ALTER", () => {
+    expect(sql).toMatch(
+      /storage\.objects com RLS off e sem privilégio para ENABLE — abortar antes de GRANT SELECT/,
+    );
+    expect(sql).toMatch(/GRANT SELECT em storage\.objects recusado — RLS off/);
+    const enable = sql.search(/alter table storage\.objects enable row level security/);
+    const swallow = sql.search(/when insufficient_privilege then null/);
+    expect(enable).toBeGreaterThan(-1);
+    expect(sql.slice(enable, enable + 400)).toMatch(/raise exception/);
+    expect(sql.slice(enable, enable + 400)).not.toMatch(/then null/);
+    expect(swallow).toBeGreaterThan(enable);
+  });
+
+  it("POST de novo número não classifica sessão empresarial", () => {
+    const post = readFileSync("app/api/v1/channel-sessions/route.ts", "utf8");
+    const connect = readFileSync("lib/channels/connect-waha.ts", "utf8");
+    expect(post).toMatch(/POST \/api\/v1\/channel-sessions/);
+    expect(post).not.toMatch(/delegacao_sessoes_empresariais/);
+    expect(connect).not.toMatch(/delegacao_sessoes_empresariais/);
+    expect(readFileSync("app/api/v1/channel-sessions/[id]/conta-empresarial/route.ts", "utf8")).toMatch(
+      /vincularSessaoContaEmpresarial/,
+    );
   });
 });

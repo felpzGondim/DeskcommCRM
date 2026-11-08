@@ -29,9 +29,25 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
   });
 
   it("rollback remove o papel; reaplicar a 0774 restaura o catálogo", () => {
-    const antes = catalogo();
+    const antes = catalogo() as {
+      membership_authenticator_oauth?: boolean;
+      rls_storage_objects?: boolean;
+      funcoes?: unknown;
+      hook_sql?: unknown;
+    };
     try {
       sql(ROLLBACK);
+      const aposRollback = catalogo() as {
+        membership_authenticator_oauth?: boolean;
+        rls_storage_objects?: boolean;
+        funcoes?: unknown;
+        hook_sql?: unknown;
+      };
+      expect(aposRollback).not.toEqual(antes);
+      expect(aposRollback.membership_authenticator_oauth).toBe(false);
+      expect(aposRollback.funcoes).toEqual([]);
+      expect(aposRollback.hook_sql ?? null).toBeNull();
+      expect(aposRollback.rls_storage_objects).toBe(antes.rls_storage_objects);
       expect(
         lastLine(
           sql(`select exists (

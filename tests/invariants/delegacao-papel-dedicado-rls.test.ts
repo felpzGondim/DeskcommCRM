@@ -397,6 +397,20 @@ describe("0774 — revogação, escrita, RPC, TRUNCATE, hook", () => {
     );
   });
 
+  it("view não concedida ao papel recusa SELECT", () => {
+    let recusou = false;
+    try {
+      sql(`
+        set role oauth_delegado;
+        select set_config('request.jwt.claims', '${jwtA}', false);
+        select count(*) from public.external_db_connections_safe;
+      `);
+    } catch (err) {
+      recusou = /permission denied|42501/i.test(motivoDoErro(err));
+    }
+    expect(recusou).toBe(true);
+  });
+
   it("EXECUTE de RPC DEFINER cookie recusa na sessão", () => {
     let recusou = false;
     try {

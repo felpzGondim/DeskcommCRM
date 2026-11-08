@@ -23,6 +23,13 @@ grant usage on schema auth to oauth_delegado;
 grant usage on schema storage to oauth_delegado;
 grant oauth_delegado to authenticator;
 
+-- A 0563 acrescenta contacts.is_personal no apêndice DEPOIS da varredura.
+-- Este bloco (funções SQL + policies) precisa da coluna aqui: ADD IF NOT EXISTS
+-- é no-op no update (0563 já rodou) e cria no install quando o baseline chega
+-- neste ponto antes da 0563.
+alter table public.contacts
+  add column if not exists is_personal boolean default false not null;
+
 -- Clients autorizados (instalação, não org). O hook só troca role neste conjunto.
 -- Sem organization_id de propósito: o hook vê client_id, não org. O grant por
 -- org+uid é a autorização de linha.
@@ -443,26 +450,37 @@ create policy locacao_processo_documentos_select_oauth_delegado
 
 -- Storage: ligar RLS (no stub do CI as policies existiam inertes) e recortar
 -- policies sem TO — sem isso elas passam a valer para oauth_delegado.
+-- Gate: RLS já ON → não ALTER (não-dono). RLS OFF → ENABLE; se continuar OFF
+-- (42501 de não-dono) ABORTA antes de GRANT SELECT. Swallow de 42501 + GRANT
+-- com RLS off entregaria o bucket inteiro ao papel.
 do $$
+declare
+  rls_ligada boolean;
 begin
   if to_regclass('storage.objects') is null then
     return;
   end if;
-  -- ENABLE em tabela já com RLS, ou de outro dono (e2e: supabase_storage_admin),
-  -- aborta o baseline com 42501. Stub do CI nasce sem RLS e o postgres é dono.
-  if exists (
-    select 1
-      from pg_class c
-      join pg_namespace n on n.oid = c.relnamespace
-     where n.nspname = 'storage'
-       and c.relname = 'objects'
-       and c.relrowsecurity is not true
-  ) then
+  select c.relrowsecurity into rls_ligada
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'storage' and c.relname = 'objects';
+  if rls_ligada is not true then
     begin
       execute 'alter table storage.objects enable row level security';
     exception
-      when insufficient_privilege then null;
+      when insufficient_privilege then
+        raise exception
+          'delegacao 0774: storage.objects com RLS off e sem privilégio para ENABLE — abortar antes de GRANT SELECT a oauth_delegado'
+          using errcode = '42501';
     end;
+    select c.relrowsecurity into rls_ligada
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'storage' and c.relname = 'objects';
+    if rls_ligada is not true then
+      raise exception
+        'delegacao 0774: storage.objects permanece com RLS off após ENABLE — abortar antes de GRANT SELECT a oauth_delegado';
+    end if;
   end if;
   begin
     execute 'grant usage on schema storage to oauth_delegado';
@@ -656,9 +674,20 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
 do $$
+declare
+  rls_ligada boolean;
 begin
   if to_regclass('storage.objects') is null then
     return;
+  end if;
+  select c.relrowsecurity into rls_ligada
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'storage' and c.relname = 'objects';
+  if rls_ligada is not true then
+    raise exception
+      'delegacao 0774: GRANT SELECT em storage.objects recusado — RLS off'
+      using errcode = '42501';
   end if;
   begin
     execute 'grant select on storage.objects to oauth_delegado';

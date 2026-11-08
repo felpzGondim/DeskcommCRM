@@ -11,9 +11,9 @@ REVIEW. Sem merge/tag/deploy/VPS. Sem 0773. Sem transportar o pacote experimenta
 - Grant `delegacao_visibilidade_corporativa` (vazio; individual; buscar/ler/baixar)
 - Conta empresarial + vínculo de sessão (vazio; inclusão/substituição herda; pessoal/unknown recusam)
 - Policies **TO** o papel em conversas/mensagens/contatos/documentos/storage
-- RLS ligada em `storage.objects`; policies de storage sem `TO` recortadas para `authenticated`
+- RLS ligada em `storage.objects`; policies de storage sem `TO` recortadas para `authenticated`. ENABLE 42501 com RLS off **aborta** antes de GRANT SELECT (já ON: não ALTER).
 - HTTP `/api/mcp/delegacao` (Bot, Bearer individual) + RFC 9728
-- Cadastro mínimo: `PUT/DELETE /api/v1/channel-sessions/:id/conta-empresarial`
+- Cadastro mínimo: `PUT/DELETE /api/v1/channel-sessions/:id/conta-empresarial` (cookie + admin). POST de número novo **não** classifica — sessão nasce desconhecida até o vínculo oficial.
 - Verifier `role=oauth_delegado` (recusa cookie/`dsk_`)
 - Invariantes RLS + herança de sessão + rollback de catálogo
 - Cadeia viva GoTrue `v2.197.0` (SHA `4eee58f296d9698a1c2c0ae14d7a0b379c7622d3`) + PostgREST HTTP (PKCE+refresh → JWT `oauth_delegado` → só conversa corporativa da identidade)
