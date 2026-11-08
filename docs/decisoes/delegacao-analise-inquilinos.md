@@ -1,8 +1,10 @@
 # Delegação restrita para análise de inquilinos — contrato proposto (NÃO ativado)
 
-**Status:** revisão / preparação. Sem merge, tag, release, deploy, migration,
-credencial ou alteração de papéis. **CONFIRMADO** abaixo é o que o código
-desta branch mede. **INFERIDO** / **EM ABERTO** não é produto ao vivo.
+**Status:** revisão / preparação. Sem merge, tag, release, deploy, banco vivo,
+credencial ou papéis. Migration **preparada e não aplicada** a nenhum banco
+de cliente. **CONFIRMADO** abaixo é o que o código desta branch mede.
+**INFERIDO** / **EM ABERTO** não é produto ao vivo. Enablement do OAuth
+Server **nesta** instalação não está confirmado.
 
 **Autorização de preparar:** Felipe. Quem atualiza produção é o operador,
 não este PR. Preparar **não** concede visibilidade ao vivo.
@@ -18,12 +20,12 @@ de `channel_session_id` no produto.
 | Peça | O que faz nesta branch | O que NÃO faz |
 |---|---|---|
 | **Exclusão pessoal (spec 21) nas rotas já autenticadas por cookie** | `GET /api/v1/messages/[id]/media` e `GET|PATCH /api/v1/conversations/[id]/locacao/documentos` recusam a menos que a conversa da org aponte a um contato da mesma org com `is_personal === false` (booleano literal), **antes** de `createSignedUrl` ou fetch do adapter. Erro de consulta, conversa/contato ausente, `contact_id` vazio ou `is_personal` malformado → 404 mudo (fail closed). A Inbox comum segue: cookie + org ativa + RLS. Sessão de canal **não** precisa ser "corporativa". | Não classifica WhatsApp pessoal vs. empresarial. Não aperta viewer/manager org-wide. Não desliga fluxos ordinários (`is_personal === false` continua). |
-| **Integração delegada buscar/ler/baixar** | Guarda puro fail-closed em `lib/auth/delegacao-empresarial.ts`. Sem rota nova, sem tool no catálogo MCP, sem `auth-dual`, sem path público. Ativação padrão: desligada. Entitlement de visibilidade corporativa: **nenhum concedido**. | Não emite `dsk_`. Não usa cookie de outra pessoa. Não assume sessão corporativa. Não escreve nem envia. Não altera RLS da Inbox. |
+| **Integração delegada buscar/ler/baixar** | Verificador `getUser(jwt)` + client anon (`lib/auth/delegacao-oauth-sujeito.ts`, `lib/supabase/jwt-usuario.ts`); superfície `executarSuperficieDelegada` (sem boolean do chamador); rotas `/api/mcp/delegacao` e RFC 9728 **404** com ativação padrão falsa; schema 0773 (grant + `classificacao_empresarial` + policy extra) **só arquivo**. Tools fora do catálogo. | Não emite token. Não registra client. Não grava grant. Não classifica sessão. Não chama `/api/mcp` admin. Não liga GoTrue. |
 
-A operação comum **não** passa pelo guarda delegado. Ligar a exclusão pessoal
-nas rotas de cookie **não** ativa o bot compartilhado.
+A operação comum **não** passa pela superfície delegada. Ligar a exclusão
+pessoal nas rotas de cookie **não** ativa o bot.
 
-Transporte de identidade (proposta, não código):
+Transporte (GoTrue OAuth 2.1 Server, não AS inventado):
 [`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md).
 
 ---
@@ -75,36 +77,28 @@ escopo-alvo para **preparar**. Não é grant ao vivo.
 Para o bot compartilhado pedir triagem nas conversas/documentos do negócio
 imobiliário, com as permissões efetivas de quem delegou:
 
-1. **Identidade** = usuário autenticado (`ator.type === "user"` + id), via
-   transporte em [`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md).
-   Token `dsk_` de organização, service role, cookie de outra conta e
-   "admin no lugar de" recusam (`identidade_nao_provada`).
+1. **Identidade** = usuário do CRM no JWT OAuth do Auth (`getUser(jwt)` +
+   `client_id` presente). Token `dsk_`, service role, cookie (sem
+   `client_id`) e "admin no lugar de" recusam. WhatsApp não identifica a
+   pessoa — é só a fonte dos documentos.
 2. **Organização** do ator = organização do recurso. Outras empresas recusam.
 3. **Visibilidade (D3/D5 — alvo decidido):** buscar / ler / baixar em
    **todas** as conversas corporativas da org imobiliária. **Não** é
-   assigned-only. **Não** é só a conversa do turno. Implementação e
-   entitlement auditável **faltam**; o guarda recusa
-   `visibilidade_nao_ativada` enquanto
-   `ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS` estiver vazio. Não alargar
-   `conversations_select` neste PR. Se a RLS da pessoa já for org-wide
-   (viewer/manager/admin ou `visibility_mode=all`), o client de sessão
-   basta como teto; os filtros 4–6 continuam. Se for `agent` em `own` /
-   `own_and_unassigned`, a proposta é tabela
-   `delegacao_visibilidade_corporativa` usada **só** na superfície
-   delegada — ver transporte §6.
+   assigned-only. **Não** é só a conversa do turno. Tabela
+   `delegacao_visibilidade_corporativa` (0773, **zero linhas**) + policy
+   extra OAuth. `conversations_select` de cookie exige `client_id IS NULL`
+   (Inbox intacta). Sem grant vivo a policy extra não abre linha.
 4. **Contato** só segue com prova `is_personal === false`. Pessoal, erro,
    ausência e malformado recusam.
-5. **Sessão de canal** com classificação **provada** `corporativa`. Pessoal
-   recusa. `nao_classificada` recusa. WhatsApp pessoal do Felipe está
-   neste recorte. Hoje **não existe** fonte no schema (sem allowlist de
-   session id, sem coluna, sem papel). O provedor embarcado devolve
-   `nao_classificada`. Não se assume que toda sessão é da empresa.
-6. **Chat privado do bot** recusa (`true` ou `nao_provado`). Fonte ainda
-   não existe.
-7. **Anexo** só depois da associação conversa (e processo, se houver).
-8. Só `buscar` | `ler` | `baixar`. Sem write/send e sem fallback amplo.
-9. Auditoria: ids + motivo, **sem** corpo, preview, telefone, path, URL.
-10. Desconhecido / erro de DB recusa.
+5. **Sessão de canal** com `classificacao_empresarial = 'corporativa'`
+   (coluna 0773, default NULL = recusa). Pessoal recusa. Não se semeia
+   session id. WhatsApp pessoal do Felipe cai neste recorte quando a
+   coluna for escrita (ativação futura).
+6. **Anexo** só depois da associação conversa (e processo, se houver).
+7. Só `buscar` | `ler` | `baixar`. Sem write/send e sem fallback amplo.
+8. Auditoria: ids + motivo, **sem** corpo, preview, telefone, path, URL.
+9. Desconhecido / erro de DB recusa. JWT `exp` não revoga sozinho: grant
+   `revoked_at` / `expires_at` + `getUser` (sessão Auth).
 
 Ativação (`ativa` ∧ `contratoAprovado`) é argumento do guarda. Produção
 passa `ATIVACAO_DELEGADA_PADRAO` (ambos falsos). **Não há variável de
@@ -127,40 +121,36 @@ corporativo autorizado. Navegar a Inbox com cookie **não** é essa entrega.
 
 | # | Estado | Conteúdo |
 |---|---|---|
-| D1 | **EM ABERTO** (proposta técnica) | Transporte: AS próprio, auth-code+PKCE se o conector tiver browser; senão device_code. Client de RLS com `sub` da atendente. Sem copiar cookie, sem `dsk_`. Ver [`delegacao-transporte-identidade.md`](delegacao-transporte-identidade.md). Capacidades do Bot Análise **não** medidas. |
-| D2 | **EM ABERTO** (proposta) | Fonte da classificação corporativa da sessão. Sem allowlist de ids neste PR. Unknown deny. |
-| D3 | **ALVO DECIDIDO — não ativado** | Todas as conversas corporativas da org imobiliária (não assigned-only). Entitlement explícito, auditável, aprovação separada para conceder. RLS existente não é bypassada com admin/org token. |
-| D4 | **EM ABERTO** | Quem grava o entitlement e quem liga a integração na org (admin da org? dono da VPS?). |
-| D5 | **ALVO DECIDIDO — não ativado** | Buscar / ler / baixar nesse conjunto (não só o turno). Tools candidatas acima, fora do catálogo. |
+| D1 | **CAMINHO ESCOLHIDO — não ativado** | Sujeito = JWT OAuth do GoTrue (`authorization_code`+PKCE). `getUser(jwt)` + client anon. Sem AS próprio, sem `device_code`, sem peer-binding. Enablement do Auth **nesta** instalação não confirmado. Interop callback Grok Bot **não medido**. |
+| D2 | **SCHEMA PREPARADO — zero valores** | `channel_sessions.classificacao_empresarial` (`corporativa` \| `pessoal` \| NULL). NULL recusa. Sem allowlist de ids, sem seed. |
+| D3 | **ALVO DECIDIDO — não ativado** | Todas as conversas corporativas da org imobiliária (não assigned-only). Grant + policy extra OAuth; Inbox cookie intacta. |
+| D4 | **NÃO TRAVA A PREPARAÇÃO** | Felipe aprova grants/ativação. UI de escrita não entra neste PR (service_role no schema; authenticated não insere). |
+| D5 | **ALVO DECIDIDO — não ativado** | Buscar / ler / baixar nesse conjunto. Tools candidatas fora do catálogo. Rotas 404. |
 
-**Proposta de schema (não aplicada):** (a) classificação corporativa de
-`channel_session_id` **por organização**, escrita só por admin; (b)
-`delegacao_visibilidade_corporativa` por `user_id`+org, usada só na
-superfície delegada até decisão extra sobre a Inbox. Migration + baseline
-+ `-- manifest:` só depois de D1/D2/D4 e da aprovação do grant. Não entra
-neste PR.
-
-Boolean de `PedidoDelegado` **não** é integração de auth completa: o
-caminho `ok: true` do guarda permanece inalcançável enquanto o entitlement
-concedido for lista vazia.
+Boolean de `PedidoDelegado` **não** é a integração. A superfície OAuth não
+aceita prova do chamador. HTTP 404 enquanto `ATIVACAO_DELEGADA_PADRAO`
+está falsa. `ENTITLEMENTS_VISIBILIDADE_CONCEDIDOS` segue vazio.
 
 ---
 
 ## Checklist de ativação (aprovação à parte)
 
-- [ ] D1 medido no conector (§7 do transporte) e Via A ou B escolhida.
-- [ ] D2 com fonte no banco (tripla de migration).
-- [ ] Entitlement da atendente gravado de forma auditável (D3/D5); sem
-      linha = recusa. Sem alterar `conversations_select` salvo decisão extra.
-- [ ] D4 respondido (quem grava / quem liga).
-- [ ] Identidade individual provada; org token sozinho continua recusado.
-- [ ] Sem credencial nova emitida por agente; o operador cria `client_id`.
-- [ ] Superfície `/api/v1/delegacao/*` (ou equivalente) com JWT de sessão;
-      MCP `dsk_` + admin **não** é o veículo.
-- [ ] Sem `auth-dual` nas rotas cookie de mídia/documentos só para "facilitar o bot".
-- [ ] Auditoria sem conteúdo. Sem dado real de cliente nos testes.
+Checklist mínimo (detalhe no transporte §5):
+
+- [ ] Auth desta instalação com `GOTRUE_OAUTH_SERVER_ENABLED` (não é env do app).
+- [ ] Client OAuth (DCR ou `CLIENT_ID`); redirect URIs só após interop.
+- [ ] Sessões de canal classificadas; NULL continua recusa.
+- [ ] Grant da atendente (Felipe aprova); sem linha = recusa.
+- [ ] Ligar `ATIVACAO_DELEGADA_PADRAO` **e** servir `/api/mcp/delegacao` + RFC 9728.
+- [ ] Medir callback Grok Bot × GoTrue. Sem isso, não anunciar o conector.
+- [ ] Identidade individual; `dsk_` + admin continuam recusados.
+- [ ] Sem `auth-dual` nas rotas cookie de mídia/documentos.
 - [ ] Irmã `notes/.../media` revista à parte se o produto quiser o mesmo 404.
 - [ ] Quem atualiza a VPS é o operador (`update.sh`), não o merge deste PR.
+
+**Prova RLS:** `pnpm test:db tests/invariants/delegacao-visibilidade-corporativa-rls.test.ts`
+(Postgres efêmero). `test:unit` não aplica o schema e **não** é prova booleana
+de policy.
 
 ---
 

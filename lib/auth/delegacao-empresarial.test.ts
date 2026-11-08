@@ -34,10 +34,8 @@ function corporativo(parcial: Partial<PedidoDelegado> = {}): PedidoDelegado {
     organizationIdDoRecurso: ORG,
     visibilidadeDaConversa: VISIBILIDADE_CONVERSA_ALVO,
     entitlementDeVisibilidade: ENTITLEMENT_VISIBILIDADE_PADRAO,
-    conversaAutorizadaParaOUsuario: true,
     contatoEhPessoal: false,
     classificacaoDaSessao: "corporativa",
-    chatPrivadoDoBot: false,
     efeito: "ler",
     anexo: {
       conversaIdDoPedido: CONV,
@@ -93,13 +91,6 @@ describe("autorizarDelegacaoEmpresarial — fail closed", () => {
     expect(r).toEqual({ ok: false, motivo: "org_nao_autorizada" });
   });
 
-  it("conversa fora da autorização individual recusa", () => {
-    const r = autorizarDelegacaoEmpresarial(
-      corporativo({ conversaAutorizadaParaOUsuario: false }),
-    );
-    expect(r).toEqual({ ok: false, motivo: "conversa_nao_autorizada" });
-  });
-
   it("contato pessoal recusa", () => {
     const r = autorizarDelegacaoEmpresarial(corporativo({ contatoEhPessoal: true }));
     expect(r).toEqual({ ok: false, motivo: "contato_pessoal" });
@@ -146,15 +137,6 @@ describe("autorizarDelegacaoEmpresarial — fail closed", () => {
       }),
     );
     expect(r).toEqual({ ok: false, motivo: "anexo_fora_do_recurso" });
-  });
-
-  it("chat privado do bot recusa, inclusive quando não provado", () => {
-    expect(
-      autorizarDelegacaoEmpresarial(corporativo({ chatPrivadoDoBot: true })),
-    ).toEqual({ ok: false, motivo: "chat_privado_do_bot" });
-    expect(
-      autorizarDelegacaoEmpresarial(corporativo({ chatPrivadoDoBot: "nao_provado" })),
-    ).toEqual({ ok: false, motivo: "chat_privado_do_bot" });
   });
 
   it("escrever ou enviar não é efeito da integração", () => {

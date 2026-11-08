@@ -7,14 +7,16 @@
  *
  * Alvo D3/D5 (Felipe, 08/11/2026 13:12 São Paulo — preparar, NÃO ativar):
  * buscar/ler/baixar em TODAS as conversas corporativas da org imobiliária.
- * Não é assigned-only nem só o turno. Exclui outras empresas, WhatsApp/sessão
- * pessoal e chats privados do bot. Identidade individual + org + sessão
- * corporativa + exclusão pessoal continuam obrigatórios. Desconhecido/erro
- * recusa. Este guarda NÃO concede visibilidade ao vivo.
+ * Não é assigned-only nem só o turno. Exclui outras empresas e WhatsApp/sessão
+ * pessoal. WhatsApp é fonte dos documentos, não canal da atendente com o bot.
+ * Identidade individual + org + sessão corporativa + exclusão pessoal
+ * continuam obrigatórios. Desconhecido/erro recusa. Este guarda NÃO concede
+ * visibilidade ao vivo.
  *
  * Fail closed: qualquer prova ausente recusa. Token de organização, cliente
  * administrative e sessão de canal sem classificação NÃO viram "corporativo".
- * Boolean do chamador NÃO é integração de auth completa.
+ * Boolean do chamador NÃO é integração de auth completa — a superfície com
+ * sujeito OAuth está em `delegacao-superficie.ts` e permanece desligada.
  *
  * Efeitos permitidos: só buscar, ler e baixar. Escrever ou enviar recusa.
  * Recusa não devolve metadado do recurso (sem path, preview, URL, corpo).
@@ -30,10 +32,17 @@ export const MOTIVOS_RECUSA_DELEGADA = [
   "contato_pessoal",
   "sessao_pessoal",
   "sessao_nao_classificada",
-  "chat_privado_do_bot",
   "anexo_fora_do_recurso",
   "efeito_nao_permitido",
   "visibilidade_nao_ativada",
+  "token_invalido",
+  "audiencia_invalida",
+  "client_id_ausente",
+  "grant_ausente",
+  "grant_revogado",
+  "grant_expirado",
+  "grant_escopo_insuficiente",
+  "grant_cliente_divergente",
 ] as const;
 export type MotivoRecusaDelegada = (typeof MOTIVOS_RECUSA_DELEGADA)[number];
 
@@ -108,22 +117,11 @@ export interface PedidoDelegado {
    */
   entitlementDeVisibilidade: EntitlementVisibilidadeDelegada;
   /**
-   * Afirmação do chamador: a linha passou no client de sessão da pessoa
-   * (quando a superfície estiver ligada). NÃO é grant org-wide. NÃO bypassa
-   * RLS via admin/org token.
-   */
-  conversaAutorizadaParaOUsuario: boolean;
-  /**
-   * Afirmação do chamador. Na ligação a prova é
-   * `avaliarContatoPessoalDaConversa`, não este boolean.
+   * Afirmação do chamador no peneira legado. A superfície OAuth NÃO usa
+   * este campo: lê `is_personal` via `avaliarContatoPessoalDaConversa`.
    */
   contatoEhPessoal: boolean;
   classificacaoDaSessao: ClassificacaoDeSessaoCanal;
-  /**
-   * Chat privado do bot compartilhado. Só `false` literal segue; `true` e
-   * `nao_provado` recusam. Fonte ainda não existe no schema.
-   */
-  chatPrivadoDoBot: true | false | "nao_provado";
   efeito: string;
   anexo?: AnexoDelegado | null;
 }
@@ -168,14 +166,8 @@ export function autorizarDelegacaoEmpresarial(pedido: PedidoDelegado): DecisaoDe
   if (pedido.visibilidadeDaConversa !== VISIBILIDADE_CONVERSA_ALVO) {
     return { ok: false, motivo: "conversa_nao_autorizada" };
   }
-  if (!pedido.conversaAutorizadaParaOUsuario) {
-    return { ok: false, motivo: "conversa_nao_autorizada" };
-  }
   if (pedido.contatoEhPessoal) {
     return { ok: false, motivo: "contato_pessoal" };
-  }
-  if (pedido.chatPrivadoDoBot !== false) {
-    return { ok: false, motivo: "chat_privado_do_bot" };
   }
   if (pedido.classificacaoDaSessao === "pessoal") {
     return { ok: false, motivo: "sessao_pessoal" };

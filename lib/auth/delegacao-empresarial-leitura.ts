@@ -1,9 +1,10 @@
 /**
  * Superfície de buscar / ler / baixar da integração delegada.
  *
- * Não registra MCP, não abre rota, não emite credencial. Quem chama tem de
- * montar o `PedidoDelegado` com provas; este módulo só aplica o guarda e,
- * se recusar, NÃO chama busca, leitura, assinatura nem provedor.
+ * Peneira legado de `PedidoDelegado`. A superfície HTTP isolada está em
+ * `delegacao-superficie.ts` + `app/api/mcp/delegacao` (404 por omissão).
+ * Quem chama este módulo ainda monta o pedido; recusa não busca, não lê,
+ * não assina.
  *
  * `buscar` no schema NÃO exige conversation_id (alvo D5: busca corporativa da
  * org). `ler`/`baixar` exigem a conversa identificada. Nada disto está servido.
@@ -61,12 +62,10 @@ export function pedidoDelegadoDesligado(
     | "classificacaoDaSessao"
     | "visibilidadeDaConversa"
     | "entitlementDeVisibilidade"
-    | "chatPrivadoDoBot"
   > & {
     classificacaoDaSessao?: PedidoDelegado["classificacaoDaSessao"];
     visibilidadeDaConversa?: PedidoDelegado["visibilidadeDaConversa"];
     entitlementDeVisibilidade?: PedidoDelegado["entitlementDeVisibilidade"];
-    chatPrivadoDoBot?: PedidoDelegado["chatPrivadoDoBot"];
   },
 ): PedidoDelegado {
   return {
@@ -75,7 +74,6 @@ export function pedidoDelegadoDesligado(
     classificacaoDaSessao: parcial.classificacaoDaSessao ?? classificacaoDeSessaoNaoDisponivel(),
     visibilidadeDaConversa: parcial.visibilidadeDaConversa ?? VISIBILIDADE_CONVERSA_ALVO,
     entitlementDeVisibilidade: parcial.entitlementDeVisibilidade ?? ENTITLEMENT_VISIBILIDADE_PADRAO,
-    chatPrivadoDoBot: parcial.chatPrivadoDoBot ?? "nao_provado",
   };
 }
 
