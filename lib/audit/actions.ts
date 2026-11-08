@@ -1368,6 +1368,8 @@ export const AUDIT_ACTIONS = [
   "contato.superlogica.desligar",
   // Validação do imóvel na Superlógica (aba Dados): status e ids, sem PII.
   "locacao.imovel_superlogica_validado",
+  "delegacao.conta_empresarial_vinculada",
+  "delegacao.conta_empresarial_revogada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

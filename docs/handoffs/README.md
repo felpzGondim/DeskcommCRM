@@ -42,7 +42,7 @@ que vieram da raiz estão igualmente indexados.
 
 | Documento | Assunto |
 |---|---|
-| [`PR-delegacao-papel-dedicado.md`](PR-delegacao-papel-dedicado.md) | Papel Postgres dedicado (0774) — schema no produto, Auth desligado; REVIEW sem merge |
+| [`PR-delegacao-papel-dedicado.md`](PR-delegacao-papel-dedicado.md) | Papel Postgres dedicado (0774) — schema, HTTP MCP individual, conta empresarial; REVIEW sem merge |
 | [`HANDOFF-canais-oficial.md`](HANDOFF-canais-oficial.md) | HANDOFF — WhatsApp API Oficial (seam de canais) |
 | [`HANDOFF-casos-humanos.md`](HANDOFF-casos-humanos.md) | HANDOFF — Casos Humanos |
 | [`HANDOFF-conversa-vira-lead.md`](HANDOFF-conversa-vira-lead.md) | HANDOFF — A conversa vira lead (spec 17) |

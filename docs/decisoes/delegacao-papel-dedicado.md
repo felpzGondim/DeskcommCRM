@@ -1,52 +1,109 @@
-# Papel Postgres dedicado (oauth_delegado) — schema no produto, Auth desligado
+# Papel Postgres dedicado (oauth_delegado) — schema no produto, Auth desligado na instalação
 
-**Status:** schema e policies no CRM (migration 0774). Hook SQL versionado existe.
-**Não ligado:** Custom Access Token Hook no Auth da instalação, HTTP de delegação,
-grant/client semeados, merge/deploy deste documento como ativação.
+**Status:** schema, policies, HTTP MCP individual e cadastro de vínculo no CRM (migration 0774).
+**Não ligado:** Custom Access Token Hook no Auth da instalação, grant/client/conta semeados,
+merge/deploy deste documento como ativação.
 
-Escopo: leitura de conversas e anexos **empresariais** (`contacts.is_personal is false`)
-por identidade OAuth **individual** (JWT `sub` = usuário do CRM). Pessoal excluído.
-Não usa chave de organização, cookie de outra sessão, nem JWT assinado nesta app.
+Escopo: leitura (buscar / ler / baixar) de conversas e anexos da **conta empresarial**
+da organização, por identidade OAuth **individual** (JWT `sub` = usuário do CRM). Pessoal
+excluído. Números atuais, futuros e substituídos herdam pelo vínculo da sessão com a
+conta — não por lista fixa de telefone nem por confirmação a cada troca. Não usa chave
+de organização, cookie de outra sessão, nem JWT assinado nesta app.
+
+WhatsApp é **fonte** de documento. O canal do Bot é HTTP `/api/mcp/delegacao`, isolado
+de `/api/mcp` (dsk_ + admin).
 
 ## O que o código faz (CONFIRMADO)
 
 | Peça | Onde |
 |---|---|
 | `CREATE ROLE oauth_delegado NOINHERIT` + `GRANT … TO authenticator` | migration 0774 / apêndice do baseline |
-| Hook `fn_delegacao_access_token_hook` | client_id na allowlist → `role=oauth_delegado`; sem client_id permanece `authenticated` |
+| Hook `fn_delegacao_access_token_hook` | **allowlist vazia** (zero linhas vivas) = copia claims, `role` permanece `authenticated`; **não-vazia** = `client_id` vivo vira `oauth_delegado`. Ligar o hook no Auth **não** desfaz recast PUBLIC→authenticated nem RLS de storage |
 | `delegacao_clientes_autorizados` | allowlist de client_id + `hook_version`; vazia |
-| `delegacao_visibilidade_corporativa` | grant uid+client+org; vazia; RLS SELECT só `TO oauth_delegado` com `user_id = auth.uid()` |
+| `delegacao_visibilidade_corporativa` | grant uid+client+org + efeitos `buscar/ler/baixar`; vazia; RLS SELECT só `TO oauth_delegado` |
+| `delegacao_contas_empresariais` | conta empresarial da org; sem telefone, sem PII, sem semente |
+| `delegacao_sessoes_empresariais` | vínculo sessão→conta, gravado no cadastro administrativo da conexão. Vazio/revogado = recusa |
+| `fn_delegacao_sessao_empresarial` | DEFINER estável: sessão vinculada a conta viva da mesma org. Não olha status, created_by, nome, telefone, WORKING |
 | Policies `TO oauth_delegado` | `conversations`, `messages`, `contacts`, `locacao_processo_*`, `storage.objects` |
-| Cookie | USING das policies de SELECT nas tabelas concedidas ao papel é o mesmo; só ganham `TO authenticated` para não valerem no papel dedicado |
+| Cookie | USING das policies de SELECT nas tabelas concedidas ao papel é o mesmo; só ganham `TO authenticated` |
+| HTTP | `GET/POST /api/mcp/delegacao` + RFC 9728 `/.well-known/oauth-protected-resource[/api/mcp/delegacao]` |
+| Cadastro | `PUT/DELETE /api/v1/channel-sessions/:id/conta-empresarial` (admin + suporte de escrita). POST que cria o número **não** classifica |
 | Verifier | `verificarSujeitoOAuth` exige `role=oauth_delegado` + `client_id`; recusa `dsk_` e cookie |
-| TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE; `FOR ALL` de policy **não** cobre |
+| TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE |
+| Pre-request PostgREST | `GRANT EXECUTE` em `fn_pgrst_recusar_replay_do_gateway` — o hook `pgrst.db_pre_request` corre como o papel do JWT; sem isso a cadeia HTTP morre em 42501 antes da RLS. Não amplia dado corporativo |
 
 0773 experimental (oauth_cookie_only em toda tabela `public`) **não** entra aqui.
 
-## Auth runtime (já medido no descartável, M1)
+## Classificação de origem (CONFIRMADO — requisito de produto)
 
-GoTrue v2.196.0 (fonte público, tag `v2.196.0`) valida `role` como string, não enum
-`anon|authenticated`. Com hook enabled, authorization_code+PKCE emitiu
-`role=oauth_delegado` no ambiente descartável (12/12). **Esta instalação** não tem
-o hook ligado. O teste do hook neste PR chama a função SQL; não substitui o Auth
-vivo até o operador apontar `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN` para
-`fn_delegacao_access_token_hook`.
+Permissão de leitura delegada mora no **grant individual** (uid+client+org) sobre a
+**conta empresarial**. Não é allowlist estática de pessoa, nem lista de telefone.
+
+- Inclusão ou substituição de sessão: o cadastro administrativo da conexão grava o
+  vínculo `channel_session_id → conta_empresarial_id`. A sessão nova **herda**.
+- Pessoal / desconhecida: **nunca** herda. Sem vínculo = recusa, mesmo com
+  `contacts.is_personal is false`, `status=WORKING`, `organization_id` da org,
+  `created_by` ou nome da sessão.
+- Tenancy que mistura pessoal precisa do vínculo explícito e do fluxo administrativo
+  na conexão — não de um ok por telefone.
+- O vínculo atual em produção é **levantamento administrativo separado**. Este corte
+  não presume números, sessões nem identidades. Fixtures de teste são sintéticas.
+
+## Auth runtime
+
+**CONFIRMADO (instalação, 08/11 17:04 São Paulo):** `GET /auth/v1/health` HTTP 200 com a
+publishable key devolveu GoTrue **v2.197.0**. Tag pública
+`v2.197.0` (git SHA `4eee58f296d9698a1c2c0ae14d7a0b379c7622d3`). Não é o digest
+gerenciado nem a tag `v2.196.0` usada num harness anterior.
+
+Changelog público v2.196.0 → v2.197.0 (não assumir digest): códigos de recuperação MFA;
+metering OAuth na troca de token; OTP `expires_at`; tabelas SCIM. Contrato do Custom
+Access Token Hook: **CONFIRMADO** na cadeia viva (role continua string, não enum;
+HTTP hook `v1,whsec_` + `host.docker.internal`; PKCE com consent API, não UI).
+
+O hook SQL deste PR **não está ligado** no Auth da instalação. Ligá-lo é
+`GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN` apontando para `fn_delegacao_access_token_hook` (ou
+URI HTTP equivalente), config do Auth, não variável de `lib/env.ts`.
+
+## Recast PUBLIC → authenticated (CONFIRMADO)
+
+Policies de SELECT das tabelas concedidas ao papel nasciam sem `TO` (vale para PUBLIC,
+incluindo `oauth_delegado` mesmo NOINHERIT). Foram recortadas `TO authenticated`.
+Inventário na 0774: `conversations_select`, `messages_select`,
+`tenant_isolation_contacts_read`, write de contacts partido em insert/update/delete,
+locação processo conversas/documentos, storage `tenant_read_ai_policy` /
+`tenant_write_ai_policy` / `tenant_delete_ai_policy` / `tenant_read_lgpd_exports` /
+`propostas: leitura por organizacao` / `locacao-processos: leitura por organizacao`.
+
+Não havia policy `TO anon` nesses objetos; `anon` permanece pelo ACL que já tinha.
+Empty hook/grants **não** desfazem o recast nem a RLS de `storage.objects`.
+
+## Recuperação / rollback (CONFIRMADO)
+
+0774 **não escreve** dado de conversa nem objeto de Storage. `agent.sh` / troca de
+imagem **não** reverte banco.
+
+Reversão = restaurar os **catálogos** afetados (policies, ACL, membership, RLS ligada,
+hook, config do Auth se tiver sido ligada à parte). Ensaio:
+`supabase/rollback/0774_delegacao_papel_dedicado.sql` + snapshot
+`supabase/rollback/0774_snapshot_catalogo.sql`. Equivalência rollback+reaplicar 0774
+é invariante. Restore indiscriminado de DB/Storage **não** é o ensaio.
+
+Backups gerenciados da instalação: **não verificados** com o conector atual. Não se
+conclui que estão ausentes. Rollout de DB na instalação espera prova de recuperação
+à parte.
 
 ## Implantação (coordenação — sem PII)
 
-Consultas sem dado pessoal, no banco da instalação, **depois** de backup:
+Consultas sem dado pessoal, no banco da instalação, **depois** de backup de catálogo:
 
 1. `select rolname, rolinherit from pg_roles where rolname = 'oauth_delegado';`
 2. `select pg_has_role('authenticator', 'oauth_delegado', 'member');`
 3. `select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='storage' and c.relname='objects';`
 4. `select has_table_privilege('oauth_delegado','public.conversations','truncate');` — esperado `f`
-5. Auth: hook **não** ligado até decisão de ativação. Flag do OAuth Server do Auth
-   é config do Auth, não variável de `lib/env.ts`.
+5. Auth: hook **não** ligado até decisão de ativação.
 
-**Consentimento / login da pessoa:** o grant (`user_id` + `oauth_client_id` + org)
-só pode ser inserido com o `sub` dela no Auth desta instalação. Isso depende do
-login (e do consentimento OAuth) **dela**. Este corte **não** envia mensagem a
-ela nem a terceiros. Identificadores não se inferem do nome do client.
-
-Rollback: `revoke oauth_delegado from authenticator;` e não ligar o hook. As
-tabelas/policies ficam inertes (allowlist e grants vazios = zero linhas).
+**Consentimento / login da pessoa:** o grant só pode ser inserido com o `sub` dela no
+Auth desta instalação. Este corte **não** envia mensagem a ela nem a terceiros.
+Identificadores não se inferem do nome do client. Vínculo de sessões da instalação
+é levantamento administrativo, não semente deste PR.

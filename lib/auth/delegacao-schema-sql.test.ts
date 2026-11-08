@@ -33,4 +33,37 @@ describe("0774 não é a 0773 experimental", () => {
     const ultimo = BASELINE.lastIndexOf("fn_delegacao_access_token_hook");
     expect(ultimo).toBeGreaterThan(0);
   });
+
+  it("conta empresarial + vínculo de sessão; herda pelo conta_id, não por telefone", () => {
+    expect(sql).toMatch(/delegacao_contas_empresariais/);
+    expect(sql).toMatch(/delegacao_sessoes_empresariais/);
+    expect(sql).toMatch(/fn_delegacao_sessao_empresarial/);
+    expect(sql).toMatch(/fn_delegacao_contato_corporativo/);
+    expect(sql).toMatch(/Substituição herda pelo mesmo conta_id/);
+    expect(sql).not.toMatch(/\bphone_number\b|\be164\b|\bwhatsapp_id\b/i);
+    const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
+    expect(sql).not.toMatch(/Marina|Brisa|okMarina/i);
+    expect(apendice).not.toMatch(/Marina|Brisa|okMarina/i);
+  });
+
+  it("allowlist de client vazia copia claims; não-vazia mapeia role — sem desfazer recast", () => {
+    expect(sql).toMatch(/allowlist VAZIA \(zero linhas vivas\) = copia claims/);
+    expect(sql).toMatch(/NÃO-VAZIA = client_id vivo vira oauth_delegado/);
+    expect(sql).toMatch(/Ligar o hook no Auth não desfaz recast/);
+  });
+
+  it("pre-request do PostgREST é executável pelo papel (sem isso a cadeia HTTP é 42501)", () => {
+    expect(sql).toMatch(
+      /grant execute on function public\.fn_pgrst_recusar_replay_do_gateway\(\) to oauth_delegado/,
+    );
+    const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
+    expect(apendice).toMatch(
+      /grant execute on function public\.fn_pgrst_recusar_replay_do_gateway\(\) to oauth_delegado/,
+    );
+  });
+
+  it("WORKING/created_by/nome não classificam origem", () => {
+    expect(sql).toMatch(/Não olha status\/created_by\/nome\/telefone/);
+    expect(sql).toMatch(/WORKING\/STOPPED\/created_by\/display_name\/org NÃO autorizam origem/);
+  });
 });

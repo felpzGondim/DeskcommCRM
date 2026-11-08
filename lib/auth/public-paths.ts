@@ -201,6 +201,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // dois nomes de propósito: `/^\/legal/` deixaria qualquer sub-path futuro
   // nascer público de carona.
   /^\/legal\/(terms|privacy)$/,
+  // RFC 9728: descoberta do recurso OAuth da superfície MCP individual.
+  // Auth mora DENTRO de /api/mcp/delegacao. Âncora: só este recurso, sem carona.
+  /^\/\.well-known\/oauth-protected-resource(\/api\/mcp\/delegacao)?$/,
 ];
 
 export function isPublicPath(pathname: string): boolean {

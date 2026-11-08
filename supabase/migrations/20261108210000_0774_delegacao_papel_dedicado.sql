@@ -1,8 +1,9 @@
--- manifest: Papel Postgres oauth_delegado (NOINHERIT) para leitura corporativa delegada: CREATE ROLE, GRANT ao authenticator, hook versionado por client_id autorizado, tabelas de client/grant sem semente, policies TO o papel só em conversas/mensagens/contatos/documentos/storage corporativos, desconhecido e pessoal recusam, REVOKE de PUBLIC/EXECUTE/TRUNCATE no papel. Cookie/authenticated intocado. Sem policy global experimental. Sem ativar o hook no Auth da instalação.
+-- manifest: Papel Postgres oauth_delegado (NOINHERIT) para leitura corporativa delegada: CREATE ROLE, GRANT ao authenticator, hook versionado por client_id autorizado, tabelas de client/grant/conta empresarial/vínculo de sessão sem semente, policies TO o papel só em conversas/mensagens/contatos/documentos/storage corporativos, origem empresarial = vínculo sessão→conta empresarial (vazia/desconhecida/pessoal recusa; is_personal=false não basta; inclusão/substituição herda pelo mesmo conta_id), REVOKE de PUBLIC/EXECUTE/TRUNCATE no papel. Cookie/authenticated intocado. Sem policy global experimental. Sem ativar o hook no Auth da instalação.
 --
--- Inbox por cookie não muda. HTTP de delegação não nasce aqui. O hook SQL existe;
--- ligá-lo no Auth (GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN) é passo de implantação, não
--- deste arquivo. Nenhuma linha de grant/client nasce com o schema.
+-- Inbox por cookie não muda. Superfície HTTP/MCP vive no app, não neste SQL.
+-- O hook SQL existe; ligá-lo no Auth (GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN) é config
+-- da instalação, não deste arquivo. Nenhuma linha de grant/client/sessão nasce
+-- com o schema. WORKING/STOPPED/created_by/display_name/org NÃO autorizam origem.
 
 -- Papel dedicado: NÃO herda authenticated. PUBLIC ainda alcança NOINHERIT —
 -- por isso o REVOKE explícito abaixo, não só a ausência de GRANT.
@@ -105,6 +106,139 @@ $$;
 revoke all on function public.fn_delegacao_grant_vivo(uuid) from public, anon, authenticated;
 grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado;
 
+-- Origem empresarial autoritativa: VÍNCULO da sessão de canal com a CONTA
+-- empresarial da organização (WhatsApp é FONTE de documento, não o canal Bot).
+-- Permissão de leitura delegada é no grant individual (uid+client+org) sobre a
+-- conta; números atuais/futuros/substituídos HERDAM se o cadastro administrativo
+-- da conexão classificar a sessão nessa conta. NÃO é lista fixa de telefone.
+-- channel_sessions NÃO tem coluna empresarial/pessoal. organization_id, status
+-- WORKING, created_by e display_name NÃO classificam. Sessão nova sem vínculo =
+-- desconhecida = recusa. Pessoal nunca herda. Sem semente.
+create table if not exists public.delegacao_contas_empresariais (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+
+comment on table public.delegacao_contas_empresariais is
+  'Conta empresarial da org. Grant individual lê o que estiver vinculado a ela. Sem telefone, sem PII, sem semente.';
+
+alter table public.delegacao_contas_empresariais enable row level security;
+revoke all on public.delegacao_contas_empresariais from public, anon, authenticated, oauth_delegado;
+grant select on public.delegacao_contas_empresariais to oauth_delegado;
+grant all on public.delegacao_contas_empresariais to service_role;
+
+drop policy if exists delegacao_contas_empresariais_select on public.delegacao_contas_empresariais;
+create policy delegacao_contas_empresariais_select
+  on public.delegacao_contas_empresariais
+  as permissive
+  for select
+  to oauth_delegado
+  using (
+    revoked_at is null
+    and public.fn_delegacao_grant_vivo(organization_id)
+  );
+
+drop table if exists public.delegacao_sessoes_empresariais;
+create table public.delegacao_sessoes_empresariais (
+  channel_session_id uuid primary key references public.channel_sessions(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conta_empresarial_id uuid not null references public.delegacao_contas_empresariais(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+
+create index if not exists delegacao_sessoes_empresariais_org_idx
+  on public.delegacao_sessoes_empresariais (organization_id)
+  where revoked_at is null;
+
+create index if not exists delegacao_sessoes_empresariais_conta_idx
+  on public.delegacao_sessoes_empresariais (conta_empresarial_id)
+  where revoked_at is null;
+
+comment on table public.delegacao_sessoes_empresariais is
+  'Vínculo sessão→conta empresarial, gravado no cadastro administrativo da conexão. Não é lista de telefone. Vazio/revogado = recusa. Sem PII.';
+
+alter table public.delegacao_sessoes_empresariais enable row level security;
+
+revoke all on public.delegacao_sessoes_empresariais from public, anon, authenticated, oauth_delegado;
+grant select on public.delegacao_sessoes_empresariais to oauth_delegado;
+grant all on public.delegacao_sessoes_empresariais to service_role;
+
+drop policy if exists delegacao_sessoes_empresariais_select on public.delegacao_sessoes_empresariais;
+create policy delegacao_sessoes_empresariais_select
+  on public.delegacao_sessoes_empresariais
+  as permissive
+  for select
+  to oauth_delegado
+  using (
+    revoked_at is null
+    and public.fn_delegacao_grant_vivo(organization_id)
+  );
+
+-- DEFINER estável: sessão vinculada a conta viva da mesma org. Não lê telefone.
+create or replace function public.fn_delegacao_sessao_empresarial(p_session uuid, p_org uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p_session is not null
+    and p_org is not null
+    and exists (
+      select 1
+        from public.delegacao_sessoes_empresariais s
+        join public.delegacao_contas_empresariais a
+          on a.id = s.conta_empresarial_id
+         and a.organization_id = s.organization_id
+        join public.channel_sessions cs
+          on cs.id = s.channel_session_id
+         and cs.organization_id = s.organization_id
+       where s.channel_session_id = p_session
+         and s.organization_id = p_org
+         and s.revoked_at is null
+         and a.revoked_at is null
+    );
+$$;
+
+revoke all on function public.fn_delegacao_sessao_empresarial(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.fn_delegacao_sessao_empresarial(uuid, uuid) to oauth_delegado;
+
+comment on function public.fn_delegacao_sessao_empresarial(uuid, uuid) is
+  'Origem empresarial: sessão vinculada a conta viva da org. Substituição herda pelo mesmo conta_id. Pessoal/unknown (sem vínculo) = false. Não olha status/created_by/nome/telefone.';
+
+-- DEFINER: lê contacts.is_personal sem RLS, para as policies de conversa
+-- não recursarem com a policy de contacts (que EXISTS conversations).
+create or replace function public.fn_delegacao_contato_corporativo(p_contact uuid, p_org uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p_contact is not null
+    and p_org is not null
+    and exists (
+      select 1
+        from public.contacts ct
+       where ct.id = p_contact
+         and ct.organization_id = p_org
+         and ct.is_personal is false
+    );
+$$;
+
+revoke all on function public.fn_delegacao_contato_corporativo(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.fn_delegacao_contato_corporativo(uuid, uuid) to oauth_delegado;
+
+comment on function public.fn_delegacao_contato_corporativo(uuid, uuid) is
+  'Contato da org com is_personal is false. DEFINER para não recursar RLS contacts↔conversations.';
+
 -- Hook versionado: só client_id autorizado (não revogado) vira oauth_delegado.
 -- Copia as claims (replace do Auth). Cookie sem client_id permanece authenticated.
 -- Não lê nome, e-mail nem user_metadata.
@@ -147,7 +281,7 @@ end
 $$;
 
 comment on function public.fn_delegacao_access_token_hook(jsonb) is
-  'Custom Access Token Hook (v1): mapeia client_id autorizado para role=oauth_delegado. Ligar no Auth é config, não este SQL.';
+  'Custom Access Token Hook (v1): allowlist VAZIA (zero linhas vivas) = copia claims, role permanece authenticated; NÃO-VAZIA = client_id vivo vira oauth_delegado. Ligar o hook no Auth não desfaz recast de policies nem RLS de storage. Ligar no Auth é config, não este SQL.';
 
 -- Policies de SELECT dessas tabelas nasciam sem TO (valem para todo papel).
 -- oauth_delegado ganha GRANT SELECT; sem recortar TO authenticated, a policy
@@ -250,6 +384,13 @@ create policy contacts_select_oauth_delegado
   using (
     is_personal is false
     and public.fn_delegacao_grant_vivo(organization_id)
+    and exists (
+      select 1
+        from public.conversations c
+       where c.contact_id = contacts.id
+         and c.organization_id = contacts.organization_id
+         and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
+    )
   );
 
 drop policy if exists conversations_select_oauth_delegado on public.conversations;
@@ -261,13 +402,8 @@ create policy conversations_select_oauth_delegado
   using (
     contact_id is not null
     and public.fn_delegacao_grant_vivo(organization_id)
-    and exists (
-      select 1
-        from public.contacts ct
-       where ct.id = conversations.contact_id
-         and ct.organization_id = conversations.organization_id
-         and ct.is_personal is false
-    )
+    and public.fn_delegacao_sessao_empresarial(channel_session_id, organization_id)
+    and public.fn_delegacao_contato_corporativo(contact_id, organization_id)
   );
 
 drop policy if exists messages_select_oauth_delegado on public.messages;
@@ -278,15 +414,14 @@ create policy messages_select_oauth_delegado
   to oauth_delegado
   using (
     public.fn_delegacao_grant_vivo(organization_id)
+    and public.fn_delegacao_sessao_empresarial(channel_session_id, organization_id)
     and exists (
       select 1
         from public.conversations c
-        join public.contacts ct
-          on ct.id = c.contact_id
-         and ct.organization_id = c.organization_id
        where c.id = messages.conversation_id
          and c.organization_id = messages.organization_id
-         and ct.is_personal is false
+         and public.fn_delegacao_contato_corporativo(c.contact_id, c.organization_id)
+         and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
     )
   );
 
@@ -302,12 +437,10 @@ create policy locacao_processo_conversas_select_oauth_delegado
     and exists (
       select 1
         from public.conversations c
-        join public.contacts ct
-          on ct.id = c.contact_id
-         and ct.organization_id = c.organization_id
        where c.id = locacao_processo_conversas.conversation_id
          and c.organization_id = locacao_processo_conversas.organization_id
-         and ct.is_personal is false
+         and public.fn_delegacao_contato_corporativo(c.contact_id, c.organization_id)
+         and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
     )
   );
 
@@ -323,15 +456,13 @@ create policy locacao_processo_documentos_select_oauth_delegado
     and exists (
       select 1
         from public.locacao_processo_conversas lpc
-        join public.conversations c
-          on c.id = lpc.conversation_id
-         and c.organization_id = lpc.organization_id
-        join public.contacts ct
-          on ct.id = c.contact_id
-         and ct.organization_id = c.organization_id
+            join public.conversations c
+              on c.id = lpc.conversation_id
+             and c.organization_id = lpc.organization_id
        where lpc.processo_id = locacao_processo_documentos.processo_id
          and lpc.organization_id = locacao_processo_documentos.organization_id
-         and ct.is_personal is false
+         and public.fn_delegacao_contato_corporativo(c.contact_id, c.organization_id)
+         and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
     )
   );
 
@@ -435,12 +566,11 @@ create policy storage_objects_select_oauth_delegado
             join public.conversations c
               on c.id = m.conversation_id
              and c.organization_id = m.organization_id
-            join public.contacts ct
-              on ct.id = c.contact_id
-             and ct.organization_id = c.organization_id
            where m.media_storage_path = storage.objects.name
              and m.organization_id = (split_part(storage.objects.name, '/', 1))::uuid
-             and ct.is_personal is false
+             and public.fn_delegacao_contato_corporativo(c.contact_id, c.organization_id)
+             and public.fn_delegacao_sessao_empresarial(m.channel_session_id, m.organization_id)
+             and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
         )
       )
       or (
@@ -455,12 +585,10 @@ create policy storage_objects_select_oauth_delegado
             join public.conversations c
               on c.id = lpc.conversation_id
              and c.organization_id = lpc.organization_id
-            join public.contacts ct
-              on ct.id = c.contact_id
-             and ct.organization_id = c.organization_id
            where d.storage_path = storage.objects.name
              and d.organization_id = (split_part(storage.objects.name, '/', 1))::uuid
-             and ct.is_personal is false
+             and public.fn_delegacao_contato_corporativo(c.contact_id, c.organization_id)
+             and public.fn_delegacao_sessao_empresarial(c.channel_session_id, c.organization_id)
         )
       )
     )
@@ -506,12 +634,20 @@ grant execute on function auth.jwt() to oauth_delegado;
 
 -- Devolve só o mínimo depois do REVOKE amplo.
 grant select on public.delegacao_visibilidade_corporativa to oauth_delegado;
+grant select on public.delegacao_contas_empresariais to oauth_delegado;
+grant select on public.delegacao_sessoes_empresariais to oauth_delegado;
+grant execute on function public.fn_delegacao_sessao_empresarial(uuid, uuid) to oauth_delegado;
+grant execute on function public.fn_delegacao_contato_corporativo(uuid, uuid) to oauth_delegado;
 grant select on public.contacts to oauth_delegado;
 grant select on public.conversations to oauth_delegado;
 grant select on public.messages to oauth_delegado;
 grant select on public.locacao_processo_conversas to oauth_delegado;
 grant select on public.locacao_processo_documentos to oauth_delegado;
 grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado;
+-- pgrst.db_pre_request corre como o papel do JWT. Sem EXECUTE a cadeia HTTP
+-- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
+-- (0250) rodar no mesmo papel que já roda para cookie.
+grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
 do $$
 begin
   if to_regclass('storage.objects') is not null then

@@ -16,6 +16,14 @@ const USER_A = "dddddddd-1111-4000-8000-00000000000a";
 const USER_B = "dddddddd-1111-4000-8000-00000000000b";
 const SESS_A = "dddddddd-2222-4000-8000-00000000000a";
 const SESS_B = "dddddddd-2222-4000-8000-00000000000b";
+const SESS_NOVA_A = "dddddddd-2222-4000-8000-0000000000a2";
+const SESS_PESS_A = "dddddddd-2222-4000-8000-0000000000a3";
+const SESS_UNK_A = "dddddddd-2222-4000-8000-0000000000a4";
+const CONTA_A = "dddddddd-8888-4000-8000-00000000000a";
+const CONTA_B = "dddddddd-8888-4000-8000-00000000000b";
+const CONV_NOVA_A = "dddddddd-4444-4000-8000-0000000000c3";
+const CONV_CORP_NA_PESS = "dddddddd-4444-4000-8000-0000000000c4";
+const CONV_CORP_NA_UNK = "dddddddd-4444-4000-8000-0000000000c5";
 const CT_CORP_A = "dddddddd-3333-4000-8000-0000000000c1";
 const CT_PESS_A = "dddddddd-3333-4000-8000-0000000000a1";
 const CT_CORP_B = "dddddddd-3333-4000-8000-0000000000c2";
@@ -69,10 +77,23 @@ beforeAll(() => {
       ('${USER_A}', '${ORG_A}', 'agent', now()),
       ('${USER_B}', '${ORG_B}', 'agent', now())
     on conflict do nothing;
-    insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted) values
-      ('${SESS_A}', '${ORG_A}', 'deleg-a', '\\x00'),
-      ('${SESS_B}', '${ORG_B}', 'deleg-b', '\\x00')
+    insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, status) values
+      ('${SESS_A}', '${ORG_A}', 'deleg-a', '\\x00', 'WORKING'),
+      ('${SESS_B}', '${ORG_B}', 'deleg-b', '\\x00', 'WORKING'),
+      ('${SESS_NOVA_A}', '${ORG_A}', 'deleg-a-nova', '\\x00', 'WORKING'),
+      ('${SESS_PESS_A}', '${ORG_A}', 'deleg-a-pess', '\\x00', 'WORKING'),
+      ('${SESS_UNK_A}', '${ORG_A}', 'deleg-a-unk', '\\x00', 'STOPPED')
     on conflict (id) do nothing;
+    insert into public.delegacao_contas_empresariais (id, organization_id) values
+      ('${CONTA_A}', '${ORG_A}'),
+      ('${CONTA_B}', '${ORG_B}')
+    on conflict (id) do nothing;
+    insert into public.delegacao_sessoes_empresariais
+      (channel_session_id, organization_id, conta_empresarial_id)
+    values
+      ('${SESS_A}', '${ORG_A}', '${CONTA_A}'),
+      ('${SESS_B}', '${ORG_B}', '${CONTA_B}')
+    on conflict (channel_session_id) do nothing;
     insert into public.contacts (id, organization_id, display_name, is_personal) values
       ('${CT_CORP_A}', '${ORG_A}', 'Contato corp A', false),
       ('${CT_PESS_A}', '${ORG_A}', 'Contato pess A', true),
@@ -81,7 +102,10 @@ beforeAll(() => {
     insert into public.conversations (id, organization_id, contact_id, channel_session_id, status, is_group) values
       ('${CONV_CORP_A}', '${ORG_A}', '${CT_CORP_A}', '${SESS_A}', 'open', false),
       ('${CONV_PESS_A}', '${ORG_A}', '${CT_PESS_A}', '${SESS_A}', 'open', false),
-      ('${CONV_CORP_B}', '${ORG_B}', '${CT_CORP_B}', '${SESS_B}', 'open', false)
+      ('${CONV_CORP_B}', '${ORG_B}', '${CT_CORP_B}', '${SESS_B}', 'open', false),
+      ('${CONV_NOVA_A}', '${ORG_A}', '${CT_CORP_A}', '${SESS_NOVA_A}', 'open', false),
+      ('${CONV_CORP_NA_PESS}', '${ORG_A}', '${CT_CORP_A}', '${SESS_PESS_A}', 'open', false),
+      ('${CONV_CORP_NA_UNK}', '${ORG_A}', '${CT_CORP_A}', '${SESS_UNK_A}', 'open', false)
     on conflict (id) do nothing;
     insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body, media_storage_path) values
       ('${MSG_CORP_A}', '${ORG_A}', '${CONV_CORP_A}', '${SESS_A}', '${CT_CORP_A}', 'image', 'inbound', 'corp', '${PATH_CORP}'),
@@ -165,6 +189,14 @@ describe("0774 papel dedicado — catálogo", () => {
         sql(`select has_function_privilege('oauth_delegado', 'public.fn_conversation_scope()', 'execute');`),
       ),
     ).toBe("f");
+  });
+
+  it("pre-request do PostgREST é executável pelo papel (cadeia HTTP)", () => {
+    expect(
+      lastLine(
+        sql(`select has_function_privilege('oauth_delegado', 'public.fn_pgrst_recusar_replay_do_gateway()', 'execute');`),
+      ),
+    ).toBe("t");
   });
 
   it("SELECT da cookie em conversations/messages/contacts é TO authenticated, não PUBLIC", () => {
@@ -433,5 +465,112 @@ describe("0774 — revogação, escrita, RPC, TRUNCATE, hook", () => {
       `),
     );
     expect(n).toBe("1");
+  });
+});
+
+describe("0774 — vínculo conta empresarial (herda; pessoal/unknown não)", () => {
+  it("fn_delegacao_sessao_empresarial não classifica por status/created_by/nome/telefone", () => {
+    const def = sql(
+      `select pg_get_functiondef('public.fn_delegacao_sessao_empresarial(uuid,uuid)'::regprocedure);`,
+    );
+    expect(def).not.toMatch(/WORKING|STOPPED|created_by|display_name|phone_number|telefone/i);
+  });
+
+  it("contato corporativo em sessão WORKING sem vínculo recusa (pessoal e unknown)", () => {
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_NA_PESS}';`,
+      ),
+    ).toBe(0);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_NA_UNK}';`,
+      ),
+    ).toBe(0);
+  });
+
+  it("cookie authenticated continua vendo a conversa na sessão sem vínculo", () => {
+    expect(
+      countAs(
+        "authenticated",
+        jwtCookieA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_NA_PESS}';`,
+      ),
+    ).toBe(1);
+  });
+
+  it("substituição: nova sessão no mesmo conta_id herda sem mexer no grant", () => {
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_NOVA_A}';`,
+      ),
+    ).toBe(0);
+    sql(`insert into public.delegacao_sessoes_empresariais
+           (channel_session_id, organization_id, conta_empresarial_id)
+         values ('${SESS_NOVA_A}', '${ORG_A}', '${CONTA_A}');`);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_NOVA_A}';`,
+      ),
+    ).toBe(1);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_A}';`,
+      ),
+    ).toBe(1);
+  });
+
+  it("revogar o vínculo da sessão zera; restaurar devolve", () => {
+    sql(`update public.delegacao_sessoes_empresariais
+           set revoked_at = now()
+         where channel_session_id = '${SESS_A}';`);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_A}';`,
+      ),
+    ).toBe(0);
+    sql(`update public.delegacao_sessoes_empresariais
+           set revoked_at = null
+         where channel_session_id = '${SESS_A}';`);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_A}';`,
+      ),
+    ).toBe(1);
+  });
+
+  it("revogar a conta empresarial zera todas as sessões dela; grant individual intacto não reabre", () => {
+    sql(`update public.delegacao_contas_empresariais
+           set revoked_at = now() where id = '${CONTA_A}';`);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id in ('${CONV_CORP_A}','${CONV_NOVA_A}');`,
+      ),
+    ).toBe(0);
+    sql(`update public.delegacao_contas_empresariais
+           set revoked_at = null where id = '${CONTA_A}';`);
+    expect(
+      countAs(
+        "oauth_delegado",
+        jwtA,
+        `select count(*) from public.conversations where id = '${CONV_CORP_A}';`,
+      ),
+    ).toBe(1);
   });
 });
