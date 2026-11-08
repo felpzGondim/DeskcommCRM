@@ -21,6 +21,16 @@ Este corte **não liga** o hook. Só use estes passos se alguém o tiver ligado 
 4. Recarregue **só o processo Auth** (reinício do serviço Auth). Não recrie o app, não dê rollback de tag/imagem como se fosse DB.
 5. Confira `GET /auth/v1/health` e um login cookie: `role` continua `authenticated` com allowlist vazia.
 
+## Pré-flight live — três inventários independentes
+
+Não misturar. Cada um tem snapshot/prova própria; o resultado de um não vale pelo outro.
+
+| Inventário | Independente de | O que conferir |
+|---|---|---|
+| Catálogo SQL (policies, ACL, papel, hook **texto**) | Revoke Auth, ENABLED/URI, grants CRM | `0774_snapshot_catalogo.sql` pré == pós-rollback (ratchet RLS storage ON) |
+| Config Auth (ENABLED / URI; **não** SECRETS) | Catálogo SQL, `revoked_at` | Snapshot de **chaves**, não de valores secretos. `agent.sh`/imagem ≠ restore |
+| Grant CRM `revoked_at` | Access JWT até `exp`, catálogo, config Auth | Efeito instantâneo no MCP/RLS. Logout/revoke Auth **não** mata o access JWT |
+
 ## O que isto não é
 
 - Restore de dump de conversa ou de objeto Storage.

@@ -14,6 +14,10 @@ describe("rollback 0774 — config Auth externa ao catálogo", () => {
     expect(SQL).toMatch(/0774_auth_config\.md/);
     expect(SQL).toMatch(/NÃO desliga RLS em storage\.objects/);
     expect(DECISAO).toMatch(/access JWT permanece válido até `exp`/);
-    expect(DECISAO).toMatch(/revoked_at` nega SELECT e GET de bytes/);
+    expect(DECISAO).toMatch(/Não inventar logout que mate o access token/);
+    expect(DECISAO).toMatch(/três inventários independentes/);
+    expect(PROC).toMatch(/três inventários independentes/);
+    expect(PROC).toMatch(/Grant CRM `revoked_at`/);
+    expect(PROC).not.toMatch(/logout mata o access/i);
   });
 });

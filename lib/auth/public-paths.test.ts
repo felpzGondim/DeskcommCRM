@@ -118,4 +118,9 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/.well-known/oauth-protected-resource/api/mcp")).toBe(false);
     expect(isPublicPath("/.well-known/oauth-authorization-server")).toBe(false);
   });
+
+  it("o proxy não decide /api/mcp/delegacao — Bearer chega ao handler", () => {
+    expect(isPublicPath("/api/mcp")).toBe(true);
+    expect(isPublicPath("/api/mcp/delegacao")).toBe(true);
+  });
 });

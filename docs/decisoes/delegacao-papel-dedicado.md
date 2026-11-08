@@ -69,9 +69,10 @@ URI HTTP equivalente), config do Auth, não variável de `lib/env.ts`.
 `POST /oauth/revoke` (RFC 7009, `token_type_hint=refresh_token`) e `POST /logout`
 negam o **refresh** seguinte. O access JWT permanece válido até `exp` em PostgREST
 e no GET de bytes da Storage API — JWT stateless, sem denylist de access neste
-corte. `delegacao_visibilidade_corporativa.revoked_at` nega SELECT e GET de bytes
-**na hora**, com o mesmo JWT ainda válido. Não confundir revoke de token Auth com
-revoke de grant CRM.
+corte. **Não inventar logout que mate o access token.** Efeito instantâneo =
+`delegacao_visibilidade_corporativa.revoked_at` (o mesmo JWT ainda válido passa
+a ser 404 no MCP e RLS recusa SELECT/bytes). Revoke Auth e revoke de grant CRM
+são eixos distintos.
 
 ## Recast PUBLIC → authenticated (CONFIRMADO)
 
@@ -102,6 +103,11 @@ hook, repor ENABLED/URI do snapshot de chaves, **não ler/exibir**
 ligou; desligar seria mudar o produto). Reaplicar 0774 == catálogo com-0774.
 Restore de imagem / `agent.sh` **não** é restore de banco. Restore indiscriminado
 de DB/Storage **não** é o ensaio.
+
+Pré-flight live: **três inventários independentes** — (1) catálogo SQL pré/pós
+0774, (2) chaves Auth ENABLED/URI (nunca secrets), (3) grants CRM `revoked_at`.
+Um não substitui o outro. Conferir catálogo igual ao snapshot **não** prova
+config Auth nem efeito de revoke.
 
 Backups gerenciados da instalação: **não verificados** com o conector atual. Não se
 conclui que estão ausentes. Rollout de DB na instalação espera prova de recuperação
