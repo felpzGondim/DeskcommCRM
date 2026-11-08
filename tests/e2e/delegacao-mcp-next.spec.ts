@@ -293,25 +293,21 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
       organization_id: orgA,
       name: `Corp A ${sufixo}`,
       is_personal: false,
-      phone_number: `+1555${sufixo}01`,
     });
     const ctPessA = await insere("contacts", {
       organization_id: orgA,
       name: `Pess A ${sufixo}`,
       is_personal: true,
-      phone_number: `+1555${sufixo}02`,
     });
     const ctUnkA = await insere("contacts", {
       organization_id: orgA,
       name: `Unk A ${sufixo}`,
       is_personal: false,
-      phone_number: `+1555${sufixo}03`,
     });
     const ctCorpB = await insere("contacts", {
       organization_id: orgB,
       name: `Corp B ${sufixo}`,
       is_personal: false,
-      phone_number: `+1555${sufixo}04`,
     });
 
     convCorpA = await insere("conversations", {
