@@ -27,11 +27,13 @@ SELECT operacional/corporativa, a extra recusaria até conversa corporativa.
 
 ## Deny (default)
 
-Toda tabela `public` com RLS fora da lista, via policy restritiva
-`oauth_cookie_only` (`FOR ALL TO authenticated`, `client_id IS NULL`).
-Inclui `locacao_*` (documentos do processo), irmã `notes`/mídia interna no
-banco, leads, etc. `storage.objects` tem a mesma restritiva (buckets
-`whatsapp-media`, `locacao-processos`, demais).
+Toda tabela `public` com RLS **e** policy permissiva para `authenticated`,
+fora da lista, via policy restritiva `oauth_cookie_only` (`FOR SELECT TO
+authenticated`, `client_id IS NULL`; escrita restritiva só se já houver
+permissiva de escrita). Tabela sem policy permanece sem policy. Inclui
+`locacao_*` (documentos do processo), irmã `notes`/mídia interna no banco,
+leads, etc. `storage.objects` tem restritiva `FOR ALL` (buckets
+`whatsapp-media`, `locacao-processos`, demais) quando a RLS do stub está ligada.
 
 Tabela **nova** com RLS e sem essa restritiva: o invariante
 `tests/invariants/delegacao-oauth-deriva-rls.test.ts` reprova.

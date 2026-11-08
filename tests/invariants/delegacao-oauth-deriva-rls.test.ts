@@ -24,7 +24,7 @@ function linhas(out: string): string[] {
 }
 
 describe("derivação OAuth default-deny (catálogo, sem token real)", () => {
-  it("toda tabela public com RLS fora da allowlist tem oauth_cookie_only restritiva", () => {
+  it("tabela public com RLS e permissiva authenticated fora da allowlist tem oauth_cookie_only restritiva", () => {
     const allow = ALLOWLIST.map((t) => `'${t}'`).join(",");
     const faltando = linhas(
       sql(`
@@ -35,6 +35,20 @@ describe("derivação OAuth default-deny (catálogo, sem token real)", () => {
            and c.relrowsecurity
            and n.nspname = 'public'
            and c.relname not in (${allow})
+           and exists (
+             select 1 from pg_policy p
+              where p.polrelid = c.oid
+                and p.polpermissive
+                and (
+                  p.polroles = '{}'::oid[]
+                  or 0::oid = any(p.polroles)
+                  or exists (
+                    select 1 from pg_roles rol
+                     where rol.oid = any(p.polroles)
+                       and rol.rolname = 'authenticated'
+                  )
+                )
+           )
            and not exists (
              select 1 from pg_policy p
               where p.polrelid = c.oid
@@ -44,7 +58,33 @@ describe("derivação OAuth default-deny (catálogo, sem token real)", () => {
          order by 1;
       `),
     );
-    expect(faltando, "tabela RLS nova sem oauth_cookie_only — o JWT OAuth herda as permissivas").toEqual([]);
+    expect(faltando, "tabela RLS com permissiva authenticated sem oauth_cookie_only — o JWT OAuth herda").toEqual([]);
+  });
+
+  it("tabela public com RLS e zero policies permanece sem oauth_cookie_only", () => {
+    const pintadas = linhas(
+      sql(`
+        select c.relname
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where c.relkind in ('r', 'p')
+           and c.relrowsecurity
+           and n.nspname = 'public'
+           and not exists (
+             select 1 from pg_policy p
+              where p.polrelid = c.oid
+                and p.polname <> 'oauth_cookie_only'
+                and p.polname not like 'oauth_cookie_only_%'
+           )
+           and exists (
+             select 1 from pg_policy p
+              where p.polrelid = c.oid
+                and p.polname like 'oauth_cookie_only%'
+           )
+         order by 1;
+      `),
+    );
+    expect(pintadas, "pintar tabela sem policy faz o PostgREST 'servir' o que era ausência de privilégio").toEqual([]);
   });
 
   it("storage.objects tem oauth_cookie_only restritiva quando RLS está ligada", () => {

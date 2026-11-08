@@ -33,7 +33,11 @@ describe("matriz OAuth — allow/deny fail-closed (offline)", () => {
       expect(sql).toMatch(new RegExp(`'${t}'`));
     }
     expect(sql).toMatch(/relname not in/i);
+    expect(sql).toMatch(/p\.polpermissive/);
     expect(sql).toMatch(new RegExp(`create policy ${POLITICA_DEFAULT_DENY_OAUTH} on`, "i"));
+    expect(sql).not.toMatch(
+      /create policy oauth_cookie_only on %I\.%I as restrictive for all to authenticated/,
+    );
   });
 
   it("contacts e channel_sessions têm SELECT grant-aware, não cookie-only FOR ALL", () => {

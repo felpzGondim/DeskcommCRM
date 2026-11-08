@@ -339,17 +339,24 @@ create policy oauth_cookie_only_delete on public.channel_sessions
   as restrictive for delete to authenticated
   using ((auth.jwt() ->> 'client_id') is null);
 
--- Default-deny OAuth em TODA tabela public com RLS fora da allowlist
--- (conversations, messages, contacts, channel_sessions,
--- delegacao_visibilidade_corporativa) e em storage.objects.
--- Restrictive AND com as permissivas: cookie (client_id nulo) passa;
--- JWT OAuth não lê locacao_*, notes, leads, nem o restante.
--- locacao_processo_documentos entra neste laço (equivalente).
+-- Default-deny OAuth só onde o JWT `authenticated` herdaria acesso:
+-- tabela public com RLS + policy PERMISSIVA que vale para authenticated
+-- (ou PUBLIC). Tabela sem policy permanece sem policy — já é default-deny
+-- e pintar quebra os invariantes "não há policy nenhuma / PostgREST não serve".
+-- `oauth_cookie_only` é FOR SELECT. Escrita restritiva só se já existir
+-- permissiva de INSERT/UPDATE/DELETE/ALL; nunca um FOR ALL novo (senão
+-- a dívida RBAC e os testes de "sem policy de escrita" incham).
+-- locacao_processo_documentos entra se tiver permissiva (tem).
 -- RPC SECURITY DEFINER executável por authenticated NÃO é fechada aqui:
 -- o JWT OAuth é o mesmo papel da cookie. Ver docs/decisoes/delegacao-oauth-matriz.md.
+-- Medido no CI de 3d19b9740e: laço FOR ALL em toda RLS = 26 falhas / 14 arquivos.
 do $delegacao_oauth_cookie_only$
 declare
   r record;
+  tem_select boolean;
+  tem_insert boolean;
+  tem_update boolean;
+  tem_delete boolean;
 begin
   for r in
     select n.nspname as nsp, c.relname as rel
@@ -365,12 +372,70 @@ begin
          'channel_sessions',
          'delegacao_visibilidade_corporativa'
        )
+       and exists (
+         select 1
+           from pg_policy p
+          where p.polrelid = c.oid
+            and p.polpermissive
+            and (
+              p.polroles = '{}'::oid[]
+              or 0::oid = any(p.polroles)
+              or exists (
+                select 1 from pg_roles rol
+                 where rol.oid = any(p.polroles)
+                   and rol.rolname = 'authenticated'
+              )
+            )
+       )
   loop
+    select
+      coalesce(bool_or(p.polcmd in ('r', '*')), false),
+      coalesce(bool_or(p.polcmd in ('a', '*')), false),
+      coalesce(bool_or(p.polcmd in ('w', '*')), false),
+      coalesce(bool_or(p.polcmd in ('d', '*')), false)
+      into tem_select, tem_insert, tem_update, tem_delete
+      from pg_policy p
+     where p.polrelid = format('%I.%I', r.nsp, r.rel)::regclass
+       and p.polpermissive
+       and (
+         p.polroles = '{}'::oid[]
+         or 0::oid = any(p.polroles)
+         or exists (
+           select 1 from pg_roles rol
+            where rol.oid = any(p.polroles)
+              and rol.rolname = 'authenticated'
+         )
+       );
+
     execute format('drop policy if exists oauth_cookie_only on %I.%I', r.nsp, r.rel);
-    execute format(
-      'create policy oauth_cookie_only on %I.%I as restrictive for all to authenticated using ((auth.jwt() ->> %L) is null) with check ((auth.jwt() ->> %L) is null)',
-      r.nsp, r.rel, 'client_id', 'client_id'
-    );
+    execute format('drop policy if exists oauth_cookie_only_insert on %I.%I', r.nsp, r.rel);
+    execute format('drop policy if exists oauth_cookie_only_update on %I.%I', r.nsp, r.rel);
+    execute format('drop policy if exists oauth_cookie_only_delete on %I.%I', r.nsp, r.rel);
+
+    if tem_select then
+      execute format(
+        'create policy oauth_cookie_only on %I.%I as restrictive for select to authenticated using ((auth.jwt() ->> %L) is null)',
+        r.nsp, r.rel, 'client_id'
+      );
+    end if;
+    if tem_insert then
+      execute format(
+        'create policy oauth_cookie_only_insert on %I.%I as restrictive for insert to authenticated with check ((auth.jwt() ->> %L) is null)',
+        r.nsp, r.rel, 'client_id'
+      );
+    end if;
+    if tem_update then
+      execute format(
+        'create policy oauth_cookie_only_update on %I.%I as restrictive for update to authenticated using ((auth.jwt() ->> %L) is null) with check ((auth.jwt() ->> %L) is null)',
+        r.nsp, r.rel, 'client_id', 'client_id'
+      );
+    end if;
+    if tem_delete then
+      execute format(
+        'create policy oauth_cookie_only_delete on %I.%I as restrictive for delete to authenticated using ((auth.jwt() ->> %L) is null)',
+        r.nsp, r.rel, 'client_id'
+      );
+    end if;
   end loop;
 
   if exists (
