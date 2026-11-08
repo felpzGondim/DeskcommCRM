@@ -57,11 +57,28 @@ const adapter = {
   fetchInboundMedia: vi.fn(async () => ({ buffer: new ArrayBuffer(8), mime: "image/jpeg" })),
 };
 let mensagem: Record<string, unknown> | null = null;
-const cadeiaMensagem = {
-  select: () => cadeiaMensagem,
-  eq: () => cadeiaMensagem,
-  maybeSingle: async () => ({ data: mensagem, error: null }),
-};
+function cadeiaPorTabela(tabela: string) {
+  const q = {
+    select: () => q,
+    eq: () => q,
+    maybeSingle: async () => {
+      if (tabela === "conversations") {
+        return {
+          data: { id: "conv-1", organization_id: "org-1", contact_id: "contato-1" },
+          error: null,
+        };
+      }
+      if (tabela === "contacts") {
+        return {
+          data: { id: "contato-1", organization_id: "org-1", is_personal: false },
+          error: null,
+        };
+      }
+      return { data: mensagem, error: null };
+    },
+  };
+  return q;
+}
 
 /** O apêndice do baseline, da marca da 0557 até a função SEGUINTE a ela. */
 const apendice = (() => {
@@ -228,7 +245,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   vi.mock("@/lib/supabase/server", () => ({
     createClient: async () => ({
       auth: { getUser: async () => ({ data: { user: { id: "usuario-1" } }, error: null }) },
-      from: () => cadeiaMensagem,
+      from: (tabela: string) => cadeiaPorTabela(tabela),
     }),
   }));
   vi.mock("@/lib/auth/server", () => ({ loadAuthUser: async () => ({ idioma: "pt-BR" }) }));
@@ -277,6 +294,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("expirada → 410 e NENHUMA chamada ao provedor", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: null,
       media_storage_path: null,
       media_mime: "image/jpeg",
@@ -295,6 +313,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("sem mídia e SEM marcador continua 404 (o 410 é só do que existiu)", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: null,
       media_storage_path: null,
       media_mime: null,
@@ -313,6 +332,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("mídia ainda não persistida segue indo buscar no provedor (controle)", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: "https://provider.test/a.jpg",
       media_storage_path: null,
       media_mime: "image/jpeg",
