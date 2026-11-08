@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { conversaTemContatoPessoal } from "@/lib/auth/exclusao-contato-pessoal";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createClient } from "@/lib/supabase/server";
@@ -109,6 +110,9 @@ async function contexto(id: string, requestId: string) {
   const {data: conv, error} = await db.from("conversations").select("id")
     .eq("organization_id", auth.org.orgId).eq("id", id).maybeSingle();
   if (error || !conv) return {ok: false as const, response: fail("not_found", "Conversa não encontrada.", 404, {requestId})};
+  if (await conversaTemContatoPessoal(db, auth.org.orgId, id)) {
+    return {ok: false as const, response: fail("not_found", "Conversa não encontrada.", 404, {requestId})};
+  }
   const admin = createAdminClient();
   const processo = await processoAtivoDaConversa(admin, auth.org.orgId, id);
   return {ok: true as const, auth, db, admin, processo, orgId: auth.org.orgId};

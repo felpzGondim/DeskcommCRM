@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { fail } from "@/lib/api/wrappers";
+import { conversaTemContatoPessoal } from "@/lib/auth/exclusao-contato-pessoal";
 import { loadAuthUser } from "@/lib/auth/server";
 import { orgAtivaDaApi } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   // Filtro explícito de organization_id por doutrina (defense-in-depth).
   const { data: msg, error } = await supabase
     .from("messages")
-    .select("id, media_url, media_mime, media_size_bytes, media_storage_path, metadata, channel_session_id")
+    .select("id, conversation_id, media_url, media_mime, media_size_bytes, media_storage_path, metadata, channel_session_id")
     .eq("id", messageId)
     .eq("organization_id", activeOrg.orgId)
     .maybeSingle();
@@ -157,6 +158,20 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("internal_error", t("Erro ao buscar mensagem."), 500, { requestId });
   }
   if (!msg) {
+    return fail("not_found", t("Mensagem sem mídia."), 404, { requestId });
+  }
+  const conversationId =
+    typeof (msg as { conversation_id?: unknown }).conversation_id === "string"
+      ? (msg as { conversation_id: string }).conversation_id
+      : null;
+  // Spec 21: mídia de contato pessoal some com o mesmo 404 mudo do histórico.
+  // Sem conversation_id não há como provar o recurso — recusa antes de assinar
+  // ou ir ao provedor. Sessão de canal NÃO é classificada aqui: a Inbox comum
+  // continuaria cega se exigíssemos "corporativa".
+  if (
+    !conversationId ||
+    (await conversaTemContatoPessoal(supabase, activeOrg.orgId, conversationId))
+  ) {
     return fail("not_found", t("Mensagem sem mídia."), 404, { requestId });
   }
   if (!msg.media_storage_path && !msg.media_url) {
