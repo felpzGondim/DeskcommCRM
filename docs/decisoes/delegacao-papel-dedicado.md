@@ -65,6 +65,14 @@ O hook SQL deste PR **não está ligado** no Auth da instalação. Ligá-lo é
 `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN` apontando para `fn_delegacao_access_token_hook` (ou
 URI HTTP equivalente), config do Auth, não variável de `lib/env.ts`.
 
+**Consent / token revoke (CONFIRMADO no harness vivo, GoTrue v2.197.0):**
+`POST /oauth/revoke` (RFC 7009, `token_type_hint=refresh_token`) e `POST /logout`
+negam o **refresh** seguinte. O access JWT permanece válido até `exp` em PostgREST
+e no GET de bytes da Storage API — JWT stateless, sem denylist de access neste
+corte. `delegacao_visibilidade_corporativa.revoked_at` nega SELECT e GET de bytes
+**na hora**, com o mesmo JWT ainda válido. Não confundir revoke de token Auth com
+revoke de grant CRM.
+
 ## Recast PUBLIC → authenticated (CONFIRMADO)
 
 Policies de SELECT das tabelas concedidas ao papel nasciam sem `TO` (vale para PUBLIC,
@@ -84,10 +92,16 @@ Empty hook/grants **não** desfazem o recast nem a RLS de `storage.objects`.
 imagem **não** reverte banco.
 
 Reversão = restaurar os **catálogos** afetados (policies, ACL, membership, RLS ligada,
-hook, config do Auth se tiver sido ligada à parte). Ensaio:
+hook) **e**, se o hook tiver sido ligado à parte, a config do Auth **antes** de
+qualquer reativação (`supabase/rollback/0774_auth_config.md`: desligar a flag do
+hook, repor ENABLED/URI do snapshot de chaves, **não ler/exibir**
+`GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_SECRETS`, recarregar só o processo Auth). Ensaio:
 `supabase/rollback/0774_delegacao_papel_dedicado.sql` + snapshot
-`supabase/rollback/0774_snapshot_catalogo.sql`. Equivalência rollback+reaplicar 0774
-é invariante. Restore indiscriminado de DB/Storage **não** é o ensaio.
+`supabase/rollback/0774_snapshot_catalogo.sql`. Equivalência: catálogo **pré-0774**
+== primeiro rollback (exceto ratchet: `storage.objects` RLS permanece ON se a 0774
+ligou; desligar seria mudar o produto). Reaplicar 0774 == catálogo com-0774.
+Restore de imagem / `agent.sh` **não** é restore de banco. Restore indiscriminado
+de DB/Storage **não** é o ensaio.
 
 Backups gerenciados da instalação: **não verificados** com o conector atual. Não se
 conclui que estão ausentes. Rollout de DB na instalação espera prova de recuperação

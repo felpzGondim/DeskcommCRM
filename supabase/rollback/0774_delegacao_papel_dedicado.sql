@@ -1,13 +1,14 @@
 -- Rollback COMPLETO da migration 0774 (papel oauth_delegado).
 -- NÃO é `agent.sh` / troca de imagem: isso não reverte banco, policies, ACL
 -- nem config do Auth. Exige backup lógico ANTES de aplicar 0774 e, para
--- desfazer, este arquivo (policies/ACL/hook/tabelas/papel) + restaurar config
--- do Auth (hook URI/enabled) se tiver sido ligada à parte.
+-- desfazer, este arquivo (policies/ACL/hook/tabelas/papel) + o procedimento
+-- `0774_auth_config.md` (config do Auth, sem ler/exibir secrets) se o hook
+-- tiver sido ligado à parte — ANTES de qualquer reativação.
 --
 -- Restaura o TO das policies recastadas (voltam a PUBLIC, como no dump) e o
 -- FOR ALL de contacts. NÃO desliga RLS em storage.objects: no stub do CI ela
--- nascia OFF; no Supabase real (PG 17.x desta instalação) storage.objects já
--- nasce com RLS. Desligar seria mudar o produto, não desfazer 0774.
+-- nascia OFF; no Supabase real storage.objects já nasce com RLS. Desligar
+-- seria mudar o produto. Ratchet: pós-rollback relrowsecurity permanece ON.
 --
 -- Idempotente. Sem PII. Não toca dados de conversa.
 

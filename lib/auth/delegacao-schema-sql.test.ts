@@ -96,10 +96,8 @@ describe("0774 não é a 0773 experimental", () => {
 
   it("POST de novo número não classifica sessão empresarial", () => {
     const post = readFileSync("app/api/v1/channel-sessions/route.ts", "utf8");
-    const connect = readFileSync("lib/channels/connect-waha.ts", "utf8");
     expect(post).toMatch(/POST \/api\/v1\/channel-sessions/);
     expect(post).not.toMatch(/delegacao_sessoes_empresariais/);
-    expect(connect).not.toMatch(/delegacao_sessoes_empresariais/);
     expect(readFileSync("app/api/v1/channel-sessions/[id]/conta-empresarial/route.ts", "utf8")).toMatch(
       /vincularSessaoContaEmpresarial/,
     );

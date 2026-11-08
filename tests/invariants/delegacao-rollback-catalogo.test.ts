@@ -28,26 +28,27 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
     expect(SNAPSHOT).toMatch(/pg_roles/);
   });
 
-  it("rollback remove o papel; reaplicar a 0774 restaura o catálogo", () => {
-    const antes = catalogo() as {
+  it("pós-rollback é o catálogo pré-0774 (exceto ratchet RLS); reaplicar restaura 0774", () => {
+    type Cat = {
       membership_authenticator_oauth?: boolean;
       rls_storage_objects?: boolean;
       funcoes?: unknown;
       hook_sql?: unknown;
+      acl?: Array<{ rel: string; oauth_select?: boolean }>;
     };
+    const com0774 = catalogo() as Cat;
     try {
       sql(ROLLBACK);
-      const aposRollback = catalogo() as {
-        membership_authenticator_oauth?: boolean;
-        rls_storage_objects?: boolean;
-        funcoes?: unknown;
-        hook_sql?: unknown;
-      };
-      expect(aposRollback).not.toEqual(antes);
-      expect(aposRollback.membership_authenticator_oauth).toBe(false);
-      expect(aposRollback.funcoes).toEqual([]);
-      expect(aposRollback.hook_sql ?? null).toBeNull();
-      expect(aposRollback.rls_storage_objects).toBe(antes.rls_storage_objects);
+      const pre0774 = catalogo() as Cat;
+      expect(pre0774).not.toEqual(com0774);
+      expect(pre0774.membership_authenticator_oauth).toBe(false);
+      expect(pre0774.funcoes).toEqual([]);
+      expect(pre0774.hook_sql ?? null).toBeNull();
+      expect(pre0774.acl?.every((a) => a.oauth_select === false)).toBe(true);
+      // Ratchet: 0774 pode ENABLE; rollback nunca DISABLE. Stub nascia OFF;
+      // live já era ON. Desligar seria mudar o produto, não desfazer 0774.
+      expect(pre0774.rls_storage_objects).toBe(true);
+      expect(com0774.rls_storage_objects).toBe(true);
       expect(
         lastLine(
           sql(`select exists (
@@ -67,8 +68,11 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
         ),
       ).toBe("0");
       sql(MIGRACAO);
-      const depois = catalogo();
-      expect(depois).toEqual(antes);
+      expect(catalogo()).toEqual(com0774);
+      sql(ROLLBACK);
+      expect(catalogo()).toEqual(pre0774);
+      sql(MIGRACAO);
+      expect(catalogo()).toEqual(com0774);
     } finally {
       // Membership de role é no cluster: devolver mesmo se a asserção falhar,
       // senão o próximo arquivo do harness herda authenticator sem SET ROLE.

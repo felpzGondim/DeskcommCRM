@@ -1,6 +1,7 @@
 /**
  * Cadeia viva: GoTrue tag v2.197.0 → JWT (authorization_code+PKCE+refresh) →
- * PostgREST HTTP → RLS do CRM. Não é SET ROLE. Skip ≠ prova.
+ * PostgREST HTTP → Storage API GET bytes → RLS do CRM. Não é SET ROLE.
+ * Skip ≠ prova. Revoke Auth: refresh falha; access JWT até exp (limite).
  */
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -19,6 +20,10 @@ const HOOK_SECRET = `v1,whsec_${Buffer.from("delegacao-vivo-hook-secret-32b!").t
 const SUFIXO = `${process.pid}-${Date.now()}`;
 const GOTRUE_NOME = `deleg-gotrue-${SUFIXO}`;
 const PGRST_NOME = `deleg-pgrst-${SUFIXO}`;
+const STORAGE_NOME = `deleg-storage-${SUFIXO}`;
+const STORAGE_IMAGEM = "supabase/storage-api:v1.74.0";
+const BYTES_CORP = Buffer.from("deleg-corp-vivo-bytes");
+const BYTES_PESS = Buffer.from("deleg-pess-vivo-bytes");
 const GOTRUE_DB = `gotrue_deleg_${process.pid}`;
 const API_EXTERNAL_URL = "http://127.0.0.1:9999";
 
@@ -28,18 +33,23 @@ const ORG_A = "dddddddd-0000-4000-8000-00000000000a";
 const ORG_B = "dddddddd-0000-4000-8000-00000000000b";
 const SESS_A = "dddddddd-2222-4000-8000-00000000000a";
 const SESS_B = "dddddddd-2222-4000-8000-00000000000b";
+const SESS_UNK = "dddddddd-2222-4000-8000-00000000000e";
 const CONTA_A = "dddddddd-8888-4000-8000-00000000000a";
 const CONTA_B = "dddddddd-8888-4000-8000-00000000000b";
 const CT_CORP_A = "dddddddd-3333-4000-8000-0000000000c1";
 const CT_PESS_A = "dddddddd-3333-4000-8000-0000000000a1";
 const CT_CORP_B = "dddddddd-3333-4000-8000-0000000000c2";
+const CT_UNK_A = "dddddddd-3333-4000-8000-0000000000e1";
 const CONV_CORP_A = "dddddddd-4444-4000-8000-0000000000c1";
 const CONV_PESS_A = "dddddddd-4444-4000-8000-0000000000a1";
 const CONV_CORP_B = "dddddddd-4444-4000-8000-0000000000c2";
+const CONV_UNK_A = "dddddddd-4444-4000-8000-0000000000e1";
 const MSG_CORP_A = "dddddddd-5555-4000-8000-0000000000c1";
 const MSG_PESS_A = "dddddddd-5555-4000-8000-0000000000a1";
+const MSG_UNK_A = "dddddddd-5555-4000-8000-0000000000e1";
 const PATH_CORP = `${ORG_A}/midia/corp.bin`;
 const PATH_PESS = `${ORG_A}/midia/pess.bin`;
+const PATH_UNK = `${ORG_A}/midia/unk.bin`;
 
 const limpar: string[] = [];
 let hookServer: ReturnType<typeof createServer> | null = null;
@@ -148,7 +158,7 @@ afterAll(() => {
 describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
   it(
     "emite JWT dedicado por PKCE e o PostgREST lê só a conversa corporativa da identidade",
-    { timeout: 240_000 },
+    { timeout: 360_000 },
     async () => {
       expect(GOTRUE_PROVA_VIVO.gitSha).toBe("4eee58f296d9698a1c2c0ae14d7a0b379c7622d3");
 
@@ -176,6 +186,9 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         grant authenticated to authenticator;
         grant anon to authenticator;
         grant oauth_delegado to authenticator;
+        grant usage on schema storage to service_role, authenticated, anon, oauth_delegado;
+        grant select on storage.buckets to service_role, authenticated, anon, oauth_delegado;
+        grant select, insert, update, delete on storage.objects to service_role;
       `);
 
       sql(`
@@ -193,7 +206,8 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         on conflict do nothing;
         insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, status) values
           ('${SESS_A}', '${ORG_A}', 'deleg-a', '\\x00', 'WORKING'),
-          ('${SESS_B}', '${ORG_B}', 'deleg-b', '\\x00', 'WORKING')
+          ('${SESS_B}', '${ORG_B}', 'deleg-b', '\\x00', 'WORKING'),
+          ('${SESS_UNK}', '${ORG_A}', 'deleg-unk', '\\x00', 'WORKING')
         on conflict (id) do nothing;
         insert into public.delegacao_contas_empresariais (id, organization_id) values
           ('${CONTA_A}', '${ORG_A}'),
@@ -208,26 +222,33 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         insert into public.contacts (id, organization_id, display_name, is_personal) values
           ('${CT_CORP_A}', '${ORG_A}', 'Contato corp A', false),
           ('${CT_PESS_A}', '${ORG_A}', 'Contato pess A', true),
-          ('${CT_CORP_B}', '${ORG_B}', 'Contato corp B', false)
+          ('${CT_CORP_B}', '${ORG_B}', 'Contato corp B', false),
+          ('${CT_UNK_A}', '${ORG_A}', 'Contato unk A', false)
         on conflict (id) do nothing;
         insert into public.conversations (id, organization_id, contact_id, channel_session_id, status, is_group) values
           ('${CONV_CORP_A}', '${ORG_A}', '${CT_CORP_A}', '${SESS_A}', 'open', false),
           ('${CONV_PESS_A}', '${ORG_A}', '${CT_PESS_A}', '${SESS_A}', 'open', false),
-          ('${CONV_CORP_B}', '${ORG_B}', '${CT_CORP_B}', '${SESS_B}', 'open', false)
+          ('${CONV_CORP_B}', '${ORG_B}', '${CT_CORP_B}', '${SESS_B}', 'open', false),
+          ('${CONV_UNK_A}', '${ORG_A}', '${CT_UNK_A}', '${SESS_UNK}', 'open', false)
         on conflict (id) do nothing;
         insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body, media_storage_path) values
           ('${MSG_CORP_A}', '${ORG_A}', '${CONV_CORP_A}', '${SESS_A}', '${CT_CORP_A}', 'image', 'inbound', 'corp', '${PATH_CORP}'),
-          ('${MSG_PESS_A}', '${ORG_A}', '${CONV_PESS_A}', '${SESS_A}', '${CT_PESS_A}', 'image', 'inbound', 'pess', '${PATH_PESS}')
+          ('${MSG_PESS_A}', '${ORG_A}', '${CONV_PESS_A}', '${SESS_A}', '${CT_PESS_A}', 'image', 'inbound', 'pess', '${PATH_PESS}'),
+          ('${MSG_UNK_A}', '${ORG_A}', '${CONV_UNK_A}', '${SESS_UNK}', '${CT_UNK_A}', 'image', 'inbound', 'unk', '${PATH_UNK}')
         on conflict (id) do nothing;
         insert into storage.buckets (id, name, public) values
           ('whatsapp-media', 'whatsapp-media', false)
         on conflict (id) do nothing;
         insert into storage.objects (bucket_id, name)
         select 'whatsapp-media', x.name
-          from (values ('${PATH_CORP}'), ('${PATH_PESS}')) as x(name)
+          from (values ('${PATH_CORP}'), ('${PATH_PESS}'), ('${PATH_UNK}')) as x(name)
          where not exists (
            select 1 from storage.objects o where o.bucket_id = 'whatsapp-media' and o.name = x.name
          );
+        alter table storage.objects add column if not exists version text;
+        alter table storage.objects add column if not exists archived_at timestamptz;
+        create unique index if not exists storage_objects_name_bucket_uidx
+          on storage.objects (name, bucket_id);
       `);
 
       psqlDb(
@@ -276,7 +297,7 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       await new Promise<void>((resolve) => hookServer!.listen(0, "0.0.0.0", resolve));
       const hookPort = (hookServer.address() as AddressInfo).port;
 
-      docker(["rm", "-f", GOTRUE_NOME, PGRST_NOME], { allowFail: true });
+      docker(["rm", "-f", GOTRUE_NOME, PGRST_NOME, STORAGE_NOME], { allowFail: true });
       docker([
         "run",
         "-d",
@@ -371,6 +392,87 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         (_body, status) => status === 200 || status === 401,
       );
 
+      if (!imagemExiste(STORAGE_IMAGEM)) {
+        docker(["pull", STORAGE_IMAGEM], { allowFail: true });
+        if (!imagemExiste(STORAGE_IMAGEM)) {
+          throw new Error(`recurso ausente: imagem ${STORAGE_IMAGEM}`);
+        }
+      }
+      const serviceJwt = await adminJwt();
+      const anonJwt = await new SignJWT({ role: "anon" })
+        .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+        .setAudience("authenticated")
+        .setIssuer(API_EXTERNAL_URL)
+        .setExpirationTime("2h")
+        .sign(new TextEncoder().encode(JWT_SECRET));
+      docker([
+        "run",
+        "-d",
+        "--name",
+        STORAGE_NOME,
+        "--add-host=host.docker.internal:host-gateway",
+        "-p",
+        "127.0.0.1::5000",
+        "-e",
+        `DATABASE_URL=postgres://postgres:postgres@${ip}:5432/postgres?sslmode=disable`,
+        "-e",
+        `PGRST_JWT_SECRET=${JWT_SECRET}`,
+        "-e",
+        `JWT_SECRET=${JWT_SECRET}`,
+        "-e",
+        `ANON_KEY=${anonJwt}`,
+        "-e",
+        `SERVICE_KEY=${serviceJwt}`,
+        "-e",
+        `POSTGREST_URL=http://host.docker.internal:${pgrstPort}`,
+        "-e",
+        "STORAGE_BACKEND=file",
+        "-e",
+        "FILE_STORAGE_BACKEND_PATH=/var/lib/storage",
+        "-e",
+        "FILE_SIZE_LIMIT=5242880",
+        "-e",
+        "TENANT_ID=stub",
+        "-e",
+        "REGION=local",
+        "-e",
+        "GLOBAL_S3_BUCKET=stub",
+        "-e",
+        "IS_MULTITENANT=false",
+        "-e",
+        "ENABLE_AUTO_MIGRATION=false",
+        "-e",
+        "ENABLE_IMAGE_TRANSFORMATION=false",
+        "-e",
+        `AUTH_JWT_SECRET=${JWT_SECRET}`,
+        "-e",
+        "DATABASE_SEARCH_PATH=storage,public",
+        "-e",
+        "DB_MIGRATIONS_FREEZE_AT=create-migrations-table",
+        STORAGE_IMAGEM,
+      ]);
+      limpar.push(STORAGE_NOME);
+      const storagePort = portaPublicada(STORAGE_NOME, 5000);
+      try {
+        await esperar(
+          `http://127.0.0.1:${storagePort}/status`,
+          (_body, status) => status === 200 || status === 204,
+        );
+      } catch {
+        try {
+          await esperar(
+            `http://127.0.0.1:${storagePort}/bucket`,
+            (_body, status) => status === 200 || status === 400 || status === 401,
+          );
+        } catch (err) {
+          const logs = docker(["logs", "--tail", "80", STORAGE_NOME], { allowFail: true });
+          throw new Error(
+            `recurso ausente: ${STORAGE_IMAGEM} não ficou pronto ` +
+              `(${err instanceof Error ? err.message : String(err)})\nlogs:\n${logs.slice(0, 1500)}`,
+          );
+        }
+      }
+
       const admin = await adminJwt();
       const authHeaders = {
         Authorization: `Bearer ${admin}`,
@@ -440,7 +542,7 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       async function pkce(
         email: string,
         password: string,
-      ): Promise<{ access: string; role: string }> {
+      ): Promise<{ access: string; refresh: string; role: string }> {
         const signIn = await fetch(`http://127.0.0.1:${gotruePort}/token?grant_type=password`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -568,12 +670,19 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
             `recurso ausente: refresh_token (${refreshRes.status} ${refreshBody.slice(0, 300)})`,
           );
         }
-        const refreshed = JSON.parse(refreshBody) as { access_token: string };
+        const refreshed = JSON.parse(refreshBody) as {
+          access_token: string;
+          refresh_token?: string;
+        };
         const payload2 = jwtPayload(refreshed.access_token);
         if (payload2.role !== "oauth_delegado") {
           throw new Error(`refresh não preservou role dedicado (role=${payload2.role})`);
         }
-        return { access: refreshed.access_token, role: payload2.role };
+        return {
+          access: refreshed.access_token,
+          refresh: refreshed.refresh_token ?? tokens.refresh_token,
+          role: payload2.role,
+        };
       }
 
       const tokA = await pkce("deleg-a@invariant.test", "SenhaA-vivo-1");
@@ -609,6 +718,79 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         }
         return { status: r.status, body };
       }
+
+      async function storagePut(objectPath: string, bytes: Buffer): Promise<number> {
+        const headers = {
+          Authorization: `Bearer ${serviceJwt}`,
+          apikey: serviceJwt,
+          "Content-Type": "application/octet-stream",
+          "x-upsert": "true",
+        };
+        const url = `http://127.0.0.1:${storagePort}/object/whatsapp-media/${objectPath}`;
+        const corpo = new Uint8Array(bytes);
+        let r = await fetch(url, { method: "POST", headers, body: corpo });
+        if (r.status >= 400) {
+          r = await fetch(url, { method: "PUT", headers, body: corpo });
+        }
+        return r.status;
+      }
+
+      async function storageGet(
+        token: string,
+        objectPath: string,
+      ): Promise<{ status: number; body: Buffer }> {
+        const caminhos = [
+          `/object/authenticated/whatsapp-media/${objectPath}`,
+          `/object/whatsapp-media/${objectPath}`,
+        ];
+        let ultimo: { status: number; body: Buffer } = { status: 0, body: Buffer.alloc(0) };
+        for (const caminho of caminhos) {
+          const r = await fetch(`http://127.0.0.1:${storagePort}${caminho}`, {
+            headers: { Authorization: `Bearer ${token}`, apikey: anonJwt },
+          });
+          ultimo = { status: r.status, body: Buffer.from(await r.arrayBuffer()) };
+          if (r.status === 200) return ultimo;
+        }
+        return ultimo;
+      }
+
+      function assertBytesNegados(
+        r: { status: number; body: Buffer },
+        bytes: Buffer,
+        rotulo: string,
+      ): void {
+        if (r.status === 200 && r.body.equals(bytes)) {
+          throw new Error(`${rotulo}: Storage API devolveu os bytes (status ${r.status})`);
+        }
+      }
+
+      const bytesUnk = Buffer.from("deleg-unk-vivo-bytes");
+      const putCorp = await storagePut(PATH_CORP, BYTES_CORP);
+      const putPess = await storagePut(PATH_PESS, BYTES_PESS);
+      const putUnk = await storagePut(PATH_UNK, bytesUnk);
+      function gravarNoDisco(objectPath: string, bytes: Buffer): void {
+        const version = lastLine(
+          sql(
+            `select coalesce(version, '') from storage.objects
+              where name = '${objectPath}' and bucket_id = 'whatsapp-media' limit 1;`,
+          ),
+        );
+        if (version === "") {
+          throw new Error(`recurso ausente: version de ${objectPath} após POST /object`);
+        }
+        const dest = `/var/lib/storage/stub/stub/whatsapp-media/${objectPath}/${version}`;
+        const b64 = bytes.toString("base64");
+        docker([
+          "exec",
+          STORAGE_NOME,
+          "sh",
+          "-c",
+          `dest='${dest}'; parent=$(dirname "$dest"); if [ -f "$parent" ]; then rm -f "$parent"; fi; mkdir -p "$parent"; printf '%s' '${b64}' | base64 -d > "$dest"`,
+        ]);
+      }
+      gravarNoDisco(PATH_CORP, BYTES_CORP);
+      gravarNoDisco(PATH_PESS, BYTES_PESS);
+      gravarNoDisco(PATH_UNK, bytesUnk);
 
       function clientePostgrest(token: string): ClienteLeitura {
         const cadeia = (schema: string, table: string) => {
@@ -701,6 +883,9 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       expect((await rest(tokA.access, `/conversations?id=eq.${CONV_CORP_B}&select=id`)).body).toEqual(
         [],
       );
+      expect((await rest(tokA.access, `/conversations?id=eq.${CONV_UNK_A}&select=id`)).body).toEqual(
+        [],
+      );
       expect((await rest(tokB.access, `/conversations?id=eq.${CONV_CORP_B}&select=id`)).body).toEqual(
         [{ id: CONV_CORP_B }],
       );
@@ -745,6 +930,47 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
           )
         ).body,
       ).toEqual([]);
+      expect(
+        (
+          await rest(
+            tokA.access,
+            `/objects?name=eq.${encodeURIComponent(PATH_UNK)}&select=name`,
+            { schema: "storage" },
+          )
+        ).body,
+      ).toEqual([]);
+
+      const bytesCorpA = await storageGet(tokA.access, PATH_CORP);
+      if (bytesCorpA.status !== 200 || !bytesCorpA.body.equals(BYTES_CORP)) {
+        const logs = docker(["logs", "--tail", "200", STORAGE_NOME], { allowFail: true });
+        const getLogs = logs
+          .split("\n")
+          .filter((l) => l.includes('"method":"GET"'))
+          .map((l) => l.slice(0, 1800))
+          .join("\n");
+        const cols = lastLine(
+          sql(
+            `select string_agg(column_name, ',' order by ordinal_position)
+               from information_schema.columns
+              where table_schema='storage' and table_name='objects';`,
+          ),
+        );
+        const ls = docker(
+          ["exec", STORAGE_NOME, "ls", "-la", `/var/lib/storage/stub/whatsapp-media/${ORG_A}/midia`],
+          { allowFail: true },
+        );
+        const asService = await storageGet(serviceJwt, PATH_CORP);
+        throw new Error(
+          `Storage API GET corporativo: status=${bytesCorpA.status} ` +
+            `len=${bytesCorpA.body.length} body=${bytesCorpA.body.toString("utf8").slice(0, 400)} ` +
+            `put=${putCorp}/${putPess}/${putUnk} service=${asService.status}:${asService.body.toString("utf8").slice(0, 200)} ` +
+            `jwt=${JSON.stringify(jwtPayload(tokA.access))} ls=${ls.slice(0, 300)} cols=${cols} ` +
+            `getLogs=${getLogs.slice(0, 2500)}`,
+        );
+      }
+      assertBytesNegados(await storageGet(tokA.access, PATH_PESS), BYTES_PESS, "pessoal A");
+      assertBytesNegados(await storageGet(tokA.access, PATH_UNK), bytesUnk, "unknown A");
+      assertBytesNegados(await storageGet(tokB.access, PATH_CORP), BYTES_CORP, "outra org B");
 
       const escrita = await rest(tokA.access, "/conversations", {
         method: "POST",
@@ -842,6 +1068,40 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         else process.env.NEXT_PUBLIC_SUPABASE_URL = urlAntiga;
       }
 
+      const revokeRes = await fetch(`http://127.0.0.1:${gotruePort}/oauth/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token: tokA.refresh,
+          token_type_hint: "refresh_token",
+          client_id: clientId,
+        }).toString(),
+      });
+      const logoutRes = await fetch(`http://127.0.0.1:${gotruePort}/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokA.access}` },
+      });
+      if (revokeRes.status >= 500 && logoutRes.status >= 500) {
+        throw new Error(
+          `recurso ausente: POST /oauth/revoke (${revokeRes.status}) e POST /logout (${logoutRes.status})`,
+        );
+      }
+      const refreshRevogado = await fetch(`http://127.0.0.1:${gotruePort}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: tokA.refresh,
+          client_id: clientId,
+        }).toString(),
+      });
+      expect(refreshRevogado.ok).toBe(false);
+      // Limite documentado: access JWT (stateless) segue válido até exp.
+      expect(
+        (await rest(tokA.access, `/conversations?id=eq.${CONV_CORP_A}&select=id`)).body,
+      ).toEqual([{ id: CONV_CORP_A }]);
+      expect((await storageGet(tokA.access, PATH_CORP)).body.equals(BYTES_CORP)).toBe(true);
+
       sql(`update public.delegacao_visibilidade_corporativa
              set revoked_at = now()
            where user_id = '${USER_A}';`);
@@ -857,6 +1117,7 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
           )
         ).body,
       ).toEqual([]);
+      assertBytesNegados(await storageGet(tokA.access, PATH_CORP), BYTES_CORP, "grant CRM revogado");
       sql(`update public.delegacao_visibilidade_corporativa
              set revoked_at = null
            where user_id = '${USER_A}';`);

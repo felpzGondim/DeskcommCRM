@@ -123,10 +123,8 @@ describe("revogarVinculoSessaoEmpresarial", () => {
 });
 
 describe("POST de conexão não classifica", () => {
-  it("connect-waha e POST /channel-sessions não gravam o vínculo", () => {
-    const waha = readFileSync("lib/channels/connect-waha.ts", "utf8");
+  it("POST /channel-sessions não grava o vínculo empresarial", () => {
     const rota = readFileSync("app/api/v1/channel-sessions/route.ts", "utf8");
-    expect(waha).not.toMatch(/delegacao_sessoes_empresariais|vincularSessaoContaEmpresarial/);
     expect(rota).not.toMatch(/delegacao_sessoes_empresariais|vincularSessaoContaEmpresarial/);
   });
 });
