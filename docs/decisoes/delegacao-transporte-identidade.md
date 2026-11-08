@@ -53,11 +53,20 @@ resource RFC 8707 no JWT) é config viva do Auth — **não ligada**.
    `contacts.is_personal is false`. A policy de cookie
    (`conversations_select`) exige `client_id IS NULL` — a Inbox não muda.
    Escritas de `conversations`/`messages` também exigem `client_id IS NULL`.
-   `messages_select_delegacao_oauth` é **restritiva** (AND com a permissiva
-   da 0035) para o token OAuth não herdar mensagem por id direto.
+   Restritivas AND: `messages_select_delegacao_oauth`,
+   `conversations_select_delegacao_restritiva`, SELECT grant-aware em
+   `contacts` / `channel_sessions` (EXISTS da extra precisa enxergar a
+   linha operacional; pessoal/NULL recusa). Default-deny
+   `oauth_cookie_only` nas demais tabelas `public` com RLS e em
+   `storage.objects` — inclui `locacao_*`. Matriz:
+   [`delegacao-oauth-matriz.md`](delegacao-oauth-matriz.md).
 6. Camada de app ainda recusa classificação NULL/pessoal e contato pessoal
    (`executarSuperficieDelegada`). Manager/admin com OAuth não vê pessoal
    pela policy extra; a Inbox por cookie continua vendo o que já via.
+   **RPC:** o JWT OAuth é o mesmo papel `authenticated` da cookie.
+   `EXECUTE` de SECURITY DEFINER volátil herdado **não** lê `client_id`.
+   404 de rota não impede `/rpc`. Confinar RPC pede decisão (hook de role
+   ou não apresentar o JWT ao PostgREST) — não está neste PR.
 
 **Não implementado (proposital):** authorize, token, DCR, registro de
 client, INSERT de grant, escrita de `classificacao_empresarial`, servir

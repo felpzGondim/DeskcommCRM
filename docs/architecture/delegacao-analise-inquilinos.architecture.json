@@ -21,7 +21,8 @@
     { "id": "assinatura", "lane": "servidor", "col": 2, "type": "process", "label": "createSignedUrl / adapter só depois da exclusão" },
     { "id": "notas_midia", "lane": "servidor", "col": 2, "type": "route", "label": "PENDENTE (não neste PR): notes/[noteId]/media assina internal-media 60s sem is_personal" },
     { "id": "rls_cookie", "lane": "registro", "col": 3, "type": "database", "label": "conversations_select: client_id IS NULL + fn_conversation_scope (Inbox)" },
-    { "id": "rls_oauth", "lane": "registro", "col": 3, "type": "database", "label": "conversations_select_delegacao_oauth: client_id + grant vivo + sessão corporativa + is_personal false" },
+    { "id": "rls_oauth", "lane": "registro", "col": 3, "type": "database", "label": "conversations extra+restritiva: client_id + grant + corporativa + is_personal false; contacts/sessions grant-aware; oauth_cookie_only no resto + storage" },
+    { "id": "rpc_aberto", "lane": "registro", "col": 3, "type": "database", "label": "BLOQUEIO: RPC DEFINER authenticated não lê client_id; 404 de rota não cobre /rpc; pede role split (Felipe)" },
     { "id": "grant", "lane": "registro", "col": 3, "type": "database", "label": "delegacao_visibilidade_corporativa: zero linhas; SELECT só auth.uid(); authenticated não insere" },
     { "id": "classif", "lane": "registro", "col": 3, "type": "database", "label": "channel_sessions.classificacao_empresarial NULL|pessoal|corporativa; NULL recusa na delegação" },
     { "id": "mcp_org", "lane": "guarda", "col": 4, "type": "process", "label": "MCP /api/mcp dsk_ + admin client: org, não identidade individual" },
@@ -48,7 +49,8 @@
     { "id": "e14", "from": "superficie", "to": "alvo", "label": "escopo escrito, grant ao vivo não" },
     { "id": "e15", "from": "notas_midia", "to": "rls_cookie", "label": "conversa da org; sem corte is_personal" },
     { "id": "e16", "from": "grant", "to": "rls_oauth", "label": "EXISTS grant na policy extra" },
-    { "id": "e17", "from": "classif", "to": "rls_oauth", "label": "EXISTS sessão corporativa" }
+    { "id": "e17", "from": "classif", "to": "rls_oauth", "label": "EXISTS sessão corporativa" },
+    { "id": "e18", "from": "rls_oauth", "to": "rpc_aberto", "label": "mesmo papel authenticated: tabelas restritas, RPC herdada" }
   ],
   "cards": [
     {
@@ -60,6 +62,11 @@
       "id": "entitlement_separado",
       "title": "Não-ligação: D3/D5 não alarga a Inbox",
       "body": "conversations_select de cookie exige client_id IS NULL. Token OAuth só entra pela policy extra + grant. Zero linhas na tabela. Enablement GoTrue nesta instalação não confirmado."
+    },
+    {
+      "id": "rpc_nao_confinada",
+      "title": "Não-ligação: RPC no mesmo JWT authenticated",
+      "body": "oauth_cookie_only fecha tabelas e Storage. SECURITY DEFINER volátil permitida a authenticated não lê client_id. Sem Custom Access Token Hook (role distinto) ou sem Data API para o Bearer, não há confinamento uniforme. Decisão de ativação do Felipe, fora deste PR."
     }
   ]
 }

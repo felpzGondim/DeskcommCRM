@@ -7,6 +7,8 @@ import { lastLine, sql } from "./gov-helpers";
  *
  * Roda só com `pnpm test:db` (Postgres efêmero). Não é prova no `test:unit`.
  * Sem dado pessoal: ids e e-mails @invariant.test.
+ * Seed de `messages` NÃO usa `ON CONFLICT` — `messages_org_external_id_unique`
+ * é DEFERRABLE e o Postgres recusa como árbitro (CI pg17 @ c748fb10ad).
  */
 const orgA = "eeeeeeee-0000-4000-8000-000000000001";
 const orgB = "eeeeeeee-0000-4000-8000-000000000002";
@@ -31,7 +33,11 @@ const msgCorp = "eeeeeeee-6666-4000-8000-000000000001";
 const msgPessoal = "eeeeeeee-6666-4000-8000-000000000002";
 const msgUnknown = "eeeeeeee-6666-4000-8000-000000000003";
 const msgB = "eeeeeeee-6666-4000-8000-000000000004";
+const imovelA = "eeeeeeee-7777-4000-8000-000000000001";
+const procA = "eeeeeeee-7777-4000-8000-000000000002";
+const docA = "eeeeeeee-7777-4000-8000-000000000003";
 const clientId = "oauth-client-cursor-test";
+const shaDoc = "ab".repeat(32);
 
 function countJwt(claims: string, query: string): number {
   const out = sql(`
@@ -124,13 +130,26 @@ beforeAll(() => {
          array['buscar','ler','baixar']::text[], now() + interval '1 day'),
         ('${grantFelipe}', '${orgA}', '${felipe}', 'outro-client',
          array['buscar']::text[], now() + interval '1 day');
-    insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
-      values
-        ('${msgCorp}', '${orgA}', '${convCorp}', '${sessCorp}', '${ctOp}', 'text', 'inbound', 'corp'),
-        ('${msgPessoal}', '${orgA}', '${convPessoal}', '${sessPessoal}', '${ctPessoal}', 'text', 'inbound', 'pessoal'),
-        ('${msgUnknown}', '${orgA}', '${convUnknown}', '${sessUnknown}', '${ctUnknownSess}', 'text', 'inbound', 'unknown'),
-        ('${msgB}', '${orgB}', '${convB}', '${sessB}', '${ctB}', 'text', 'inbound', 'org-b')
-      on conflict do nothing;
+    do $m$ begin
+      insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
+        values
+          ('${msgCorp}', '${orgA}', '${convCorp}', '${sessCorp}', '${ctOp}', 'text', 'inbound', 'corp'),
+          ('${msgPessoal}', '${orgA}', '${convPessoal}', '${sessPessoal}', '${ctPessoal}', 'text', 'inbound', 'pessoal'),
+          ('${msgUnknown}', '${orgA}', '${convUnknown}', '${sessUnknown}', '${ctUnknownSess}', 'text', 'inbound', 'unknown'),
+          ('${msgB}', '${orgB}', '${convB}', '${sessB}', '${ctB}', 'text', 'inbound', 'org-b');
+    exception when unique_violation then null; end $m$;
+    do $l$ begin
+      insert into public.locacao_imoveis (id, organization_id, logradouro, chave_endereco)
+        values ('${imovelA}', '${orgA}', 'Rua invariante', 'deleg-inv-a');
+      insert into public.locacao_processos (id, organization_id, imovel_id, status)
+        values ('${procA}', '${orgA}', '${imovelA}', 'lead');
+      insert into public.locacao_processo_documentos (
+        id, organization_id, processo_id, categoria, storage_path, mime, tamanho_bytes, sha256, origem
+      ) values (
+        '${docA}', '${orgA}', '${procA}', 'relatorio',
+        '${orgA}/processos/${procA}/relatorio.pdf', 'application/pdf', 1, '${shaDoc}', 'relatorio'
+      );
+    exception when unique_violation then null; end $l$;
   `);
 });
 
@@ -178,6 +197,8 @@ describe.sequential("conversations — cookie Inbox vs OAuth + grant", () => {
   it("OAuth do Felipe admin sem grant deste client_id não herda a Inbox (sem fallback de dono)", () => {
     expect(oauth(felipe, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(0);
     expect(oauth(felipe, `select count(*) from public.conversations where id = '${convPessoal}';`)).toBe(0);
+    expect(oauth(felipe, `select count(*) from public.contacts where id = '${ctOp}';`)).toBe(0);
+    expect(oauth(felipe, `select count(*) from public.channel_sessions where id = '${sessCorp}';`)).toBe(0);
   });
 
   it("OAuth+grant lê mensagem da corporativa por id e zero de pessoal, unknown, outra org", () => {
@@ -214,11 +235,42 @@ describe.sequential("conversations — cookie Inbox vs OAuth + grant", () => {
     ).toBe(1);
   });
 
-  it("fronteira: contacts/channel_sessions seguem org-wide (OAuth lê contato pessoal da própria org; zero da outra)", () => {
-    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctPessoal}';`)).toBe(1);
+  it("OAuth+grant lê contato operacional e sessão corporativa; recusa pessoal, unknown, outra org", () => {
+    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctOp}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctPessoal}';`)).toBe(0);
     expect(oauth(marina, `select count(*) from public.contacts where id = '${ctB}';`)).toBe(0);
-    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessPessoal}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessCorp}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessPessoal}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessUnknown}';`)).toBe(0);
     expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessB}';`)).toBe(0);
+  });
+
+  it("cookie do Felipe continua vendo contato pessoal e sessão pessoal (spec 21 não aperta a Inbox)", () => {
+    expect(cookie(felipe, `select count(*) from public.contacts where id = '${ctPessoal}';`)).toBe(1);
+    expect(cookie(felipe, `select count(*) from public.channel_sessions where id = '${sessPessoal}';`)).toBe(1);
+    expect(cookie(felipe, `select count(*) from public.channel_sessions where id = '${sessUnknown}';`)).toBe(1);
+  });
+
+  it("locacao_processo_documentos: cookie da org lê; OAuth default-deny mesmo com grant", () => {
+    expect(cookie(felipe, `select count(*) from public.locacao_processo_documentos where id = '${docA}';`)).toBe(1);
+    expect(cookie(marina, `select count(*) from public.locacao_processo_documentos where id = '${docA}';`)).toBe(1);
+    expect(oauth(marina, `select count(*) from public.locacao_processo_documentos where id = '${docA}';`)).toBe(0);
+    expect(oauth(felipe, `select count(*) from public.locacao_processo_documentos where id = '${docA}';`)).toBe(0);
+  });
+
+  it("OAuth não escreve contato operacional; cookie do admin continua atualizando display_name", () => {
+    expect(
+      writeJwt(
+        `{"sub":"${marina}","role":"authenticated","client_id":"${clientId}"}`,
+        `update public.contacts set display_name = 'oauth' where id = '${ctOp}'`,
+      ),
+    ).toBe(0);
+    expect(
+      writeJwt(
+        `{"sub":"${felipe}","role":"authenticated"}`,
+        `update public.contacts set display_name = 'cookie' where id = '${ctOp}'`,
+      ),
+    ).toBe(1);
   });
 
   it("storage.objects: authenticated não ganha SELECT no bucket whatsapp-media por esta migration", () => {
@@ -240,11 +292,13 @@ describe.sequential("conversations — cookie Inbox vs OAuth + grant", () => {
          where id = '${grantMarina}';`);
     expect(oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(0);
     expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.contacts where id = '${ctOp}';`)).toBe(0);
     sql(`update public.delegacao_visibilidade_corporativa
            set expires_at = now() + interval '1 day', revoked_at = now()
          where id = '${grantMarina}';`);
     expect(oauth(marina, `select count(*) from public.conversations where id = '${convCorp}';`)).toBe(0);
     expect(oauth(marina, `select count(*) from public.messages where id = '${msgCorp}';`)).toBe(0);
+    expect(oauth(marina, `select count(*) from public.channel_sessions where id = '${sessCorp}';`)).toBe(0);
     sql(`update public.delegacao_visibilidade_corporativa
            set revoked_at = null
          where id = '${grantMarina}';`);

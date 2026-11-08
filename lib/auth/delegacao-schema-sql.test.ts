@@ -34,6 +34,7 @@ describe("0773 — contrato SQL (offline, sem aplicar)", () => {
   it("Inbox cookie exige client_id nulo; extra OAuth exige grant vivo + classificação corporativa + is_personal false", () => {
     expect(sql).toMatch(/\(auth\.jwt\(\) ->> 'client_id'\) is null/);
     expect(sql).toMatch(/conversations_select_delegacao_oauth/);
+    expect(sql).toMatch(/conversations_select_delegacao_restritiva/);
     expect(sql).toMatch(/classificacao_empresarial = 'corporativa'/);
     expect(sql).toMatch(/ct\.is_personal is false/);
     expect(sql).toMatch(/g\.revoked_at is null/);
@@ -41,6 +42,9 @@ describe("0773 — contrato SQL (offline, sem aplicar)", () => {
     expect(sql).toMatch(/as restrictive/);
     expect(sql).toMatch(/messages_select_delegacao_oauth/);
     expect(sql).toMatch(/conversations_agent_insert/);
+    expect(sql).toMatch(/oauth_cookie_only/);
+    expect(sql).toMatch(/oauth_delegacao_select on public\.contacts/);
+    expect(sql).toMatch(/oauth_delegacao_select on public\.channel_sessions/);
   });
 
   it("apêndice do baseline contém o SQL da migration depois do cabeçalho manifest", () => {

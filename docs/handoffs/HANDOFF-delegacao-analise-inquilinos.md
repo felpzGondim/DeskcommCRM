@@ -21,9 +21,11 @@
     sem boolean do chamador; sem peer-binding.
   - `app/api/mcp/delegacao` e RFC 9728 **404** (`ATIVACAO_DELEGADA_PADRAO` falsa).
   - Migration `0773` + apêndice do baseline: grant, coluna de classificação,
-    policy extra OAuth + `messages_select` restritiva; escritas cookie-only.
+    policy extra OAuth + restritivas grant-aware + `oauth_cookie_only`
+    default-deny nas demais tabelas RLS e `storage.objects`.
     `conversations_select` de cookie exige `client_id` nulo.
-    **Não aplicada** a banco de cliente.
+    **Não aplicada** a banco de cliente. RPC DEFINER do papel
+    `authenticated` permanece herdada.
 - D3/D5 **alvo decidido, não ativado:** buscar/ler/baixar em todas as
   conversas corporativas da org. WhatsApp = fonte de documentos, não canal
   da atendente com o Bot.
@@ -52,10 +54,13 @@
 - Enablement `GOTRUE_OAUTH_SERVER_ENABLED` nesta instalação (não medido).
 - Interop callback Grok Bot × GoTrue (adiado, não bloqueia offline).
 - Escrita da classificação e do grant (Felipe aprova; sem UI neste PR).
-- Irmã notes/media, se o produto quiser o mesmo 404.
-- `contacts` / `channel_sessions` / `locacao_processo_documentos` SELECT
-  org-wide para membro (OAuth de agente da org lê contato pessoal por id);
-  a superfície não usa isso como autorização. Sem patch silencioso.
-- Prova RLS no Postgres efêmero do CI (`invariants-majors`, arquivo
-  `delegacao-visibilidade-corporativa-rls.test.ts`). Docker local ausente
-  neste ambiente — não instalar infra para contornar.
+- Irmã notes/media, se o produto quiser o mesmo 404 (default-deny OAuth no
+  banco não altera o cookie; a rota irmã segue sem `is_personal`).
+- **RPC / Data API:** JWT OAuth = papel `authenticated`. Confinamento
+  uniforme de RPC exige decisão de Felipe (Custom Access Token Hook com
+  role distinto, ou não publicar o JWT no PostgREST). Matriz:
+  `docs/decisoes/delegacao-oauth-matriz.md`.
+- Prova RLS no Postgres efêmero do CI (`invariants-majors`, arquivos
+  `delegacao-visibilidade-corporativa-rls.test.ts` e
+  `delegacao-oauth-deriva-rls.test.ts`). Docker local ausente neste
+  ambiente — não instalar infra para contornar.

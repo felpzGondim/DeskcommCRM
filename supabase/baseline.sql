@@ -64997,4 +64997,168 @@ create policy messages_select_delegacao_oauth on public.messages
     )
   );
 
+-- Mesma restritiva em conversations: a extra é PERMISSIVA. Sem AND, uma
+-- policy SELECT futura sem checar client_id reabriria a Inbox ao JWT OAuth.
+drop policy if exists conversations_select_delegacao_restritiva on public.conversations;
+create policy conversations_select_delegacao_restritiva on public.conversations
+  as restrictive
+  for select
+  to authenticated
+  using (
+    (auth.jwt() ->> 'client_id') is null
+    or (
+      exists (
+        select 1
+        from public.delegacao_visibilidade_corporativa g
+        where g.user_id = auth.uid()
+          and g.organization_id = conversations.organization_id
+          and g.oauth_client_id = (auth.jwt() ->> 'client_id')
+          and g.revoked_at is null
+          and g.expires_at > now()
+          and g.efeitos && array['buscar','ler','baixar']::text[]
+      )
+      and exists (
+        select 1
+        from public.channel_sessions cs
+        where cs.id = conversations.channel_session_id
+          and cs.organization_id = conversations.organization_id
+          and cs.classificacao_empresarial = 'corporativa'
+      )
+      and exists (
+        select 1
+        from public.contacts ct
+        where ct.id = conversations.contact_id
+          and ct.organization_id = conversations.organization_id
+          and ct.is_personal is false
+      )
+    )
+  );
+
+-- contacts / channel_sessions: a extra de conversations faz EXISTS nestas
+-- tabelas — RLS do EXISTS é a do JWT. Cookie-only nelas faria a extra
+-- recusar até conversa corporativa. SELECT OAuth só operacional/corporativa
+-- + grant; escritas só cookie. DELETE usa só USING: por isso write separado.
+drop policy if exists oauth_delegacao_select on public.contacts;
+create policy oauth_delegacao_select on public.contacts
+  as restrictive
+  for select
+  to authenticated
+  using (
+    (auth.jwt() ->> 'client_id') is null
+    or (
+      is_personal is false
+      and exists (
+        select 1
+        from public.delegacao_visibilidade_corporativa g
+        where g.user_id = auth.uid()
+          and g.organization_id = contacts.organization_id
+          and g.oauth_client_id = (auth.jwt() ->> 'client_id')
+          and g.revoked_at is null
+          and g.expires_at > now()
+          and g.efeitos && array['buscar','ler','baixar']::text[]
+      )
+    )
+  );
+drop policy if exists oauth_cookie_only_insert on public.contacts;
+create policy oauth_cookie_only_insert on public.contacts
+  as restrictive for insert to authenticated
+  with check ((auth.jwt() ->> 'client_id') is null);
+drop policy if exists oauth_cookie_only_update on public.contacts;
+create policy oauth_cookie_only_update on public.contacts
+  as restrictive for update to authenticated
+  using ((auth.jwt() ->> 'client_id') is null)
+  with check ((auth.jwt() ->> 'client_id') is null);
+drop policy if exists oauth_cookie_only_delete on public.contacts;
+create policy oauth_cookie_only_delete on public.contacts
+  as restrictive for delete to authenticated
+  using ((auth.jwt() ->> 'client_id') is null);
+
+drop policy if exists oauth_delegacao_select on public.channel_sessions;
+create policy oauth_delegacao_select on public.channel_sessions
+  as restrictive
+  for select
+  to authenticated
+  using (
+    (auth.jwt() ->> 'client_id') is null
+    or (
+      classificacao_empresarial = 'corporativa'
+      and exists (
+        select 1
+        from public.delegacao_visibilidade_corporativa g
+        where g.user_id = auth.uid()
+          and g.organization_id = channel_sessions.organization_id
+          and g.oauth_client_id = (auth.jwt() ->> 'client_id')
+          and g.revoked_at is null
+          and g.expires_at > now()
+          and g.efeitos && array['buscar','ler','baixar']::text[]
+      )
+    )
+  );
+drop policy if exists oauth_cookie_only_insert on public.channel_sessions;
+create policy oauth_cookie_only_insert on public.channel_sessions
+  as restrictive for insert to authenticated
+  with check ((auth.jwt() ->> 'client_id') is null);
+drop policy if exists oauth_cookie_only_update on public.channel_sessions;
+create policy oauth_cookie_only_update on public.channel_sessions
+  as restrictive for update to authenticated
+  using ((auth.jwt() ->> 'client_id') is null)
+  with check ((auth.jwt() ->> 'client_id') is null);
+drop policy if exists oauth_cookie_only_delete on public.channel_sessions;
+create policy oauth_cookie_only_delete on public.channel_sessions
+  as restrictive for delete to authenticated
+  using ((auth.jwt() ->> 'client_id') is null);
+
+-- Default-deny OAuth em TODA tabela public com RLS fora da allowlist
+-- (conversations, messages, contacts, channel_sessions,
+-- delegacao_visibilidade_corporativa) e em storage.objects.
+-- Restrictive AND com as permissivas: cookie (client_id nulo) passa;
+-- JWT OAuth não lê locacao_*, notes, leads, nem o restante.
+-- locacao_processo_documentos entra neste laço (equivalente).
+-- RPC SECURITY DEFINER executável por authenticated NÃO é fechada aqui:
+-- o JWT OAuth é o mesmo papel da cookie. Ver docs/decisoes/delegacao-oauth-matriz.md.
+do $delegacao_oauth_cookie_only$
+declare
+  r record;
+begin
+  for r in
+    select n.nspname as nsp, c.relname as rel
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where c.relkind in ('r', 'p')
+       and c.relrowsecurity
+       and n.nspname = 'public'
+       and c.relname not in (
+         'conversations',
+         'messages',
+         'contacts',
+         'channel_sessions',
+         'delegacao_visibilidade_corporativa'
+       )
+  loop
+    execute format('drop policy if exists oauth_cookie_only on %I.%I', r.nsp, r.rel);
+    execute format(
+      'create policy oauth_cookie_only on %I.%I as restrictive for all to authenticated using ((auth.jwt() ->> %L) is null) with check ((auth.jwt() ->> %L) is null)',
+      r.nsp, r.rel, 'client_id', 'client_id'
+    );
+  end loop;
+
+  if exists (
+    select 1
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'storage'
+       and c.relname = 'objects'
+       and c.relrowsecurity
+  ) then
+    execute 'drop policy if exists oauth_cookie_only on storage.objects';
+    execute $p$
+      create policy oauth_cookie_only on storage.objects
+        as restrictive for all to authenticated
+        using ((auth.jwt() ->> 'client_id') is null)
+        with check ((auth.jwt() ->> 'client_id') is null)
+    $p$;
+  end if;
+end
+$delegacao_oauth_cookie_only$;
+
 notify pgrst, 'reload schema';
