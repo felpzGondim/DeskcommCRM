@@ -84,6 +84,7 @@ import { GET } from "@/app/api/v1/messages/[id]/media/route";
 
 const audio = {
   id: "mensagem-1",
+  conversation_id: "conv-1",
   media_url: null,
   media_mime: "audio/ogg; codecs=opus",
   media_size_bytes: 9,

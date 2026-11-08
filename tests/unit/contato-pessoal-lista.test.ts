@@ -22,7 +22,9 @@ import { listMessagesHandler } from "@/app/api/v1/messages/_handler";
  * - Manter somando no counts: o badge diverge da lista (critério 3).
  * - Tirar o 404 do `getConversationHandler`: o caso "link direto dá 404" cai.
  * Linha para reverter: `app/api/v1/conversations/_handler.ts`,
- * `app/api/v1/conversations/counts/route.ts`, `app/api/v1/messages/_handler.ts`.
+ * `app/api/v1/conversations/counts/route.ts`, `app/api/v1/messages/_handler.ts`,
+ * `app/api/v1/messages/[id]/media/route.ts`,
+ * `app/api/v1/conversations/[id]/locacao/documentos/route.ts`.
  */
 
 const RAIZ = process.cwd();
@@ -146,5 +148,16 @@ describe("link direto e histórico recusam (defesa em profundidade)", () => {
   it("o corte do histórico está no fonte (duas consultas planas, antes de tudo)", () => {
     expect(HISTORICO).toMatch(/\.select\("contact_id"\)/);
     expect(HISTORICO).toMatch(/\.select\("is_personal"\)/);
+  });
+
+  it("mídia e documentos da locação recusam pelo mesmo helper (defesa em profundidade)", () => {
+    const midia = semComentarios(fonte("app", "api", "v1", "messages", "[id]", "media", "route.ts"));
+    const docs = semComentarios(
+      fonte("app", "api", "v1", "conversations", "[id]", "locacao", "documentos", "route.ts"),
+    );
+    expect(midia).toMatch(/conversaTemContatoPessoal/);
+    expect(docs).toMatch(/conversaTemContatoPessoal/);
+    expect(midia).toMatch(/createSignedUrl/);
+    expect(midia.indexOf("conversaTemContatoPessoal")).toBeLessThan(midia.indexOf("createSignedUrl"));
   });
 });

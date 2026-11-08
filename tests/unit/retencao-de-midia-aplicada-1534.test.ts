@@ -277,6 +277,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("expirada → 410 e NENHUMA chamada ao provedor", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: null,
       media_storage_path: null,
       media_mime: "image/jpeg",
@@ -295,6 +296,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("sem mídia e SEM marcador continua 404 (o 410 é só do que existiu)", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: null,
       media_storage_path: null,
       media_mime: null,
@@ -313,6 +315,7 @@ describe("a rota messages/[id]/media não re-busca do provedor o que expirou", (
   it("mídia ainda não persistida segue indo buscar no provedor (controle)", async () => {
     mensagem = {
       id: "mensagem-1",
+      conversation_id: "conv-1",
       media_url: "https://provider.test/a.jpg",
       media_storage_path: null,
       media_mime: "image/jpeg",

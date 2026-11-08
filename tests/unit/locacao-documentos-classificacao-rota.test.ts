@@ -40,7 +40,8 @@ vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
 
 function query(tabela: string) {
   let rows: Array<Record<string, unknown>> =
-    tabela === "conversations" ? [{ id: estado.conversa, organization_id: estado.org }]
+    tabela === "conversations" ? [{ id: estado.conversa, organization_id: estado.org, contact_id: "contato-1" }]
+    : tabela === "contacts" ? [{ id: "contato-1", organization_id: estado.org, is_personal: false }]
     : tabela === "messages" ? estado.mensagens
     : tabela === "locacao_processo_participantes" ? estado.participantes
     : tabela === "locacao_processo_documentos" ? estado.documentos
