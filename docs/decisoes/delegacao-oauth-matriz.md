@@ -52,13 +52,16 @@ amplo; patchar três paths e declarar confinamento global seria mentira.
 
 O enum `anon`|`authenticated` na **página de docs** do hook **não** é o
 schema de runtime. GoTrue v2.196.0 valida `role` como `type: string`
-(`MinimumViableTokenSchema`). Emissão com papel terceiro: **runtime
-untested** (M1). `GRANT TO PUBLIC` alcança qualquer papel `NOINHERIT`.
-“Não mandar o JWT ao PostgREST” **não** corta `/rest/v1`/`/rpc`. Lei e
-próxima medição: [`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md).
+(`MinimumViableTokenSchema`). Emissão com papel terceiro: **MEDIDO** em
+Auth descartável (M1 12/12 — `role=oauth_delegado` só no client mapeado).
+`GRANT TO PUBLIC` alcança qualquer papel `NOINHERIT` (**MEDIDO** M2).
+“Não mandar o JWT ao PostgREST” **não** corta `/rest/v1`/`/rpc`. Lei:
+[`delegacao-papel-dedicado.md`](delegacao-papel-dedicado.md). Evidência:
+[`../evidencias/delegacao-m1-m2-vm-2026-11-08.md`](../evidencias/delegacao-m1-m2-vm-2026-11-08.md).
 
-**Sem M1** a homologação **não** trata o JWT OAuth como sujeito confinado
-na RPC. Sem hook/CREATE ROLE neste PR.
+A homologação **não** trata o JWT OAuth do **produto** como sujeito
+confinado na RPC: hook/CREATE ROLE **não** estão no CRM. M1/M2 não ligam
+o produto.
 
 ## Spec 21 (cookie) vs esta matriz
 

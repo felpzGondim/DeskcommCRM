@@ -54,8 +54,13 @@ describe("derivação OAuth default-deny (catálogo, sem token real)", () => {
         join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'storage' and c.relname = 'objects';
     `);
-    if (rls !== "t") {
-      expect(rls, "storage.objects ausente ou sem RLS — registrar, não silenciar").toBe("f");
+    // `boolean::text` no Postgres é `true`/`false`; `-tA` sem cast é `t`/`f`.
+    const rlsOn = rls === "t" || rls === "true";
+    if (!rlsOn) {
+      expect(
+        ["f", "false"].includes(rls),
+        `storage.objects ausente ou sem RLS — registrar, não silenciar (recebi ${JSON.stringify(rls)})`,
+      ).toBe(true);
       return;
     }
     expect(

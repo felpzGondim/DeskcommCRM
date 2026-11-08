@@ -1,0 +1,170 @@
+{
+  "pass": 12,
+  "fail": 0,
+  "skip": 0,
+  "user_id": "d8dd6a6b-5c70-45e7-981e-bc5a476023d0",
+  "mapped_client_id": "7d006601-7c40-460d-8e2d-cc4f4f243f0a",
+  "control_client_id": "f2915598-499b-47f2-981d-da0e3ce1d7ad",
+  "dedicated_role": "oauth_delegado",
+  "cases": [
+    {
+      "id": "m1.signup",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "status": 200,
+        "has_user": true
+      }
+    },
+    {
+      "id": "m1.password_grant",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "authenticated",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": false,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated",
+        "jose_ok": true
+      }
+    },
+    {
+      "id": "m1.password_get_user",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "status": 200,
+        "id_match": true
+      }
+    },
+    {
+      "id": "m1.register_client_mapped",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "client_id": "7d006601-7c40-460d-8e2d-cc4f4f243f0a"
+      }
+    },
+    {
+      "id": "m1.register_client_control",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "client_id": "f2915598-499b-47f2-981d-da0e3ce1d7ad"
+      }
+    },
+    {
+      "id": "m1.oauth_pkce_mapped",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "oauth_delegado",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": true,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated",
+        "jose_ok": true
+      }
+    },
+    {
+      "id": "m1.oauth_mapped_getClaims",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "oauth_delegado",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": true,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated"
+      }
+    },
+    {
+      "id": "m1.oauth_mapped_getUser",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "id_match": true,
+        "has_error": false
+      }
+    },
+    {
+      "id": "m1.oauth_refresh_mapped",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "oauth_delegado",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": true,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated",
+        "jose_ok": true
+      }
+    },
+    {
+      "id": "m1.oauth_pkce_other_client",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "authenticated",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": true,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated",
+        "jose_ok": true
+      }
+    },
+    {
+      "id": "m1.oauth_omit_client_id",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "authenticated",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": false,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated"
+      }
+    },
+    {
+      "id": "m1.password_unaffected_after_hook",
+      "ok": true,
+      "skip": false,
+      "detail": {
+        "role": "authenticated",
+        "has_sub": true,
+        "sub_eq_user": true,
+        "has_client_id": false,
+        "client_id_eq_expected": true,
+        "has_session_id": true,
+        "iss": "http://127.0.0.1:9888/auth/v1",
+        "iss_eq_expected": true,
+        "aud": "authenticated"
+      }
+    }
+  ]
+}

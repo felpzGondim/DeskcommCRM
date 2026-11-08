@@ -1,7 +1,7 @@
 # Papel Postgres dedicado via Custom Access Token Hook — evidência (não ativado)
 
-**Status:** consolidação. Preparação continua desligada. Nenhum hook configurado,
-nenhum papel concedido, nenhum token, nenhum apply, nenhum merge/deploy.
+**Status:** M1/M2 medidos no descartável (2026-11-08). Produto continua
+desligado. Nenhum hook/papel/token/apply no CRM. Sem merge/deploy.
 
 **Pin do kit (CONFIRMADO no repositório):** imagem `supabase/gotrue:v2.196.0`
 (`tests/shell/supabase-imagens-plataforma.test.sh`). Tag Git pública
@@ -11,12 +11,11 @@ no repo open-source [`supabase/auth`](https://github.com/supabase/auth).
 **Runtime desta instalação:** não inspecionado (digest da imagem ≠ SHA Git até
 alguém puxar o manifesto). Fonte abaixo = Git tag, não o binário em produção.
 
-**Veredito:** isolamento RPC **não está provado**. O enum das docs **não** é a
-validação de runtime. `verificarSujeitoOAuth` exigir `role=authenticated` é
-**escolha local**, não limite do Auth. Mesmo se o Auth emitir um `role` string
-terceiro, PUBLIC / membership / `SET ROLE` / policies `TO authenticated`
-continuam. Este PR **não** acrescenta hook, `CREATE ROLE` nem REVOKE global.
-Spec 21 (cookie) segue útil sozinha.
+**Veredito:** o Auth pinado **emite** `role=oauth_delegado` (M1 12/12). Isolamento
+RPC no **produto** continua **não ligado**. PUBLIC alcança NOINHERIT; policies
+`TO authenticated` não cobrem o papel terceiro; authenticator precisa de GRANT.
+`verificarSujeitoOAuth` exigir `authenticated` é escolha local. Spec 21 (cookie)
+independente. HTTP 404.
 
 ---
 
@@ -74,7 +73,9 @@ Saída do hook **substitui** as claims: `gotrueClaims = jwt.MapClaims(output.Cla
 - Os casos usam `grant_type=refresh_token` no endpoint `/token` **não-OAuth**
   (L803). Não exercitam `/oauth/token` authorization_code.
 
-**Runtime untested:** JWT com `role=oauth_delegado` aceito ou recusado.
+**Runtime MEDIDO** (VM descartável 2026-11-08, não produção): JWT com
+`role=oauth_delegado` **foi emitido** pelo binário compilado de `0204331`
+(12/12 no harness). Ver `docs/evidencias/delegacao-m1-m2-vm-2026-11-08.md`.
 
 Papel default **sem** hook: `Role: params.User.Role` (service.go L711) — em
 geral `authenticated` em `auth.users.role` (INFERIDO do produto; não medido
@@ -96,8 +97,11 @@ passam pelo hook com `client_id` no **input** (quando a sessão OAuth tem
 client). Cookie/password não passa `ClientID` (generateAccessToken em
 `internal/api/token.go` não preenche ClientID).
 
-**Runtime untested:** Auth desta instalação com hook enabled; preservação de
-`client_id` no **output** do hook; emissão com `role` string terceiro.
+**Runtime MEDIDO** no Auth descartável (não nesta instalação viva): hook
+enabled só nesse processo; `client_id` copiado no output quando o hook não
+omite; `role=oauth_delegado` só no `client_id` mapeado; omitir `client_id`
+no output remove o claim (replace). Cookie/password sem `client_id`,
+`role=authenticated`.
 
 Cookie/outros clients: o hook corre em **todo** `GenerateAccessToken` se
 Enabled (service.go L721). Isolar cookie exige o hook **não** alterar `role`
@@ -112,7 +116,7 @@ Mesmo **se** M1 (abaixo) mostrar JWT `role=oauth_delegado` + `sub` + `client_id`
 
 | Camada | Estado |
 |---|---|
-| `GRANT … TO PUBLIC` | alcança **todo** papel, inclusive `NOINHERIT`. Papel dedicado **não** isola o que está em PUBLIC. Sintético local: `tests/invariants/delegacao-papel-publico-nao-isola.test.ts` (escrito; **não executado** aqui — Docker ausente; CI pg15/17 no HEAD ainda sem conclusão). |
+| `GRANT … TO PUBLIC` | alcança **todo** papel, inclusive `NOINHERIT`. Papel dedicado **não** isola o que está em PUBLIC. **MEDIDO** no sintético (`m2.public_execute_reaches_dedicated`) e nos invariantes CRM `delegacao-papel-publico-nao-isola.test.ts` (27/27 no Postgres 16 local). |
 | `GRANT … TO authenticated` | **não** cai em papel que não é membro. DEFINER volátil do allowlist está em `authenticated` (issue #128; `anon` zerado). |
 | `USAGE ON SCHEMA public` | dump: postgres/anon/authenticated/service_role — **não** PUBLIC. Papel novo sem GRANT não entra no schema. |
 | PostgREST `authenticator` `SET ROLE` | precisa `GRANT <papel> TO authenticator`. Sem isso o switch falha. |
@@ -124,38 +128,40 @@ app**, não o Auth. Dá para mudar depois; **não** é prova de que o Auth recus
 
 ---
 
-## O que este PR não faz (de propósito)
+## O que este PR não faz no produto (de propósito)
 
-Nenhum ficheiro de hook SQL, nenhum `CREATE ROLE`, nenhum GRANT a
-`authenticator`, nenhum REVOKE global de DEFINER, nenhum rewrite de RPC,
-nenhum `pgrst.db_pre_request`. 0773 (tabelas) permanece **não aplicada**.
+Nenhum hook no baseline, nenhum `CREATE ROLE` no CRM, nenhum GRANT a
+`authenticator` na instalação viva, nenhum REVOKE global de DEFINER, nenhum
+rewrite de RPC, nenhum `pgrst.db_pre_request`. 0773 (tabelas) permanece
+**não aplicada** no banco do cliente. HTTP 404. Harness em
+`scripts/disposable-delegacao-auth/` é só a VM de teste.
 
 ---
 
-## Próxima medição autorizada (uma, não um menu)
+## Medição M1+M2 (VM descartável 2026-11-08)
 
-Não há escolha A/B/C que feche RPC sem medição. O que falta e **não cabe** no
-Postgres efêmero de `test:db` (não sobe GoTrue):
+Autorização Felipe (Análise pos2792–2793): ambiente temporário isolado,
+dados fictícios, sem produção. Harness:
+`scripts/disposable-delegacao-auth/run.sh`. Evidência:
+`docs/evidencias/delegacao-m1-m2-vm-2026-11-08.md`.
 
-**M1 — emissão de JWT pelo Auth pinado, ambiente descartável, aprovação
-posterior.** Sem isto, não afirmar que o Auth aceita ou recusa `role`
-terceiro.
-
-| | |
+| Faixa | Resultado |
 |---|---|
-| **Recurso** | Um Auth descartável da **mesma tag de imagem** `supabase/gotrue:v2.196.0` (ou binário do commit `0204331`) + Postgres só do Auth. **Não** a VPS de cliente. **Não** ligar o hook na instalação viva. |
-| **Efeito** | Liga `Hook.CustomAccessToken` **só nesse Auth**. Função/HTTP que **copia** `event.claims` e, se `client_id` presente, põe `claims.role = "oauth_delegado"`; se ausente, devolve claims intactas. Emite 2–3 tokens de teste e apaga o ambiente. Zero GRANT no schema do CRM. Zero client OAuth de produção. |
-| **Asserções** | (1) `authorization_code` → JWT com `sub` = user id, `client_id` = client do teste, `role` = `oauth_delegado` **ou** HTTP 500 com erro de schema (os dois resultados são evidência). (2) `refresh_token` do mesmo client: mesmas claims. (3) grant password/cookie no mesmo Auth: `role` continua o de `auth.users` (tipicamente `authenticated`) e **sem** `client_id`. (4) variante: hook que omite `client_id` no output → JWT **sem** `client_id` (replace). |
-| **Não é** | CREATE ROLE no CRM, GRANT, policies, PostgREST, Inbox, merge, deploy. |
+| **M1** GoTrue `0204331` + PKCE + refresh | **12/12 PASS.** `role=oauth_delegado` só no client mapeado; outro client e password `authenticated` sem `client_id`; omitir `client_id` no output remove o claim; `jose` + `getClaims`/`getUser`. |
+| **M2** SQL sintético (papel dedicado) | **25/25 PASS.** PUBLIC alcança NOINHERIT; authenticator SET ROLE recusa sem GRANT (`SET SESSION AUTHORIZATION`); policies TO `oauth_delegado` + policy no grant; recusa pessoal/unknown/outra org/client/revogado; documents/storage/write deny; cookie intacta. |
+| **M2** invariantes CRM (`delegacao-*.test.ts` no baseline local pg16) | **27/27 PASS** (3 files). `storage.objects` neste stub **não** tem RLS (`false`) — 0773 **não** cria `oauth_cookie_only` lá (condicional a `relrowsecurity`). |
+| **Produto** | Inalterado: 404, flag off, 0773 unapplied, sem hook. |
 
-**M2 só depois de M1 aceitar o claim** (aprovação à parte, blast de schema):
-`CREATE ROLE` NOINHERIT, `GRANT TO authenticator`, `USAGE` em `public`,
-policies `TO` o papel, inventário PUBLIC restante. **Não agora.**
+**Não homologar RPC do produto.** M1 prova que o Auth *pode* emitir o papel;
+M2 prova o isolamento *se* o CRM ganhar o papel + policies + GRANT
+authenticator + revogação de PUBLIC. Nada disso está ligado.
 
 ---
 
 ## Spec 21 vs delegação
 
 A exclusão `is_personal === false` nas rotas cookie de mídia/documentos é
-independente e continua. Delegação HTTP 404. Sem M1, **não** homologar JWT
-OAuth como sujeito confinado na RPC.
+independente e continua. Delegação HTTP 404. M1/M2 medidos no descartável
+**não** ligam o produto. `verificarSujeitoOAuth` ainda exige
+`role=authenticated` (escolha local): um Bearer `oauth_delegado` seria
+recusado por essa função mesmo com o Auth a emití-lo.

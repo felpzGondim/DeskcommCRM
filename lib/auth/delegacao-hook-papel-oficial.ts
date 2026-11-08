@@ -6,7 +6,9 @@
  * tem exemplo HTTP que copia `app_metadata.role` para `claims.role` (valor
  * arbitrário). O schema de **runtime** do GoTrue v2.196.0 é `role: { type:
  * "string" }` sem enum — ver docs/decisoes/delegacao-papel-dedicado.md.
- * Isto NÃO é um hook ligado. Nenhum CREATE FUNCTION de hook neste PR.
+ * Isto NÃO é um hook ligado no produto. O único CREATE FUNCTION de hook
+ * deste PR vive no harness descartável
+ * `scripts/disposable-delegacao-auth/m1-hook.sql` (não entra no baseline).
  */
 export const HOOK_ACCESS_TOKEN_ROLE_ENUM_OFICIAL = ["anon", "authenticated"] as const;
 

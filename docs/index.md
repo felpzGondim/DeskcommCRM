@@ -178,7 +178,8 @@ de produção num repositório público (#638). O gate que impede a volta é
 - [`handoffs/`](handoffs/) — **todo** o arquivo de handoff, com o índice e a convenção em [`handoffs/README.md`](handoffs/README.md). Quantos: `git ls-files 'docs/handoffs/HANDOFF*.md' | wc -l` (20 em 2026-09-26), mais briefing, contrato e `waves/`
 - [`decisoes/delegacao-analise-inquilinos.md`](decisoes/delegacao-analise-inquilinos.md) — correção spec 21 em mídia/documentos + contrato de delegação **não ativado** (D3/D5 alvo org-wide; superfície 404; grant 0773 vazio)
 - [`decisoes/delegacao-transporte-identidade.md`](decisoes/delegacao-transporte-identidade.md) — sujeito = JWT OAuth do GoTrue (`getUser`); sem AS próprio, sem `device_code`; enablement desta instalação não confirmado
-- [`decisoes/delegacao-papel-dedicado.md`](decisoes/delegacao-papel-dedicado.md) — enum das docs ≠ schema runtime GoTrue v2.196.0; PUBLIC/NOINHERIT; próxima medição M1 (Auth descartável)
+- [`decisoes/delegacao-papel-dedicado.md`](decisoes/delegacao-papel-dedicado.md) — enum das docs ≠ schema runtime GoTrue v2.196.0; M1/M2 medidos no descartável (não ligados no produto)
+- [`evidencias/delegacao-m1-m2-vm-2026-11-08.md`](evidencias/delegacao-m1-m2-vm-2026-11-08.md) — corrida M1 (GoTrue v2.196.0 PKCE) + M2 (ACL/RLS sintético + invariantes) na VM de 2026-11-08
 - [`decisoes/delegacao-oauth-matriz.md`](decisoes/delegacao-oauth-matriz.md) — matriz allow/deny Data API/RPC para JWT OAuth (RPC não confinada)
 - [`stories/`](stories/) — épicos e stories (`epics/MASTER.md` = plano por epic/wave)
 - [`superpowers/`](superpowers/) — `plans/` e `specs/` datados por onda, mais `handoffs/`

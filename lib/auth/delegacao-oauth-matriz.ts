@@ -24,24 +24,24 @@ export const POLITICA_DEFAULT_DENY_OAUTH = "oauth_cookie_only";
 export const STORAGE_OAUTH = "default_deny" as const;
 
 /**
- * RPC não é confinada pelo mesmo JWT. Cookie e OAuth compartilham o papel
- * `authenticated` até M1 medir o Auth. O enum das docs **não** é o schema de
- * runtime (GoTrue v2.196.0: role type string). Ver
+ * RPC do **produto** não é confinada: o hook e o papel dedicado não estão
+ * ligados no CRM. M1/M2 medidos só no harness descartável
+ * (`scripts/disposable-delegacao-auth/`, evidência
+ * `docs/evidencias/delegacao-m1-m2-vm-2026-11-08.md`). Ver
  * docs/decisoes/delegacao-papel-dedicado.md. Revogar EXECUTE de authenticated
- * quebra a Inbox. DEFINER volátil do allowlist não lê client_id. PUBLIC
- * alcança NOINHERIT.
+ * quebra a Inbox. PUBLIC alcança NOINHERIT.
  */
 export const RPC_OAUTH = {
   estado: "nao_confinado",
   motivo:
-    "JWT OAuth e cookie compartilham authenticated até medição M1. O enum das docs não é o schema de runtime (role type string). verificarSujeitoOAuth exigir authenticated é escolha local. REVOKE EXECUTE de authenticated quebra a Inbox. DEFINER volátil não consulta client_id. GRANT TO PUBLIC alcança qualquer papel NOINHERIT.",
+    "Produto: JWT OAuth e cookie ainda compartilhariam authenticated (hook/CREATE ROLE não ligados). M1 medido em Auth descartável v2.196.0: o runtime EMITE role=oauth_delegado. verificarSujeitoOAuth exigir authenticated continua escolha local. REVOKE EXECUTE de authenticated quebra a Inbox. GRANT TO PUBLIC alcança qualquer papel NOINHERIT.",
   alternativas: [
-    "M1 — Auth descartável pin v2.196.0: hook copia claims e põe role string terceiro só com client_id; medir emissão authorization_code/refresh vs cookie (aprovação posterior)",
-    "M2 — só se M1 aceitar o claim: CREATE ROLE + GRANT authenticator + USAGE + policies TO (blast de schema, aprovação à parte)",
-    "0773 permanece tabelas/Storage; não isola RPC",
+    "M1 MEDIDO (VM 2026-11-08): GoTrue v2.196.0 authorization_code+PKCE e refresh emitiram role=oauth_delegado só no client mapeado; cookie/outro client ficaram authenticated; omitir client_id no output do hook remove o claim (replace). Produto sem hook.",
+    "M2 MEDIDO no sintético: PUBLIC alcança NOINHERIT; authenticator SET ROLE exige GRANT; policies TO oauth_delegado + policy no grant isolam; cookie intacta. Produto sem CREATE ROLE.",
+    "0773 permanece tabelas/Storage; RPC do produto segue authenticated compartilhado até hook+papel no CRM (aprovação à parte)",
   ],
   decisao_fora_de_escopo:
-    "Felipe autoriza M1 (Auth descartável) antes de qualquer hook/CREATE ROLE no CRM. Sem M1 não homologar RPC confinada. Não mandar o JWT ao PostgREST não corta /rest/v1 /rpc de quem tem o Bearer.",
+    "Felipe autorizou M1/M2 descartáveis. Não ligar hook/CREATE ROLE no CRM sem aprovação nova. Não mandar o JWT ao PostgREST não corta /rest/v1 /rpc de quem tem o Bearer.",
 } as const;
 
 /** Acesso que esta migration INTRODUZ para client_id presente (não existia na cookie policy). */

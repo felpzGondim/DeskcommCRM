@@ -47,22 +47,33 @@ import { execFileSync } from "node:child_process";
 
 const container = process.env.TEST_DB_CONTAINER;
 const template = process.env.TEST_DB_TEMPLATE;
+const localPsql = process.env.TEST_DB_PSQL;
+const localDb = process.env.TEST_DB_NAME ?? "postgres";
 
-if (!container || !template) {
+if ((!container && !localPsql) || !template) {
   throw new Error(
     "TEST_DB_CONTAINER/TEST_DB_TEMPLATE ausentes — a suíte de invariantes roda por " +
       "`pnpm test:db` (scripts/test-db.sh), que sobe o Postgres efêmero e aplica o baseline no molde.",
   );
 }
 
-execFileSync(
-  "docker",
-  ["exec", "-i", container, "psql", "-U", "postgres", "-d", "template1", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-  {
-    input: `drop database if exists postgres with (force);\ncreate database postgres template ${template};\n`,
+const resetSql = `drop database if exists ${localDb} with (force);\ncreate database ${localDb} template ${template};\n`;
+
+if (localPsql) {
+  execFileSync(localPsql, ["-d", "template1", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"], {
+    input: resetSql,
     encoding: "utf8",
-  },
-);
+  });
+} else {
+  execFileSync(
+    "docker",
+    ["exec", "-i", container as string, "psql", "-U", "postgres", "-d", "template1", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"],
+    {
+      input: `drop database if exists postgres with (force);\ncreate database postgres template ${template};\n`,
+      encoding: "utf8",
+    },
+  );
+}
 
 // Marcador lido por tests/invariants/harness-isola-por-arquivo.test.ts. Sem ele
 // aquele invariante não teria como distinguir "recebi um banco limpo porque o
