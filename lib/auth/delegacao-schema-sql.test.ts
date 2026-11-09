@@ -139,6 +139,9 @@ describe("0774 não é a 0773 experimental", () => {
     expect(e2e).toMatch(/Ativar leitura storage do oauth_delegado \(supabase_admin\)/);
     expect(e2e).toMatch(/postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:54322\/postgres/);
     expect(e2e).toMatch(/delegacao-storage-ativar\.sql/);
+    const harness = readFileSync("scripts/test-db.sh", "utf8");
+    expect(harness).toMatch(/delegacao-storage-ativar\.sql/);
+    expect(harness).toMatch(/aplicar_baseline\(\)/);
   });
 
   it("POST de novo número não classifica sessão empresarial", () => {
