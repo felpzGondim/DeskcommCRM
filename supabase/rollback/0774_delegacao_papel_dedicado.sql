@@ -172,10 +172,20 @@ begin
     execute 'revoke all on schema storage from oauth_delegado';
     execute 'revoke all on all tables in schema public from oauth_delegado';
     execute 'revoke all on all functions in schema public from oauth_delegado';
+    -- Grants da ativação (delegacao-storage-ativar.sql): USAGE no schema e
+    -- SELECT em objects/buckets. Sem isto o papel sobrevive ao DROP falho no
+    -- harness com SELECT de storage ainda ligado.
     begin
-      execute 'revoke all on all tables in schema storage from oauth_delegado';
-    exception when others then
-      null;
+      execute 'revoke all on storage.objects from oauth_delegado';
+    exception
+      when undefined_table then
+        null;
+    end;
+    begin
+      execute 'revoke all on storage.buckets from oauth_delegado';
+    exception
+      when undefined_table then
+        null;
     end;
     begin
       execute 'revoke all on function auth.uid() from oauth_delegado';

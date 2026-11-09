@@ -1,7 +1,8 @@
 /**
  * Reversão ensaiada da 0774: snapshot de CATÁLOGOS (policies/ACL/papel/RLS/hook),
  * não dump de conversa/storage. 0774 não escreve dado de atendimento.
- * Equivalência: estado pós-baseline == rollback + reaplicar a migration.
+ * Equivalência: estado pós-baseline == rollback + reaplicar 0774 e a ativação
+ * storage (o mesmo par do rollout: migration + delegacao-storage-ativar.sql).
  */
 import { readFileSync } from "node:fs";
 
@@ -15,6 +16,12 @@ const MIGRACAO = readFileSync(
   "supabase/migrations/20261108210000_0774_delegacao_papel_dedicado.sql",
   "utf8",
 );
+const ATIVAR = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
+
+function aplicar0774EAtivar(): void {
+  sql(MIGRACAO);
+  sql(ATIVAR);
+}
 
 function catalogo(): unknown {
   return JSON.parse(lastLine(sql(SNAPSHOT))) as unknown;
@@ -67,11 +74,11 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
                  and c.relname = 'delegacao_contas_empresariais';`),
         ),
       ).toBe("0");
-      sql(MIGRACAO);
+      aplicar0774EAtivar();
       expect(catalogo()).toEqual(com0774);
       sql(ROLLBACK);
       expect(catalogo()).toEqual(pre0774);
-      sql(MIGRACAO);
+      aplicar0774EAtivar();
       expect(catalogo()).toEqual(com0774);
     } finally {
       // Membership de role é no cluster: devolver mesmo se a asserção falhar,

@@ -110,7 +110,10 @@ hook, repor ENABLED/URI do snapshot de chaves, **não ler/exibir**
 `supabase/rollback/0774_delegacao_papel_dedicado.sql` + snapshot
 `supabase/rollback/0774_snapshot_catalogo.sql`. Equivalência: catálogo **pré-0774**
 == primeiro rollback (exceto ratchet: `storage.objects` RLS permanece ON se a 0774
-ligou; desligar seria mudar o produto). Reaplicar 0774 == catálogo com-0774.
+ligou; desligar seria mudar o produto). Reaplicar 0774 **e**
+`delegacao-storage-ativar.sql` == catálogo com-0774 (a 0774 sozinha no molde
+sem GRANT OPTION deixa SELECT de storage inerte). Rollback revoga também USAGE
+e SELECT da ativação.
 Restore de imagem / `agent.sh` **não** é restore de banco. Restore indiscriminado
 de DB/Storage **não** é o ensaio.
 
