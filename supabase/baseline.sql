@@ -61216,7 +61216,16 @@ $$;
 
 grant usage on schema public to oauth_delegado;
 grant usage on schema auth to oauth_delegado;
-grant usage on schema storage to oauth_delegado;
+-- USAGE em storage: o GRANT top-level como postgres não grava (e2e:
+-- obj_sel true, stor_usage false). O DO no fim concede como dono do schema.
+do $$
+begin
+  execute 'grant usage on schema storage to oauth_delegado';
+exception
+  when insufficient_privilege then
+    raise notice 'delegacao 0774: GRANT USAGE storage como current_user recusado; o DO do dono tenta';
+end
+$$;
 grant oauth_delegado to authenticator;
 
 -- A 0563 acrescenta contacts.is_personal no apêndice DEPOIS da varredura.
@@ -61884,9 +61893,9 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
--- GRANT USAGE no schema storage + SELECT em objects. postgres do e2e
--- não é dono do schema (supabase_storage_admin): SELECT sozinho deixa
--- obj_sel true e o REST morre em 42501 "permission denied for schema storage".
+-- GRANT USAGE no schema storage + SELECT em objects. Sempre como dono
+-- do schema: GRANT como postgres não lança e não grava USAGE (e2e
+-- e1973dc9ae: obj_sel true, stor_usage false → REST 42501 schema storage).
 do $$
 declare
   rls_ligada boolean;
@@ -61905,45 +61914,42 @@ begin
       'delegacao 0774: GRANT SELECT em storage.objects recusado — RLS off'
       using errcode = '42501';
   end if;
-  begin
-    execute 'grant usage on schema storage to oauth_delegado';
-    execute 'grant select on storage.objects to oauth_delegado';
-    if to_regclass('storage.buckets') is not null then
-      execute 'grant select on storage.buckets to oauth_delegado';
+  select r.rolname into dono
+    from pg_namespace n
+    join pg_roles r on r.oid = n.nspowner
+   where n.nspname = 'storage';
+  if dono is not null and dono is distinct from eu then
+    if not pg_has_role(eu, dono, 'member') then
+      begin
+        execute format('grant %I to %I', dono, eu);
+      exception
+        when insufficient_privilege then
+          if exists (select 1 from pg_roles where rolname = 'supabase_admin')
+            and pg_has_role(eu, 'supabase_admin', 'member') then
+            execute 'set role supabase_admin';
+          else
+            raise exception
+              'delegacao 0774: sem GRANT USAGE/SELECT em storage para oauth_delegado (dono=%)',
+              coalesce(dono, '?')
+              using errcode = '42501';
+          end if;
+      end;
     end if;
-  exception
-    when insufficient_privilege then
-      select r.rolname into dono
-        from pg_namespace n
-        join pg_roles r on r.oid = n.nspowner
-       where n.nspname = 'storage';
-      if dono is not null and pg_has_role(eu, dono, 'member') then
-        execute format('set role %I', dono);
-      elsif exists (select 1 from pg_roles where rolname = 'supabase_admin')
-        and pg_has_role(eu, 'supabase_admin', 'member') then
-        execute 'set role supabase_admin';
-      else
-        select r.rolname into dono
-          from pg_class c
-          join pg_namespace n on n.oid = c.relnamespace
-          join pg_roles r on r.oid = c.relowner
-         where n.nspname = 'storage' and c.relname = 'objects';
-        if dono is not null and pg_has_role(eu, dono, 'member') then
-          execute format('set role %I', dono);
-        else
-          raise exception
-            'delegacao 0774: sem GRANT USAGE/SELECT em storage para oauth_delegado (dono=%)',
-            coalesce(dono, '?')
-            using errcode = '42501';
-        end if;
-      end if;
-      execute 'grant usage on schema storage to oauth_delegado';
-      execute 'grant select on storage.objects to oauth_delegado';
-      if to_regclass('storage.buckets') is not null then
-        execute 'grant select on storage.buckets to oauth_delegado';
-      end if;
-      execute format('set role %I', eu);
-  end;
+    if current_user is distinct from dono and current_user is distinct from 'supabase_admin' then
+      execute format('set role %I', dono);
+    end if;
+  end if;
+  execute 'grant usage on schema storage to oauth_delegado';
+  execute 'grant select on storage.objects to oauth_delegado';
+  if to_regclass('storage.buckets') is not null then
+    execute 'grant select on storage.buckets to oauth_delegado';
+  end if;
+  execute format('set role %I', eu);
+  if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
+    raise exception
+      'delegacao 0774: USAGE em schema storage não ficou em oauth_delegado'
+      using errcode = '42501';
+  end if;
 end
 $$;
 

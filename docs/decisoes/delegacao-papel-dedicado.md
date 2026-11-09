@@ -33,7 +33,7 @@ de `/api/mcp` (dsk_ + admin).
 | TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE |
 | Pre-request PostgREST | `GRANT EXECUTE` em `fn_pgrst_recusar_replay_do_gateway` — o hook `pgrst.db_pre_request` corre como o papel do JWT; sem isso a cadeia HTTP morre em 42501 antes da RLS. Não amplia dado corporativo |
 | Grant vivo | `fn_delegacao_grant_vivo` lê `request.jwt.claims` (GUC do PostgREST). `auth.uid()`/`auth.jwt()` dentro da função INVOKER com `search_path=public` é 42501 schema auth no SELECT de conversations |
-| Storage GRANT | USAGE no schema `storage` **e** SELECT em `storage.objects` para `oauth_delegado` depois do REVOKE amplo **não** engolem 42501. postgres do e2e não é dono (`supabase_storage_admin`): SET ROLE no dono do schema/supabase_admin; sem isso aborta. SELECT sozinho deixa `obj_sel` true e o REST morre em `permission denied for schema storage`. Baixar aceita visível no REST **ou** signed URL da Storage API |
+| Storage GRANT | USAGE no schema `storage` **e** SELECT em `storage.objects` para `oauth_delegado`. GRANT como postgres não grava USAGE (e2e: `obj_sel` true, `stor_usage` false → REST 42501 schema storage). O DO final SET ROLE no dono do schema e aborta se `has_schema_privilege` continuar false. Baixar aceita visível no REST **ou** signed URL da Storage API |
 
 0773 experimental (oauth_cookie_only em toda tabela `public`) **não** entra aqui.
 

@@ -517,6 +517,7 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
           prereq: boolean;
           obj_sel: boolean;
           stor_usage: boolean;
+          stor_dono: string | null;
         }>(
           `select
              pg_has_role('authenticator', 'oauth_delegado', 'member') as member,
@@ -539,12 +540,16 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
                'oauth_delegado',
                'storage',
                'usage'
-             ) as stor_usage`,
+             ) as stor_usage,
+             (select r.rolname
+                from pg_namespace n
+                join pg_roles r on r.oid = n.nspowner
+               where n.nspname = 'storage') as stor_dono`,
         );
         const row = rows[0];
         if (!row?.member || !row.sel || !row.prereq || !row.obj_sel || !row.stor_usage) {
           throw new Error(
-            `catalogo oauth_delegado: member=${String(row?.member)} sel=${String(row?.sel)} prereq=${String(row?.prereq)} obj_sel=${String(row?.obj_sel)} stor_usage=${String(row?.stor_usage)}`,
+            `catalogo oauth_delegado: member=${String(row?.member)} sel=${String(row?.sel)} prereq=${String(row?.prereq)} obj_sel=${String(row?.obj_sel)} stor_usage=${String(row?.stor_usage)} dono=${String(row?.stor_dono)}`,
           );
         }
         await pool.query("notify pgrst, 'reload schema'");
