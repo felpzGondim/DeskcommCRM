@@ -30,6 +30,18 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.18] — 2026-11-09
+
+### Adicionado
+
+- **Papel Postgres de leitura corporativa delegada (desligado no Auth)** A Inbox por cookie não muda. O banco passa a ter o papel `oauth_delegado` (sem herança da sessão), o hook SQL versionado por client autorizado, a conta empresarial com vínculo de sessão (números novos/substituídos herdam; pessoal/desconhecida recusam) e policies só nesse papel para conversa/mensagem/documento/arquivo corporativos (`is_personal` falso + grant vivo + vínculo). Pessoal, outra organização, client desconhecido, sessão sem vínculo e grant revogado continuam invisíveis nesse papel. O hook do Auth desta instalação **não é ligado** por esta atualização — `impacto: nada_mudou` significa **sem ação do operador na VPS agora**, não "nada foi criado". Ligar o hook, registrar o client, o grant da pessoa e o levantamento administrativo das sessões da conta são passos à parte.
+
+  Cadastro mínimo (sem número/PII): PUT/DELETE `/api/v1/channel-sessions/:id/conta-empresarial` (cookie + admin). POST de número novo não classifica — a sessão fica desconhecida e a leitura delegada recusa até o vínculo oficial. Substituição herda só se o cadastro gravar o mesmo `conta_id`. Apply do schema com `storage.objects` RLS off e sem privilégio de ENABLE aborta antes de GRANT SELECT ao papel. (#51)
+
+### Corrigido
+
+- **Link direto de mídia e documentos de contato pessoal passa a 404** Comportamento para quem usa: o URL direto de mídia (`GET /api/v1/messages/[id]/media`) e o de documentos da locação (`GET|PATCH /api/v1/conversations/[id]/locacao/documentos`) de um contato marcado pessoal **antes abria o arquivo**; agora responde 404 mudo, sem assinar storage e sem ir ao provedor. PATCH pessoal não grava. A Inbox já escondia a conversa; o furo era o link. Contato operacional (`is_personal === false`, mesma organização) segue. Nada a configurar na VPS — `impacto: nada_mudou` significa **sem ação do operador**, não "a tela não muda". A irmã `notes/[noteId]/media` não entra neste corte. (#50)
+
 ## [1.88.0-felpz.14] — 2026-10-29
 
 ### Alterado
