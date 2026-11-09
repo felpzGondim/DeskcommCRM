@@ -43,7 +43,7 @@ function do0774(schema: string): string {
   if (gate < 0) throw new Error("0774 DO ausente");
   const from = src.lastIndexOf("do $$", gate);
   const to = src.indexOf("$$;", gate);
-  let block = src.slice(from, to + 3);
+  const block = src.slice(from, to + 3);
   return block
     .replaceAll("storage.objects", `${schema}.objects`)
     .replaceAll("storage.buckets", `${schema}.buckets`)
