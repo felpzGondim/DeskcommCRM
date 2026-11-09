@@ -697,9 +697,10 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
--- GRANT USAGE no schema storage + SELECT em objects. Sempre como dono
--- do schema: GRANT como postgres não lança e não grava USAGE (e2e
--- e1973dc9ae: obj_sel true, stor_usage false → REST 42501 schema storage).
+-- GRANT USAGE no schema storage + SELECT em objects. Sempre SET ROLE no
+-- dono: aplicador com USAGE sem GRANT OPTION recebe WARNING "no privileges
+-- were granted" — não 42501 — e o GRANT não grava (e2e e1973dc9ae:
+-- obj_sel true, stor_usage false → REST 42501 schema storage).
 do $$
 declare
   rls_ligada boolean;
