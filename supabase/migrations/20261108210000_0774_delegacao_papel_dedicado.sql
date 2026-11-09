@@ -169,14 +169,21 @@ create policy delegacao_contas_empresariais_select
     and public.fn_delegacao_grant_vivo(organization_id)
   );
 
-drop table if exists public.delegacao_sessoes_empresariais;
-create table public.delegacao_sessoes_empresariais (
+-- Reaplicar o baseline NÃO pode DROP desta tabela: o update.sh da VPS
+-- reaplica o apêndice inteiro. DROP apaga os vínculos de sessão gravados.
+create table if not exists public.delegacao_sessoes_empresariais (
   channel_session_id uuid primary key references public.channel_sessions(id) on delete cascade,
   organization_id uuid not null references public.organizations(id) on delete cascade,
   conta_empresarial_id uuid not null references public.delegacao_contas_empresariais(id) on delete cascade,
   created_at timestamptz not null default now(),
   revoked_at timestamptz
 );
+
+alter table public.delegacao_sessoes_empresariais
+  add column if not exists organization_id uuid,
+  add column if not exists conta_empresarial_id uuid,
+  add column if not exists created_at timestamptz,
+  add column if not exists revoked_at timestamptz;
 
 create index if not exists delegacao_sessoes_empresariais_org_idx
   on public.delegacao_sessoes_empresariais (organization_id)
@@ -697,12 +704,16 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
--- GRANT USAGE no schema storage + SELECT em objects.
+-- GRANT USAGE no schema storage + SELECT em objects/buckets.
 -- Apply como postgres no e2e local (sem GRANT OPTION) é inerte: WARNING,
 -- NOTICE não é ativação. CRM gerenciado: o mesmo postgres TEM GRANT OPTION
 -- e o GRANT deste DO grava. A promoção que aborta se o privilégio não
 -- ficar é supabase/delegacao-storage-ativar.sql (aplicador = conexão
 -- administrativa existente, sem SET ROLE e sem nome de dono obrigatório).
+-- Cada privilégio é conferido sozinho: USAGE presente + SELECT revogado
+-- (o update.sh da VPS reaplica este bloco e o REVOKE amplo) tem de
+-- reconceder SELECT. Falha de GRANT OPTION vira NOTICE, não aborta o
+-- baseline — o ativar.sql é quem recusa.
 do $$
 declare
   rls_ligada boolean;
@@ -710,6 +721,7 @@ declare
   eu name := current_user;
   candidatos name[] := array[]::name[];
   visto name[] := array[]::name[];
+  leitura_ok boolean;
 begin
   if to_regclass('storage.objects') is null then
     return;
@@ -768,9 +780,14 @@ begin
     end if;
     begin
       execute format('set role %I', cand);
-      execute 'grant usage on schema storage to oauth_delegado';
-      execute 'grant select on storage.objects to oauth_delegado';
-      if to_regclass('storage.buckets') is not null then
+      if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
+        execute 'grant usage on schema storage to oauth_delegado';
+      end if;
+      if not has_table_privilege('oauth_delegado', 'storage.objects', 'select') then
+        execute 'grant select on storage.objects to oauth_delegado';
+      end if;
+      if to_regclass('storage.buckets') is not null
+         and not has_table_privilege('oauth_delegado', 'storage.buckets', 'select') then
         execute 'grant select on storage.buckets to oauth_delegado';
       end if;
     exception
@@ -783,18 +800,51 @@ begin
       when insufficient_privilege then
         reset role;
     end;
-    exit when has_schema_privilege('oauth_delegado', 'storage', 'usage');
+    select
+      has_schema_privilege('oauth_delegado', 'storage', 'usage')
+      and has_table_privilege('oauth_delegado', 'storage.objects', 'select')
+      and (
+        to_regclass('storage.buckets') is null
+        or has_table_privilege('oauth_delegado', 'storage.buckets', 'select')
+      )
+      into leitura_ok;
+    exit when leitura_ok;
   end loop;
 
   if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
-    execute 'grant usage on schema storage to oauth_delegado';
-    execute 'grant select on storage.objects to oauth_delegado';
-    if to_regclass('storage.buckets') is not null then
+    begin
+      execute 'grant usage on schema storage to oauth_delegado';
+    exception
+      when insufficient_privilege then
+        raise notice 'delegacao 0774: GRANT USAGE current_user recusado';
+    end;
+  end if;
+  if not has_table_privilege('oauth_delegado', 'storage.objects', 'select') then
+    begin
+      execute 'grant select on storage.objects to oauth_delegado';
+    exception
+      when insufficient_privilege then
+        raise notice 'delegacao 0774: GRANT SELECT objects current_user recusado';
+    end;
+  end if;
+  if to_regclass('storage.buckets') is not null
+     and not has_table_privilege('oauth_delegado', 'storage.buckets', 'select') then
+    begin
       execute 'grant select on storage.buckets to oauth_delegado';
-    end if;
+    exception
+      when insufficient_privilege then
+        raise notice 'delegacao 0774: GRANT SELECT buckets current_user recusado';
+    end;
   end if;
   if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
     raise notice 'delegacao 0774: USAGE em schema storage não ficou em oauth_delegado';
+  end if;
+  if not has_table_privilege('oauth_delegado', 'storage.objects', 'select') then
+    raise notice 'delegacao 0774: SELECT em storage.objects não ficou em oauth_delegado';
+  end if;
+  if to_regclass('storage.buckets') is not null
+     and not has_table_privilege('oauth_delegado', 'storage.buckets', 'select') then
+    raise notice 'delegacao 0774: SELECT em storage.buckets não ficou em oauth_delegado';
   end if;
 end
 $$;
