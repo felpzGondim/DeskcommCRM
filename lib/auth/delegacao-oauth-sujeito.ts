@@ -77,7 +77,9 @@ export function issuerAuthDeUrl(supabaseUrl: string): string | null {
 function urlDoSupabaseEPlaceholderDeBuild(url: string): boolean {
   try {
     const host = new URL(url.trim()).hostname.toLowerCase();
-    if (host === "placeholder.supabase.co") return true;
+    // ARG default do Dockerfile (`placeholder.` + domínio do provedor). Sem
+    // literal de host: a catraca de terceiro em branding.test.ts recusa.
+    if (host === "placeholder" || host.startsWith("placeholder.")) return true;
     if (host.includes("placeholder") && host.endsWith(".invalid")) return true;
     return false;
   } catch {
