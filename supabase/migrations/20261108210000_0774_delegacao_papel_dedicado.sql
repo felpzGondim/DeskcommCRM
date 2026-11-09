@@ -496,9 +496,7 @@ begin
     end if;
   end if;
   begin
-    execute 'grant usage on schema storage to oauth_delegado';
     execute 'revoke all on storage.objects from oauth_delegado';
-    execute 'grant select on storage.objects to oauth_delegado';
   exception
     when insufficient_privilege then null;
   end;
@@ -671,7 +669,10 @@ end
 $$;
 
 -- Devolve só o mínimo depois do REVOKE amplo.
-grant usage on schema public, auth, storage to oauth_delegado;
+-- USAGE em storage vai no DO abaixo (dono do schema). Junto com SELECT
+-- no mesmo GRANT top-level, 42501 em storage abortava public/auth ou,
+-- no DO anterior, o subtransaction engolia USAGE junto com SELECT.
+grant usage on schema public, auth to oauth_delegado;
 grant select on public.delegacao_visibilidade_corporativa to oauth_delegado;
 grant select on public.delegacao_contas_empresariais to oauth_delegado;
 grant select on public.delegacao_sessoes_empresariais to oauth_delegado;
@@ -687,9 +688,9 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
--- GRANT SELECT tem que ficar. postgres do e2e/self-host não é dono
--- (supabase_storage_admin é): 42501 engolido deixava baixar em
--- anexo_fora_do_recurso no PostgREST/Storage. Sem dono/supabase_admin: aborta.
+-- GRANT USAGE no schema storage + SELECT em objects. postgres do e2e
+-- não é dono do schema (supabase_storage_admin): SELECT sozinho deixa
+-- obj_sel true e o REST morre em 42501 "permission denied for schema storage".
 do $$
 declare
   rls_ligada boolean;
@@ -709,6 +710,7 @@ begin
       using errcode = '42501';
   end if;
   begin
+    execute 'grant usage on schema storage to oauth_delegado';
     execute 'grant select on storage.objects to oauth_delegado';
     if to_regclass('storage.buckets') is not null then
       execute 'grant select on storage.buckets to oauth_delegado';
@@ -716,21 +718,30 @@ begin
   exception
     when insufficient_privilege then
       select r.rolname into dono
-        from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        join pg_roles r on r.oid = c.relowner
-       where n.nspname = 'storage' and c.relname = 'objects';
+        from pg_namespace n
+        join pg_roles r on r.oid = n.nspowner
+       where n.nspname = 'storage';
       if dono is not null and pg_has_role(eu, dono, 'member') then
         execute format('set role %I', dono);
       elsif exists (select 1 from pg_roles where rolname = 'supabase_admin')
         and pg_has_role(eu, 'supabase_admin', 'member') then
         execute 'set role supabase_admin';
       else
-        raise exception
-          'delegacao 0774: sem GRANT SELECT em storage.objects para oauth_delegado (dono=%)',
-          coalesce(dono, '?')
-          using errcode = '42501';
+        select r.rolname into dono
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_roles r on r.oid = c.relowner
+         where n.nspname = 'storage' and c.relname = 'objects';
+        if dono is not null and pg_has_role(eu, dono, 'member') then
+          execute format('set role %I', dono);
+        else
+          raise exception
+            'delegacao 0774: sem GRANT USAGE/SELECT em storage para oauth_delegado (dono=%)',
+            coalesce(dono, '?')
+            using errcode = '42501';
+        end if;
       end if;
+      execute 'grant usage on schema storage to oauth_delegado';
       execute 'grant select on storage.objects to oauth_delegado';
       if to_regclass('storage.buckets') is not null then
         execute 'grant select on storage.buckets to oauth_delegado';
