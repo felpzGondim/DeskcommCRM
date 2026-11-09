@@ -30,6 +30,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.20] — 2026-11-09
+
+### Corrigido
+
+- **Atualizar a VPS deixa de apagar os vínculos da delegação e o acesso aos anexos.** O `update.sh` reaplica o schema inteiro. A passada anterior derrubava a tabela de vínculo sessão→conta empresarial (os números da conta sumiam) e revogava a leitura de arquivos no storage sem devolver o SELECT quando o USAGE no schema já estava lá. A reaplicação agora cria as tabelas só se faltarem, não apaga linhas, e reconcede cada privilégio de leitura que estiver faltando. Quem já restaurou os vínculos à mão não precisa de SQL extra: o próximo atualizar é o conserto. Quem ainda não restaurou linhas apagadas não as recupera daqui — o backup/restauração manual continua sendo o caminho. Sem variável nova.
+
 ## [1.88.0-felpz.19] — 2026-11-09
 
 ### Adicionado

@@ -126,6 +126,43 @@ describe("0774 não é a 0773 experimental", () => {
     expect(aTrecho).not.toMatch(/then null/);
   });
 
+  it("0774/apêndice/update não DROP/DELETE/TRUNCATE tabelas delegacao_*", () => {
+    const apendice = BASELINE.slice(
+      BASELINE.lastIndexOf("delegação papel dedicado"),
+      BASELINE.search(/^-- ---- VARREDURA anon:/m),
+    );
+    expect(sql).toMatch(/create table if not exists public\.delegacao_sessoes_empresariais/);
+    expect(sql).toMatch(/create or replace function public\.fn_delegacao_access_token_hook/);
+    expect(sql).not.toMatch(/drop\s+table\s+(if\s+exists\s+)?(public\.)?delegacao_/i);
+    expect(sql).not.toMatch(/delete\s+from\s+(public\.)?delegacao_/i);
+    expect(sql).not.toMatch(/truncate\s+(table\s+)?(public\.)?delegacao_/i);
+    expect(sql).not.toMatch(/drop\s+function[\s\S]{0,120}fn_delegacao_access_token_hook/i);
+    expect(apendice).toContain(sql);
+    expect(apendice).not.toMatch(/drop\s+table\s+(if\s+exists\s+)?(public\.)?delegacao_/i);
+    expect(apendice).not.toMatch(/delete\s+from\s+(public\.)?delegacao_/i);
+    expect(apendice).not.toMatch(/truncate\s+(table\s+)?(public\.)?delegacao_/i);
+    const corpo = BASELINE.slice(0, BASELINE.lastIndexOf("delegação papel dedicado"));
+    expect(corpo).not.toMatch(/drop\s+table[\s\S]{0,80}delegacao_/i);
+    const update = readFileSync("hostgator-setup-kit/update.sh", "utf8");
+    expect(update).toMatch(/reaplicar_baseline "\$PROJECT_DIR\/supabase\/baseline\.sql"/);
+    expect(update).not.toMatch(/delegacao_/);
+    const rollback = readFileSync("supabase/rollback/0774_delegacao_papel_dedicado.sql", "utf8");
+    expect(rollback).toMatch(/drop table if exists public\.delegacao_sessoes_empresariais/);
+  });
+
+  it("GRANT storage reconcede cada privilégio, não só USAGE", () => {
+    const ancora = sql.lastIndexOf("GRANT USAGE no schema storage");
+    const trecho = sql.slice(ancora, sql.indexOf("notify pgrst, 'reload schema'", ancora));
+    expect(trecho).toMatch(/has_table_privilege\('oauth_delegado', 'storage\.objects', 'select'\)/);
+    expect(trecho).toMatch(/has_table_privilege\('oauth_delegado', 'storage\.buckets', 'select'\)/);
+    expect(trecho).not.toMatch(
+      /exit when has_schema_privilege\('oauth_delegado', 'storage', 'usage'\);/,
+    );
+    expect(trecho).toMatch(/SELECT em storage\.objects não ficou em oauth_delegado/);
+    const ativar = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
+    expect(ativar).toMatch(/has_table_privilege\('oauth_delegado', 'storage\.buckets', 'select'\)/);
+  });
+
   it("ativação storage aborta se USAGE/SELECT não ficarem; sem NOTICE", () => {
     const ativar = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
     expect(ativar).toMatch(/has_schema_privilege\('oauth_delegado', 'storage', 'usage'\)/);

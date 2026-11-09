@@ -7,9 +7,10 @@
 --   • stack e2e local (supabase/postgres:15.8.1.085): postgres NÃO tem
 --     GRANT OPTION; o passo do e2e corre este arquivo como supabase_admin
 --     (papel que o stack já tem).
--- Tenta o GRANT mínimo e aborta se has_schema_privilege /
--- has_table_privilege não ficarem. oauth_delegado nasce na 0774; este
--- arquivo não cria o papel.
+-- Tenta o GRANT mínimo (cada privilégio sozinho) e aborta se
+-- has_schema_privilege / has_table_privilege não ficarem. USAGE presente
+-- com SELECT ausente também recusa — não basta conferir só o schema.
+-- oauth_delegado nasce na 0774; este arquivo não cria o papel.
 do $$
 begin
   if to_regclass('storage.objects') is null then
@@ -22,26 +23,37 @@ begin
       'delegacao: oauth_delegado ausente — aplique o schema 0774 antes'
       using errcode = '42501';
   end if;
-  begin
-    execute 'grant usage on schema storage to oauth_delegado';
-  exception
-    when insufficient_privilege then
-      null;
-  end;
-  begin
-    execute 'grant select on storage.objects to oauth_delegado';
-  exception
-    when insufficient_privilege then
-      null;
-  end;
-  begin
-    execute 'grant select on storage.buckets to oauth_delegado';
-  exception
-    when insufficient_privilege then
-      null;
-  end;
+  if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
+    begin
+      execute 'grant usage on schema storage to oauth_delegado';
+    exception
+      when insufficient_privilege then
+        null;
+    end;
+  end if;
+  if not has_table_privilege('oauth_delegado', 'storage.objects', 'select') then
+    begin
+      execute 'grant select on storage.objects to oauth_delegado';
+    exception
+      when insufficient_privilege then
+        null;
+    end;
+  end if;
+  if to_regclass('storage.buckets') is not null
+     and not has_table_privilege('oauth_delegado', 'storage.buckets', 'select') then
+    begin
+      execute 'grant select on storage.buckets to oauth_delegado';
+    exception
+      when insufficient_privilege then
+        null;
+    end;
+  end if;
   if not has_schema_privilege('oauth_delegado', 'storage', 'usage')
-     or not has_table_privilege('oauth_delegado', 'storage.objects', 'select') then
+     or not has_table_privilege('oauth_delegado', 'storage.objects', 'select')
+     or (
+       to_regclass('storage.buckets') is not null
+       and not has_table_privilege('oauth_delegado', 'storage.buckets', 'select')
+     ) then
     raise exception
       'delegacao: ativação storage recusada (aplicador=%; USAGE/SELECT não ficaram em oauth_delegado)'
       , current_user
