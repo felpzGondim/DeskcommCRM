@@ -6,7 +6,8 @@
  * de supabase_admin nem de supabase_storage_admin.
  *
  * Apply 0774 como postgres: USAGE/SELECT continuam false (inerte).
- * Ativação: GRANT como o dono do schema — USAGE+SELECT, sem escrita.
+ * Ativação neste stack: o mesmo script, como dono/superuser. No CRM
+ * gerenciado o postgres TEM GRANT OPTION — ver matriz-prod-grantoption.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,6 +23,14 @@ const SCHEMA = `ci_storage_${SUFIXO}`;
 
 function flag(q: string): boolean {
   return lastLine(sql(q)) === "t";
+}
+
+function ativarSql(schema: string): string {
+  return readFileSync(resolve("supabase/delegacao-storage-ativar.sql"), "utf8")
+    .replaceAll("storage.objects", `${schema}.objects`)
+    .replaceAll("storage.buckets", `${schema}.buckets`)
+    .replaceAll("schema storage", `schema ${schema}`)
+    .replaceAll("'storage'", `'${schema}'`);
 }
 
 function do0774(schema: string): string {
@@ -131,17 +140,7 @@ describe("matriz CI supabase/postgres:15.8.1.085 — apply inerte vs ativação 
     try {
       sql(`
         set role ${PG};
-        grant usage on schema ${SCHEMA} to oauth_delegado;
-        do $a$
-        begin
-          if not has_schema_privilege('oauth_delegado', '${SCHEMA}', 'usage') then
-            raise exception
-              'delegacao: ativação storage recusada (aplicador=%, precisa supabase_admin)'
-              , current_user
-              using errcode = '42501';
-          end if;
-        end
-        $a$;
+        ${ativarSql(SCHEMA)}
       `);
     } catch (err) {
       motivo = motivoDoErro(err);
@@ -149,14 +148,13 @@ describe("matriz CI supabase/postgres:15.8.1.085 — apply inerte vs ativação 
     }
     sql(`reset role;`);
     expect(recusou, motivo.slice(0, 400)).toBe(true);
+    expect(motivo).not.toMatch(/precisa supabase_admin/);
   });
 
-  it("ativação como dono do schema: USAGE+SELECT; sem escrita", () => {
+  it("ativar.sql como dono do schema: USAGE+SELECT; sem escrita", () => {
     sql(`
       set role ${ADMIN};
-      grant usage on schema ${SCHEMA} to oauth_delegado;
-      grant select on ${SCHEMA}.objects to oauth_delegado;
-      grant select on ${SCHEMA}.buckets to oauth_delegado;
+      ${ativarSql(SCHEMA)}
       reset role;
     `);
     expect(flag(`select has_schema_privilege('oauth_delegado', '${SCHEMA}', 'usage');`)).toBe(

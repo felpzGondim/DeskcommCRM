@@ -1882,10 +1882,11 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
             -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
 
-      # Baseline como postgres (NOSUPERUSER, sem membership do dono do schema
-      # storage) deixa GRANT USAGE inerte — WARNING, não 42501. Ativação é o
-      # dono: supabase_admin. Sem este passo, o catálogo do e2e recusa a cadeia
-      # Next (stor_usage=false) e o NOTICE do 0774 mascara "pronto".
+      # Neste stack local postgres NÃO tem GRANT OPTION em storage (diferente
+      # do CRM gerenciado, onde o mesmo postgres concede via grant option).
+      # O script de ativação não exige o dono: aqui o aplicador que grava é
+      # supabase_admin, papel que o stack já tem — não é credencial nova de
+      # produção. Sem este passo, stor_usage=false e o NOTICE do 0774 mascara.
       - name: Ativar leitura storage do oauth_delegado (supabase_admin)
         run: |
           psql "postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres" \

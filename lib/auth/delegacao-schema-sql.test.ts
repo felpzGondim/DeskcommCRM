@@ -130,8 +130,10 @@ describe("0774 não é a 0773 experimental", () => {
     const ativar = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
     expect(ativar).toMatch(/has_schema_privilege\('oauth_delegado', 'storage', 'usage'\)/);
     expect(ativar).toMatch(/has_table_privilege\('oauth_delegado', 'storage\.objects', 'select'\)/);
-    expect(ativar).toMatch(/precisa supabase_admin/);
+    expect(ativar).toMatch(/USAGE\/SELECT não ficaram em oauth_delegado/);
     expect(ativar).toMatch(/concedeu escrita — recusar/);
+    expect(ativar).not.toMatch(/precisa supabase_admin/);
+    expect(ativar).not.toMatch(/^\s*set role/im);
     expect(ativar).not.toMatch(/raise notice/i);
     const e2e = readFileSync(".github/workflows/e2e.yml", "utf8");
     expect(e2e).toMatch(/Ativar leitura storage do oauth_delegado \(supabase_admin\)/);

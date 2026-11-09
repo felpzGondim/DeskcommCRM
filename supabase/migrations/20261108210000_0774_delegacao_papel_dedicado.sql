@@ -20,8 +20,8 @@ $$;
 
 grant usage on schema public to oauth_delegado;
 grant usage on schema auth to oauth_delegado;
--- USAGE em storage: o GRANT top-level como postgres não grava (e2e:
--- obj_sel true, stor_usage false). O DO no fim concede como dono do schema.
+-- USAGE em storage: o GRANT top-level como postgres no e2e local não grava
+-- (sem GRANT OPTION). O DO no fim tenta de novo como current_user.
 do $$
 begin
   execute 'grant usage on schema storage to oauth_delegado';
@@ -678,7 +678,7 @@ end
 $$;
 
 -- Devolve só o mínimo depois do REVOKE amplo.
--- USAGE em storage vai no DO abaixo (dono do schema). Junto com SELECT
+-- USAGE em storage vai no DO abaixo (current_user). Junto com SELECT
 -- no mesmo GRANT top-level, 42501 em storage abortava public/auth ou,
 -- no DO anterior, o subtransaction engolia USAGE junto com SELECT.
 grant usage on schema public, auth to oauth_delegado;
@@ -698,11 +698,11 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
 -- GRANT USAGE no schema storage + SELECT em objects.
--- Apply do baseline como postgres (stack e2e: NOSUPERUSER, sem membership do
--- dono, USAGE sem GRANT OPTION) é inerte: WARNING, não 42501. NOTICE não é
--- ativação. Papel autorizado: supabase_admin (dono do schema). A promoção
--- está em supabase/delegacao-storage-ativar.sql e exige
--- has_schema_privilege + has_table_privilege verdadeiros.
+-- Apply como postgres no e2e local (sem GRANT OPTION) é inerte: WARNING,
+-- NOTICE não é ativação. CRM gerenciado: o mesmo postgres TEM GRANT OPTION
+-- e o GRANT deste DO grava. A promoção que aborta se o privilégio não
+-- ficar é supabase/delegacao-storage-ativar.sql (aplicador = conexão
+-- administrativa existente, sem SET ROLE e sem nome de dono obrigatório).
 do $$
 declare
   rls_ligada boolean;
