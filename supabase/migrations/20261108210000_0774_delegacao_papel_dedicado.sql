@@ -697,15 +697,21 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
--- GRANT USAGE no schema storage + SELECT em objects. Sempre SET ROLE no
--- dono: aplicador com USAGE sem GRANT OPTION recebe WARNING "no privileges
--- were granted" — não 42501 — e o GRANT não grava (e2e e1973dc9ae:
--- obj_sel true, stor_usage false → REST 42501 schema storage).
+-- GRANT USAGE no schema storage + SELECT em objects.
+-- Aplicador com USAGE sem GRANT OPTION recebe WARNING "no privileges were
+-- granted" — não 42501 — e o GRANT não grava (e2e e1973dc9ae: obj_sel true,
+-- stor_usage false). O e2e supabase tem dono do schema = supabase_admin e
+-- postgres NOSUPERUSER sem membership: GRANT do dono a si abortava o
+-- baseline inteiro (3d4f2ca89d, 7 partes). Candidatos: dono do schema,
+-- dono da tabela, supabase_admin/storage_admin, papéis com USAGE grantable.
+-- Sem membership não aborta o apply (NOTICE); baixar cai no signed URL.
 do $$
 declare
   rls_ligada boolean;
-  dono name;
+  cand name;
   eu name := current_user;
+  candidatos name[] := array[]::name[];
+  visto name[] := array[]::name[];
 begin
   if to_regclass('storage.objects') is null then
     return;
@@ -719,41 +725,78 @@ begin
       'delegacao 0774: GRANT SELECT em storage.objects recusado — RLS off'
       using errcode = '42501';
   end if;
-  select r.rolname into dono
+
+  select r.rolname into cand
     from pg_namespace n
     join pg_roles r on r.oid = n.nspowner
    where n.nspname = 'storage';
-  if dono is not null and dono is distinct from eu then
-    if not pg_has_role(eu, dono, 'member') then
-      begin
-        execute format('grant %I to %I', dono, eu);
-      exception
-        when insufficient_privilege then
-          if exists (select 1 from pg_roles where rolname = 'supabase_admin')
-            and pg_has_role(eu, 'supabase_admin', 'member') then
-            execute 'set role supabase_admin';
-          else
-            raise exception
-              'delegacao 0774: sem GRANT USAGE/SELECT em storage para oauth_delegado (dono=%)',
-              coalesce(dono, '?')
-              using errcode = '42501';
-          end if;
-      end;
-    end if;
-    if current_user is distinct from dono and current_user is distinct from 'supabase_admin' then
-      execute format('set role %I', dono);
-    end if;
+  if cand is not null then
+    candidatos := array_append(candidatos, cand);
   end if;
-  execute 'grant usage on schema storage to oauth_delegado';
-  execute 'grant select on storage.objects to oauth_delegado';
-  if to_regclass('storage.buckets') is not null then
-    execute 'grant select on storage.buckets to oauth_delegado';
+  select r.rolname into cand
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_roles r on r.oid = c.relowner
+   where n.nspname = 'storage' and c.relname = 'objects';
+  if cand is not null then
+    candidatos := array_append(candidatos, cand);
   end if;
-  execute format('set role %I', eu);
+  candidatos := candidatos || array['supabase_admin', 'supabase_storage_admin']::name[];
+  for cand in
+    select distinct r.rolname
+      from pg_namespace n
+      cross join lateral aclexplode(n.nspacl) a
+      join pg_roles r on r.oid = a.grantee
+     where n.nspname = 'storage'
+       and a.privilege_type = 'USAGE'
+       and a.is_grantable
+  loop
+    candidatos := array_append(candidatos, cand);
+  end loop;
+
+  foreach cand in array candidatos loop
+    if cand is null or cand = any (visto) then
+      continue;
+    end if;
+    visto := array_append(visto, cand);
+    if cand is not distinct from eu then
+      continue;
+    end if;
+    if not exists (select 1 from pg_roles where rolname = cand) then
+      continue;
+    end if;
+    if not pg_has_role(eu, cand, 'member') then
+      continue;
+    end if;
+    begin
+      execute format('set role %I', cand);
+      execute 'grant usage on schema storage to oauth_delegado';
+      execute 'grant select on storage.objects to oauth_delegado';
+      if to_regclass('storage.buckets') is not null then
+        execute 'grant select on storage.buckets to oauth_delegado';
+      end if;
+    exception
+      when insufficient_privilege then
+        raise notice 'delegacao 0774: SET ROLE/GRANT candidato % recusado', cand;
+    end;
+    begin
+      execute format('set role %I', eu);
+    exception
+      when insufficient_privilege then
+        reset role;
+    end;
+    exit when has_schema_privilege('oauth_delegado', 'storage', 'usage');
+  end loop;
+
   if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
-    raise exception
-      'delegacao 0774: USAGE em schema storage não ficou em oauth_delegado'
-      using errcode = '42501';
+    execute 'grant usage on schema storage to oauth_delegado';
+    execute 'grant select on storage.objects to oauth_delegado';
+    if to_regclass('storage.buckets') is not null then
+      execute 'grant select on storage.buckets to oauth_delegado';
+    end if;
+  end if;
+  if not has_schema_privilege('oauth_delegado', 'storage', 'usage') then
+    raise notice 'delegacao 0774: USAGE em schema storage não ficou em oauth_delegado';
   end if;
 end
 $$;

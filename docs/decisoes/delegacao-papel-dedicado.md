@@ -33,7 +33,7 @@ de `/api/mcp` (dsk_ + admin).
 | TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE |
 | Pre-request PostgREST | `GRANT EXECUTE` em `fn_pgrst_recusar_replay_do_gateway` — o hook `pgrst.db_pre_request` corre como o papel do JWT; sem isso a cadeia HTTP morre em 42501 antes da RLS. Não amplia dado corporativo |
 | Grant vivo | `fn_delegacao_grant_vivo` lê `request.jwt.claims` (GUC do PostgREST). `auth.uid()`/`auth.jwt()` dentro da função INVOKER com `search_path=public` é 42501 schema auth no SELECT de conversations |
-| Storage GRANT | USAGE no schema `storage` **e** SELECT em `storage.objects` para `oauth_delegado`. GRANT como aplicador com USAGE sem GRANT OPTION não lança 42501: Postgres emite WARNING `no privileges were granted` e não grava (e2e: `obj_sel` true, `stor_usage` false). O DO final SET ROLE no dono e aborta se `has_schema_privilege` continuar false. Baixar aceita visível no REST **ou** signed URL da Storage API |
+| Storage GRANT | USAGE no schema `storage` **e** SELECT em `storage.objects` para `oauth_delegado`. GRANT como aplicador com USAGE sem GRANT OPTION não lança 42501: WARNING `no privileges were granted`. E2e supabase: dono do schema = `supabase_admin`, postgres NOSUPERUSER sem membership — GRANT do dono a si abortava o baseline (7 partes). O DO tenta dono/tabela/`supabase_storage_admin`/papéis com USAGE grantable; sem membership não aborta (NOTICE). Baixar aceita visível no REST **ou** signed URL |
 
 0773 experimental (oauth_cookie_only em toda tabela `public`) **não** entra aqui.
 

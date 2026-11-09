@@ -114,7 +114,9 @@ describe("0774 não é a 0773 experimental", () => {
     const trecho = sql.slice(ancora, sql.indexOf("notify pgrst, 'reload schema'", ancora));
     expect(trecho).toMatch(/USAGE em schema storage não ficou em oauth_delegado/);
     expect(trecho).toMatch(/grant usage on schema storage to oauth_delegado/);
+    expect(trecho).toMatch(/aclexplode\(n\.nspacl\)/);
     expect(trecho).not.toMatch(/then null/);
+    expect(trecho).not.toMatch(/grant %I to %I/);
     const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
     const aAncora = apendice.lastIndexOf("GRANT USAGE no schema storage");
     const aTrecho = apendice.slice(aAncora, apendice.indexOf("notify pgrst, 'reload schema'", aAncora));
