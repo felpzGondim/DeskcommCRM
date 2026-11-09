@@ -698,13 +698,11 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
 -- GRANT USAGE no schema storage + SELECT em objects.
--- Aplicador com USAGE sem GRANT OPTION recebe WARNING "no privileges were
--- granted" — não 42501 — e o GRANT não grava (e2e e1973dc9ae: obj_sel true,
--- stor_usage false). O e2e supabase tem dono do schema = supabase_admin e
--- postgres NOSUPERUSER sem membership: GRANT do dono a si abortava o
--- baseline inteiro (3d4f2ca89d, 7 partes). Candidatos: dono do schema,
--- dono da tabela, supabase_admin/storage_admin, papéis com USAGE grantable.
--- Sem membership não aborta o apply (NOTICE); baixar cai no signed URL.
+-- Apply do baseline como postgres (stack e2e: NOSUPERUSER, sem membership do
+-- dono, USAGE sem GRANT OPTION) é inerte: WARNING, não 42501. NOTICE não é
+-- ativação. Papel autorizado: supabase_admin (dono do schema). A promoção
+-- está em supabase/delegacao-storage-ativar.sql e exige
+-- has_schema_privilege + has_table_privilege verdadeiros.
 do $$
 declare
   rls_ligada boolean;

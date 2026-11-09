@@ -1882,6 +1882,18 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
             -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
 
+      # Baseline como postgres (NOSUPERUSER, sem membership do dono do schema
+      # storage) deixa GRANT USAGE inerte — WARNING, não 42501. Ativação é o
+      # dono: supabase_admin. Sem este passo, o catálogo do e2e recusa a cadeia
+      # Next (stor_usage=false) e o NOTICE do 0774 mascara "pronto".
+      - name: Ativar leitura storage do oauth_delegado (supabase_admin)
+        run: |
+          psql "postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -q -f supabase/delegacao-storage-ativar.sql
+          test "$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -Atqc \
+            "select has_schema_privilege('oauth_delegado','storage','usage')::int::text
+                  || has_table_privilege('oauth_delegado','storage.objects','select')::int::text")" = "11"
+
       # A chave de cifra dos segredos, como o install.sh semeia em TODA instalação
       # (`ensure_encryption_key`, em hostgator-setup-kit/_common.sh). Sem ela,
       # `fn_encrypt_oauth` levanta "NUVEMSHOP_OAUTH_ENCRYPTION_KEY ausente" e

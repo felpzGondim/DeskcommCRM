@@ -115,13 +115,28 @@ describe("0774 não é a 0773 experimental", () => {
     expect(trecho).toMatch(/USAGE em schema storage não ficou em oauth_delegado/);
     expect(trecho).toMatch(/grant usage on schema storage to oauth_delegado/);
     expect(trecho).toMatch(/aclexplode\(n\.nspacl\)/);
+    expect(trecho).toMatch(/delegacao-storage-ativar/);
     expect(trecho).not.toMatch(/then null/);
     expect(trecho).not.toMatch(/grant %I to %I/);
     const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
     const aAncora = apendice.lastIndexOf("GRANT USAGE no schema storage");
     const aTrecho = apendice.slice(aAncora, apendice.indexOf("notify pgrst, 'reload schema'", aAncora));
     expect(aTrecho).toMatch(/USAGE em schema storage não ficou em oauth_delegado/);
+    expect(aTrecho).toMatch(/delegacao-storage-ativar/);
     expect(aTrecho).not.toMatch(/then null/);
+  });
+
+  it("ativação storage aborta se USAGE/SELECT não ficarem; sem NOTICE", () => {
+    const ativar = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
+    expect(ativar).toMatch(/has_schema_privilege\('oauth_delegado', 'storage', 'usage'\)/);
+    expect(ativar).toMatch(/has_table_privilege\('oauth_delegado', 'storage\.objects', 'select'\)/);
+    expect(ativar).toMatch(/precisa supabase_admin/);
+    expect(ativar).toMatch(/concedeu escrita — recusar/);
+    expect(ativar).not.toMatch(/raise notice/i);
+    const e2e = readFileSync(".github/workflows/e2e.yml", "utf8");
+    expect(e2e).toMatch(/Ativar leitura storage do oauth_delegado \(supabase_admin\)/);
+    expect(e2e).toMatch(/postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:54322\/postgres/);
+    expect(e2e).toMatch(/delegacao-storage-ativar\.sql/);
   });
 
   it("POST de novo número não classifica sessão empresarial", () => {
