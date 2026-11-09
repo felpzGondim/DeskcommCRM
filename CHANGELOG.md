@@ -30,6 +30,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.19] — 2026-11-09
+
+### Corrigido
+
+- **Well-known OAuth da delegação deixa de anunciar o placeholder do build** O GET `/.well-known/oauth-protected-resource/api/mcp/delegacao` (e o well-known raiz) monta `authorization_servers` com a URL pública do Auth lida em runtime (`NEXT_PUBLIC_SUPABASE_URL` via `lib/env`), não com o valor assado na imagem (`https://placeholder.supabase.co`). Sem essa URL real — ou com o placeholder do Dockerfile — o campo sai vazio e o JWT é recusado (fail-closed). O 401 com `WWW-Authenticate` não muda. Quem já instalou não precisa de variável nova: conferir que o contêiner `app` tem `NEXT_PUBLIC_SUPABASE_URL` no `.env` de runtime (a mesma que o resto do CRM já usa). `SUPABASE_SERVER_URL` continua só para o transporte interno; não entra no issuer anunciado ao Bot.
+
 ## [1.88.0-felpz.18] — 2026-11-09
 
 ### Adicionado

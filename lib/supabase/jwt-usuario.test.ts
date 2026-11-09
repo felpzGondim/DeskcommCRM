@@ -24,4 +24,11 @@ describe("createUserClientFromAccessToken", () => {
     expect(SUJEITO).toMatch(/createAnonAuthLeitor/);
     expect(SUJEITO).not.toMatch(/createUserClientFromAccessToken/);
   });
+
+  it("client e verifier leem a URL pública via lib/env, não process.env.NEXT_PUBLIC_*", () => {
+    expect(FONTE).not.toMatch(/process\.env\.NEXT_PUBLIC_/);
+    expect(FONTE).toMatch(/from "@\/lib\/env"/);
+    expect(SUJEITO).not.toMatch(/process\.env\.NEXT_PUBLIC_/);
+    expect(SUJEITO).toMatch(/from "@\/lib\/env"/);
+  });
 });

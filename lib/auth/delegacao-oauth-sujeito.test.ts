@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
+
+import { env } from "@/lib/env";
 
 import {
   extrairBearer,
+  issuerAuthConfigurado,
   issuerAuthDeUrl,
   verificarSujeitoOAuth,
   type LeitorAuthOAuth,
@@ -46,10 +52,18 @@ function leitor(opts: {
   };
 }
 
-const URL_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const URL_RUNTIME = "http://127.0.0.1:54321";
+const URL_ENV_ANTIGA = env.NEXT_PUBLIC_SUPABASE_URL;
+const URL_PROCESS_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+function urlPublicaDoAuthNoTeste(url: string = URL_RUNTIME) {
+  env.NEXT_PUBLIC_SUPABASE_URL = url;
+}
+
 afterEach(() => {
-  if (URL_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_ANTIGA;
+  env.NEXT_PUBLIC_SUPABASE_URL = URL_ENV_ANTIGA;
+  if (URL_PROCESS_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_PROCESS_ANTIGA;
 });
 
 describe("extrairBearer / issuer", () => {
@@ -63,11 +77,29 @@ describe("extrairBearer / issuer", () => {
     expect(issuerAuthDeUrl("http://127.0.0.1:54321")).toBe(ISS);
     expect(issuerAuthDeUrl("not a url")).toBeNull();
   });
+
+  it("issuer configurado lê a URL de runtime, não o placeholder assado no build", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    urlPublicaDoAuthNoTeste("https://o-supabase-do-cliente.supabase.co");
+    expect(issuerAuthConfigurado()).toBe("https://o-supabase-do-cliente.supabase.co/auth/v1");
+  });
+
+  it("placeholder do Dockerfile não vira issuer (fail-closed)", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    urlPublicaDoAuthNoTeste("https://placeholder.supabase.co");
+    expect(issuerAuthConfigurado()).toBeNull();
+  });
+
+  it("nunca lê process.env.NEXT_PUBLIC_* direto (inline de build anunciaria placeholder)", () => {
+    const source = readFileSync(join(__dirname, "delegacao-oauth-sujeito.ts"), "utf8");
+    expect(source).not.toMatch(/process\.env\.NEXT_PUBLIC_/);
+    expect(source).toMatch(/from "@\/lib\/env"/);
+  });
 });
 
 describe("verificarSujeitoOAuth", () => {
   it("aceita papel dedicado + client_id + getUser", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({ userId: UID, claims: claims() }),
@@ -99,7 +131,7 @@ describe("verificarSujeitoOAuth", () => {
   });
 
   it("recusa cookie authenticated (papel da sessão)", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({ userId: UID, claims: claims({ role: "authenticated", client_id: undefined }) }),
@@ -109,7 +141,7 @@ describe("verificarSujeitoOAuth", () => {
   });
 
   it("recusa client_id ausente mesmo com papel dedicado", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({ userId: UID, claims: claims({ client_id: "" }) }),
@@ -125,7 +157,7 @@ describe("verificarSujeitoOAuth", () => {
   });
 
   it("recusa sub ≠ user.id", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({
@@ -137,7 +169,7 @@ describe("verificarSujeitoOAuth", () => {
   });
 
   it("recusa exp passado", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({ userId: UID, claims: claims({ exp: AGORA_S - 1 }) }),
@@ -146,7 +178,7 @@ describe("verificarSujeitoOAuth", () => {
   });
 
   it("não infere nome nem e-mail das claims", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await verificarSujeitoOAuth("Bearer token.jwt", {
       agora: AGORA,
       leitor: leitor({
@@ -158,5 +190,40 @@ describe("verificarSujeitoOAuth", () => {
     if (r.ok) {
       expect(JSON.stringify(r.sujeito)).not.toMatch(/Nao Inferir|nao-usar/i);
     }
+  });
+
+  it("recusa JWT cujo iss é o placeholder do build mesmo com URL de runtime", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    urlPublicaDoAuthNoTeste("https://o-supabase-do-cliente.supabase.co");
+    const r = await verificarSujeitoOAuth("Bearer token.jwt", {
+      agora: AGORA,
+      leitor: leitor({
+        userId: UID,
+        claims: claims({ iss: "https://placeholder.supabase.co/auth/v1" }),
+      }),
+    });
+    expect(r).toEqual({ ok: false, motivo: "token_invalido" });
+  });
+
+  it("fail-closed: placeholder no env não autoriza nenhum iss, nem o próprio placeholder", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    urlPublicaDoAuthNoTeste("https://placeholder.supabase.co");
+    const r = await verificarSujeitoOAuth("Bearer token.jwt", {
+      agora: AGORA,
+      leitor: leitor({
+        userId: UID,
+        claims: claims({ iss: "https://placeholder.supabase.co/auth/v1" }),
+      }),
+    });
+    expect(r).toEqual({ ok: false, motivo: "token_invalido" });
+  });
+
+  it("fail-closed: sem issuer configurado recusa JWT bem-formado de outro /auth/v1", async () => {
+    urlPublicaDoAuthNoTeste("https://placeholder.supabase.co");
+    const r = await verificarSujeitoOAuth("Bearer token.jwt", {
+      agora: AGORA,
+      leitor: leitor({ userId: UID, claims: claims() }),
+    });
+    expect(r).toEqual({ ok: false, motivo: "token_invalido" });
   });
 });
