@@ -1482,6 +1482,7 @@ jobs:
         ia-no-celular.spec.ts
         prova-painel-provedores.spec.ts
         comercial-no-celular.spec.ts
+        delegacao-mcp-next.spec.ts
 
       # ─── FORA_DO_CI — as que ficaram fora, e o motivo de cada uma ───
       #
@@ -1880,6 +1881,19 @@ jobs:
         run: |
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
             -v ON_ERROR_STOP=1 -q -f supabase/baseline.sql
+
+      # Neste stack local postgres NÃO tem GRANT OPTION em storage (diferente
+      # do CRM gerenciado, onde o mesmo postgres concede via grant option).
+      # O script de ativação não exige o dono: aqui o aplicador que grava é
+      # supabase_admin, papel que o stack já tem — não é credencial nova de
+      # produção. Sem este passo, stor_usage=false e o NOTICE do 0774 mascara.
+      - name: Ativar leitura storage do oauth_delegado (supabase_admin)
+        run: |
+          psql "postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -q -f supabase/delegacao-storage-ativar.sql
+          test "$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -Atqc \
+            "select has_schema_privilege('oauth_delegado','storage','usage')::int::text
+                  || has_table_privilege('oauth_delegado','storage.objects','select')::int::text")" = "11"
 
       # A chave de cifra dos segredos, como o install.sh semeia em TODA instalação
       # (`ensure_encryption_key`, em hostgator-setup-kit/_common.sh). Sem ela,

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "titulo": "Papel Postgres dedicado para leitura corporativa delegada",
+    "pergunta": "Como uma identidade OAuth individual lê conversas e anexos da conta empresarial — números atuais, futuros e substituídos — sem ver pessoal, sem lista fixa de telefone e sem herdar o papel da cookie?",
+    "resumo": "O Auth, com hook versionado por client_id autorizado, emite JWT role=oauth_delegado. O Bot chama /api/mcp/delegacao com esse Bearer. PostgREST autentica e faz SET ROLE. Policies TO esse papel recortam conversas/mensagens/documentos/storage com grant vivo + is_personal is false + vínculo sessão→conta empresarial. Sessão nova/substituída herda pelo mesmo conta_id gravado no cadastro da conexão. Pessoal/unknown nunca herdam. Cookie permanece authenticated. TRUNCATE é ACL, não RLS."
+  },
+  "lanes": [
+    { "id": "identidade", "label": "Identidade" },
+    { "id": "auth", "label": "Auth" },
+    { "id": "banco", "label": "Banco" },
+    { "id": "superficie", "label": "O que a pessoa alcança" }
+  ],
+  "mainPath": ["sujeito", "hook", "jwt", "http", "postgrest", "policies", "anexos"],
+  "nodes": [
+    { "id": "sujeito", "lane": "identidade", "col": 1, "type": "external", "label": "Usuário do CRM (sub)", "sublabel": "conta individual; não é chave de org nem cookie de outra pessoa" },
+    { "id": "clientes", "lane": "banco", "col": 1, "type": "tabela", "label": "delegacao_clientes_autorizados", "sublabel": "vazia = hook copia claims (cookie authenticated); não-vazia = client vivo vira oauth_delegado" },
+    { "id": "hook", "lane": "auth", "col": 2, "type": "funcao", "label": "fn_delegacao_access_token_hook", "sublabel": "só client autorizado vira oauth_delegado; cookie fica authenticated" },
+    { "id": "jwt", "lane": "auth", "col": 2, "type": "security", "label": "JWT role=oauth_delegado", "sublabel": "emissão do Auth (PKCE+refresh); este app não assina" },
+    { "id": "wellknown", "lane": "superficie", "col": 2, "type": "frontend", "label": "RFC 9728 well-known", "sublabel": "/.well-known/oauth-protected-resource/api/mcp/delegacao" },
+    { "id": "http", "lane": "superficie", "col": 3, "type": "backend", "label": "/api/mcp/delegacao", "sublabel": "Bot; Bearer individual; isolado de /api/mcp dsk_" },
+    { "id": "postgrest", "lane": "auth", "col": 3, "type": "backend", "label": "authenticator SET ROLE", "sublabel": "GRANT oauth_delegado TO authenticator" },
+    { "id": "grant", "lane": "banco", "col": 3, "type": "tabela", "label": "delegacao_visibilidade_corporativa", "sublabel": "uid + client + org + buscar/ler/baixar; sem linha = recusa" },
+    { "id": "conta", "lane": "banco", "col": 3, "type": "tabela", "label": "delegacao_contas_empresariais", "sublabel": "conta empresarial da org; sem telefone; sem semente" },
+    { "id": "sessao", "lane": "banco", "col": 4, "type": "tabela", "label": "delegacao_sessoes_empresariais", "sublabel": "vínculo sessão→conta; inclusão/substituição herda; pessoal/unknown recusam" },
+    { "id": "cadastro", "lane": "superficie", "col": 4, "type": "backend", "label": "PUT canal/conta-empresarial", "sublabel": "menor superfície do cadastro da conexão; POST do número não classifica" },
+    { "id": "policies", "lane": "banco", "col": 4, "type": "security", "label": "policies TO oauth_delegado", "sublabel": "grant vivo + is_personal is false + fn_delegacao_sessao_empresarial" },
+    { "id": "anexos", "lane": "superficie", "col": 5, "type": "database", "label": "storage.objects com RLS", "sublabel": "whatsapp-media e locacao-processos corporativos" },
+    { "id": "cookie", "lane": "superficie", "col": 1, "type": "frontend", "label": "Inbox cookie", "sublabel": "authenticated; não reescrita" },
+    { "id": "verifier", "lane": "identidade", "col": 3, "type": "lib", "label": "verificarSujeitoOAuth", "sublabel": "recusa dsk_, cookie, role≠oauth_delegado" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "sujeito", "to": "hook", "label": "authorization_code + PKCE com client_id no input do hook" },
+    { "id": "e2", "from": "clientes", "to": "hook", "label": "allowlist versionada; vazia não mapeia role" },
+    { "id": "e3", "from": "hook", "to": "jwt", "label": "replace das claims; client_id copiado" },
+    { "id": "e4", "from": "jwt", "to": "postgrest", "label": "Bearer; SET ROLE oauth_delegado" },
+    { "id": "e5", "from": "jwt", "to": "verifier", "label": "getUser + claims; fail-closed" },
+    { "id": "e6", "from": "postgrest", "to": "policies", "label": "RLS do papel dedicado, não da cookie" },
+    { "id": "e7", "from": "grant", "to": "policies", "label": "fn_delegacao_grant_vivo (INVOKER)" },
+    { "id": "e8", "from": "policies", "to": "anexos", "label": "EXISTS mensagem/documento corporativo" },
+    { "id": "e9", "from": "cookie", "to": "policies", "label": "não-ligação: cookie não usa estas policies" },
+    { "id": "e10", "from": "wellknown", "to": "http", "label": "resource_metadata RFC 9728" },
+    { "id": "e11", "from": "http", "to": "verifier", "label": "Bearer no JSON-RPC; 401 WWW-Authenticate" },
+    { "id": "e12", "from": "jwt", "to": "http", "label": "Bot envia o access token da pessoa" },
+    { "id": "e13", "from": "cadastro", "to": "sessao", "label": "admin classifica na conexão do número" },
+    { "id": "e14", "from": "conta", "to": "sessao", "label": "conta_empresarial_id; substituição reusa o id" },
+    { "id": "e15", "from": "sessao", "to": "policies", "label": "fn_delegacao_sessao_empresarial (DEFINER estável)" }
+  ],
+  "cards": [
+    { "titulo": "Laço de retorno (invariante 7)", "texto": "Grant revogado ou expirado, client fora da allowlist, contato pessoal, sessão sem vínculo ou org errada: zero linhas. O Auth continuar emitindo o JWT até exp não reabre a leitura — o grant é outra camada. Falha do hook (client omitido no output) deixa role=authenticated, e o verifier da superfície dedicada recusa. Revogar o vínculo da sessão ou a conta zera; o grant individual intacto não reabre." },
+    { "titulo": "O que este corte NÃO liga", "texto": "Hook no Auth da instalação, DCR, mensagem a terceiros, merge/deploy, semente de conta/sessão de produção. Vínculo atual em produção é levantamento administrativo separado. TRUNCATE não entra em policy FOR ALL: é REVOKE. Allowlist vazia de client não desfaz recast PUBLIC→authenticated nem RLS de storage." }
+  ]
+}

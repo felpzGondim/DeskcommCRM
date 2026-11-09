@@ -109,7 +109,7 @@ TEMPLATE="inv_baseline"
 # Esta forma é idêntica nos dois: caminho completo, seis X, sem depender de como
 # cada `mktemp` interpreta `-t`.
 CARIMBO="$(mktemp "${TMPDIR:-/tmp}/deskcomm-test-db-carimbo.XXXXXX")"
-MEDIDOS=("$BASELINE" "$ROOT/tests/invariants" "$ROOT/scripts/test-db.sh" "$ROOT/vitest.db.config.ts")
+MEDIDOS=("$BASELINE" "$ROOT/tests/invariants" "$ROOT/scripts/test-db.sh" "$ROOT/vitest.db.config.ts" "$ROOT/supabase/delegacao-storage-ativar.sql")
 
 arvore_mexeu() {
   find "${MEDIDOS[@]}" -type f -newer "$CARIMBO" 2>/dev/null | head -20
@@ -182,6 +182,8 @@ psql_install() {
 # Toda aplicação do baseline deixa UMA linha em `test_db.aplicacoes_do_baseline`,
 # no próprio molde. Com isso um invariante PROVA quantas aplicações o banco que ele
 # lê recebeu, em vez de confiar na posição das linhas deste script.
+ATIVAR_STORAGE="$ROOT/supabase/delegacao-storage-ativar.sql"
+
 aplicar_baseline() {
   psql_install < "$BASELINE"
   psql_install <<'SQL'
@@ -190,6 +192,15 @@ create schema if not exists test_db;
 create table if not exists test_db.aplicacoes_do_baseline (aplicada_em timestamptz not null default clock_timestamp());
 insert into test_db.aplicacoes_do_baseline default values;
 SQL
+  # Mesmo caminho de produção: current_user tenta o GRANT mínimo e aborta se
+  # has_schema_privilege/has_table_privilege não ficarem. docker cp + psql -f
+  # no container (não `psql < arquivo` no host): o gate
+  # test-db-aplica-o-baseline-num-lugar-so só admite um '<' de arquivo, o do
+  # baseline. O 0774 no molde pgvector é inerte como no e2e (NOTICE); sem este
+  # passo o SELECT em storage.objects como oauth_delegado é 42501.
+  docker cp "$ATIVAR_STORAGE" "$CONTAINER:/tmp/delegacao-storage-ativar.sql"
+  docker exec "$CONTAINER" psql -U postgres -d "$TEMPLATE" \
+    -v ON_ERROR_STOP=1 -q -f /tmp/delegacao-storage-ativar.sql
 }
 
 echo "==> prelude: stubs mínimos do Supabase (roles, auth.uid(), extensions)"

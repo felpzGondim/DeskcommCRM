@@ -111,4 +111,16 @@ describe("isPublicPath", () => {
   it("e não libera nenhum sub-path dela de carona", () => {
     expect(isPublicPath("/account-suspended/qualquer")).toBe(false);
   });
+
+  it("libera a descoberta RFC 9728 da superfície MCP individual, sem carona", () => {
+    expect(isPublicPath("/.well-known/oauth-protected-resource")).toBe(true);
+    expect(isPublicPath("/.well-known/oauth-protected-resource/api/mcp/delegacao")).toBe(true);
+    expect(isPublicPath("/.well-known/oauth-protected-resource/api/mcp")).toBe(false);
+    expect(isPublicPath("/.well-known/oauth-authorization-server")).toBe(false);
+  });
+
+  it("o proxy não decide /api/mcp/delegacao — Bearer chega ao handler", () => {
+    expect(isPublicPath("/api/mcp")).toBe(true);
+    expect(isPublicPath("/api/mcp/delegacao")).toBe(true);
+  });
 });

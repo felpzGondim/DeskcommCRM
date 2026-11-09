@@ -35,6 +35,8 @@ export interface ConnectChannelInput {
 /** Única reserva WAHA: auth client reserva, service client confirma por lease+org.
  * HTTP não participa da transação. Falha mantém FAILED e identidade; retry
  * reutiliza o remoto existente. Nunca exclui uma sessão automaticamente.
+ * Não classifica conta empresarial: POST de número novo deixa a sessão
+ * desconhecida até PUT /channel-sessions/:id/conta-empresarial.
  */
 export async function connectWahaChannel(authDb: SupabaseClient, serviceDb: SupabaseClient, waha: Transport, input: ConnectChannelInput): Promise<{ channel: z.infer<typeof channelSchema>; replay: boolean }> {
   if (!z.string().uuid().safeParse(input.idempotencyKey).success) throw new ChannelConnectionError("idempotency_key_required", 422);

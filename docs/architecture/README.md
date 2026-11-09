@@ -15,8 +15,9 @@ ser fonte sem ninguém decidir isso.
 ## Mapas
 
 | arquivo | escopo |
-| `etiquetas-paginadas.architecture.json` | vocabulário paginado, busca e sugestões nos editores do Inbox |
 |---|---|
+| `delegacao-papel-dedicado.architecture.json` | papel Postgres `oauth_delegado` (NOINHERIT): hook versionado por client autorizado, grant uid+client+org, conta empresarial + vínculo de sessão (herda inclusão/substituição), HTTP MCP individual, policies só nesse papel para conversa/anexo corporativos; cookie authenticated não reescrita |
+| `etiquetas-paginadas.architecture.json` | vocabulário paginado, busca e sugestões nos editores do Inbox |
 | `painel-acoes-hub.architecture.json` | botões do painel → rota tenant-aware → MCP externo → Brisa Hub, com recibo de análise e sugestão no Composer |
 | `painel-pergunta-agente.architecture.json` | campo /pergunta do painel → registro único `executarFerramenta` compartilhado com os botões; C/S só com clique humano; polling de `etapa_atual`; chave desligada |
 | `painel-analise-renda.architecture.json` | Analisar renda (PR 4.1): chave `locacao.analise.renda` off; botão e /pergunta compartilham `executarFerramenta`; PDFs originais; confirmar só com clique |
