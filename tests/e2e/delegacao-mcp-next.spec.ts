@@ -152,12 +152,14 @@ async function restComJwt(
   anonKey: string,
   token: string,
   caminho: string,
+  extra: Record<string, string> = {},
 ): Promise<{ status: number; body: string }> {
   const r = await fetch(`${supabaseUrl.replace(/\/+$/, "")}${caminho}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       apikey: anonKey,
       Accept: "application/json",
+      ...extra,
     },
   });
   return { status: r.status, body: opacoHttp(await r.text()) };
@@ -168,6 +170,7 @@ async function diagnosticoCadeia(q: {
   supabaseUrl: string;
   anonKey: string;
   token: string;
+  pathCorp?: string;
 }): Promise<string> {
   const grant = await restComJwt(
     q.supabaseUrl,
@@ -181,7 +184,14 @@ async function diagnosticoCadeia(q: {
     q.token,
     "/rest/v1/conversations?select=id&limit=3",
   );
-  return `ident=${q.appGetStatus} grant=${grant.status}:${grant.body} conv=${conv.status}:${conv.body}`;
+  const obj = await restComJwt(
+    q.supabaseUrl,
+    q.anonKey,
+    q.token,
+    `/rest/v1/objects?select=name&limit=1${q.pathCorp ? `&name=eq.${encodeURIComponent(q.pathCorp)}` : ""}`,
+    { "Accept-Profile": "storage", "Content-Profile": "storage" },
+  );
+  return `ident=${q.appGetStatus} grant=${grant.status}:${grant.body} conv=${conv.status}:${conv.body} obj=${obj.status}:${obj.body}`;
 }
 
 type Rpc = {
@@ -505,6 +515,7 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
           member: boolean;
           sel: boolean;
           prereq: boolean;
+          obj_sel: boolean;
         }>(
           `select
              pg_has_role('authenticator', 'oauth_delegado', 'member') as member,
@@ -517,12 +528,17 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
                'oauth_delegado',
                'public.fn_pgrst_recusar_replay_do_gateway()',
                'execute'
-             ) as prereq`,
+             ) as prereq,
+             has_table_privilege(
+               'oauth_delegado',
+               'storage.objects',
+               'select'
+             ) as obj_sel`,
         );
         const row = rows[0];
-        if (!row?.member || !row.sel || !row.prereq) {
+        if (!row?.member || !row.sel || !row.prereq || !row.obj_sel) {
           throw new Error(
-            `catalogo oauth_delegado: member=${String(row?.member)} sel=${String(row?.sel)} prereq=${String(row?.prereq)}`,
+            `catalogo oauth_delegado: member=${String(row?.member)} sel=${String(row?.sel)} prereq=${String(row?.prereq)} obj_sel=${String(row?.obj_sel)}`,
           );
         }
         await pool.query("notify pgrst, 'reload schema'");
@@ -592,7 +608,16 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
       bucket: "whatsapp-media",
       path: pathCorp,
     });
-    expect(baixar.status, JSON.stringify(baixar.rpc).slice(0, 500)).toBe(200);
+    if (baixar.status !== 200) {
+      const diag = await diagnosticoCadeia({
+        appGetStatus: ident.status(),
+        supabaseUrl: url,
+        anonKey,
+        token: tokenA,
+        pathCorp,
+      });
+      expect(baixar.status, `${diag} rpc=${opacoHttp(JSON.stringify(baixar.rpc))}`).toBe(200);
+    }
     expect(baixar.rpc.result?.structuredContent?.visivel).toBe(true);
     expect(baixar.rpc.result?.structuredContent?.path).toBe(pathCorp);
     const signed = baixar.rpc.result?.structuredContent?.signed_url;

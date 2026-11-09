@@ -108,6 +108,19 @@ describe("0774 não é a 0773 experimental", () => {
     expect(swallow).toBeGreaterThan(enable);
   });
 
+  it("GRANT SELECT em storage.objects depois do REVOKE não engole 42501", () => {
+    const ancora = sql.lastIndexOf("GRANT SELECT tem que ficar");
+    expect(ancora).toBeGreaterThan(-1);
+    const trecho = sql.slice(ancora, sql.indexOf("notify pgrst, 'reload schema'", ancora));
+    expect(trecho).toMatch(/sem GRANT SELECT em storage\.objects para oauth_delegado/);
+    expect(trecho).not.toMatch(/then null/);
+    const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
+    const aAncora = apendice.lastIndexOf("GRANT SELECT tem que ficar");
+    const aTrecho = apendice.slice(aAncora, apendice.indexOf("notify pgrst, 'reload schema'", aAncora));
+    expect(aTrecho).toMatch(/sem GRANT SELECT em storage\.objects para oauth_delegado/);
+    expect(aTrecho).not.toMatch(/then null/);
+  });
+
   it("POST de novo número não classifica sessão empresarial", () => {
     const post = readFileSync("app/api/v1/channel-sessions/route.ts", "utf8");
     expect(post).toMatch(/POST \/api\/v1\/channel-sessions/);

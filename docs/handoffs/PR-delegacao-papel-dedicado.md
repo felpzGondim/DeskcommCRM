@@ -17,7 +17,7 @@ REVIEW. Sem merge/tag/deploy/VPS. Sem 0773. Sem transportar o pacote experimenta
 - Verifier `role=oauth_delegado` (recusa cookie/`dsk_`)
 - Invariantes RLS + herança de sessão + rollback de catálogo
 - Cadeia viva GoTrue `v2.197.0` (SHA `4eee58f296d9698a1c2c0ae14d7a0b379c7622d3`) + PostgREST HTTP (PKCE+refresh → JWT `oauth_delegado` → só conversa corporativa da identidade)
-- `tests/e2e/delegacao-mcp-next.spec.ts` (`SPECS_PARTE_7`): tools/call buscar/ler/baixar **no processo Next**, duas identidades, negativos pessoal/unknown/outra org/grant CRM revogado. Recusa 401/well-known/cookie **não** conta como cadeia positiva. GET com JWT dedicado prova identidade no Next; tools/call prova PostgREST/Storage. Client JWT: `accessToken` do SDK (anon key sozinha SET ROLE `anon`). `fn_delegacao_grant_vivo` lê `request.jwt.claims` — `auth.uid()` na função INVOKER era 42501 schema auth no SELECT de conversations.
+- `tests/e2e/delegacao-mcp-next.spec.ts` (`SPECS_PARTE_7`): tools/call buscar/ler/baixar **no processo Next**, duas identidades, negativos pessoal/unknown/outra org/grant CRM revogado. Recusa 401/well-known/cookie **não** conta como cadeia positiva. GET com JWT dedicado prova identidade no Next; tools/call prova PostgREST/Storage. Client JWT: `accessToken` do SDK (anon key sozinha SET ROLE `anon`). `fn_delegacao_grant_vivo` lê `request.jwt.claims` — `auth.uid()` na função INVOKER era 42501 schema auth no SELECT de conversations. GRANT SELECT em `storage.objects` depois do REVOKE **não** engole 42501 (dono `supabase_storage_admin` no e2e); baixar prova REST **ou** signed URL da Storage API.
 - Fragmento `.changes/delegacao-papel-dedicado.md` (`nada_mudou` = sem ação do operador na VPS agora)
 
 ## O que NÃO entra

@@ -310,13 +310,15 @@ export async function executarSuperficieDelegada(
     .eq("name", anexo.path)
     .eq("bucket_id", anexo.bucket)
     .maybeSingle();
-  if (obj.error || !obj.data || typeof obj.data !== "object") {
-    return recusa("anexo_fora_do_recurso", pedido, { organization_id: grant.organization_id });
-  }
-
+  const visivelNoRest = Boolean(obj.data) && typeof obj.data === "object" && !obj.error;
   const assinado = deps.assinarAposRls
     ? await deps.assinarAposRls({ bucket: anexo.bucket, path: anexo.path })
     : null;
+  // PostgREST schema("storage") e Storage API são hops distintos. Bytes
+  // passam pela Storage API (RLS no JWT). Sem os dois, anexo fora.
+  if (!visivelNoRest && !assinado) {
+    return recusa("anexo_fora_do_recurso", pedido, { organization_id: grant.organization_id });
+  }
 
   return {
     ok: true,

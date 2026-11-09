@@ -61883,9 +61883,14 @@ grant execute on function public.fn_delegacao_grant_vivo(uuid) to oauth_delegado
 -- morre em 42501 antes da RLS — não amplia dado, só deixa a guarda de replay
 -- (0250) rodar no mesmo papel que já roda para cookie.
 grant execute on function public.fn_pgrst_recusar_replay_do_gateway() to oauth_delegado;
+-- GRANT SELECT tem que ficar. postgres do e2e/self-host não é dono
+-- (supabase_storage_admin é): 42501 engolido deixava baixar em
+-- anexo_fora_do_recurso no PostgREST/Storage. Sem dono/supabase_admin: aborta.
 do $$
 declare
   rls_ligada boolean;
+  dono name;
+  eu name := current_user;
 begin
   if to_regclass('storage.objects') is null then
     return;
@@ -61901,8 +61906,32 @@ begin
   end if;
   begin
     execute 'grant select on storage.objects to oauth_delegado';
+    if to_regclass('storage.buckets') is not null then
+      execute 'grant select on storage.buckets to oauth_delegado';
+    end if;
   exception
-    when insufficient_privilege then null;
+    when insufficient_privilege then
+      select r.rolname into dono
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        join pg_roles r on r.oid = c.relowner
+       where n.nspname = 'storage' and c.relname = 'objects';
+      if dono is not null and pg_has_role(eu, dono, 'member') then
+        execute format('set role %I', dono);
+      elsif exists (select 1 from pg_roles where rolname = 'supabase_admin')
+        and pg_has_role(eu, 'supabase_admin', 'member') then
+        execute 'set role supabase_admin';
+      else
+        raise exception
+          'delegacao 0774: sem GRANT SELECT em storage.objects para oauth_delegado (dono=%)',
+          coalesce(dono, '?')
+          using errcode = '42501';
+      end if;
+      execute 'grant select on storage.objects to oauth_delegado';
+      if to_regclass('storage.buckets') is not null then
+        execute 'grant select on storage.buckets to oauth_delegado';
+      end if;
+      execute format('set role %I', eu);
   end;
 end
 $$;
