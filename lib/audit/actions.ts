@@ -1370,6 +1370,8 @@ export const AUDIT_ACTIONS = [
   "locacao.imovel_superlogica_validado",
   "delegacao.conta_empresarial_vinculada",
   "delegacao.conta_empresarial_revogada",
+  "oauth.consent_approved",
+  "oauth.consent_denied",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

@@ -123,4 +123,9 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/api/mcp")).toBe(true);
     expect(isPublicPath("/api/mcp/delegacao")).toBe(true);
   });
+
+  it("NÃO libera /oauth/consent — exige login do CRM", () => {
+    expect(isPublicPath("/oauth/consent")).toBe(false);
+    expect(isPublicPath("/oauth/consent/x")).toBe(false);
+  });
 });

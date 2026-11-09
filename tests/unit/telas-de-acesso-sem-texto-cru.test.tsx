@@ -134,6 +134,7 @@ describe("o título da aba das telas de acesso segue o idioma do corpo", () => {
     ["app/(public)/login/recovery/page.tsx", "Recuperar acesso"],
     ["app/(public)/login/reset/page.tsx", "Nova senha"],
     ["app/(public)/signup/page.tsx", "Criar conta"],
+    ["app/(public)/oauth/consent/page.tsx", "Autorizar acesso"],
   ];
 
   it.each(PAGINAS)("%s declara o título pelo idioma do visitante", (arquivo, titulo) => {

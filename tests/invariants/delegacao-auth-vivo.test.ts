@@ -13,6 +13,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { handleDelegacaoHttp } from "@/lib/auth/delegacao-http";
 import { GOTRUE_PROVA_VIVO } from "@/lib/auth/delegacao-gotrue-prova";
 import type { ClienteLeitura } from "@/lib/auth/delegacao-superficie";
+import { env } from "@/lib/env";
 import { lastLine, sql } from "./psql-transporte";
 
 const JWT_SECRET = "delegacao-vivo-secret-min-32-chars!!";
@@ -999,7 +1000,11 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
       expect(vista.status === 200 ? vista.body : []).toEqual([]);
 
       const urlAntiga = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const envAntiga = env.NEXT_PUBLIC_SUPABASE_URL;
       process.env.NEXT_PUBLIC_SUPABASE_URL = API_EXTERNAL_URL;
+      // issuerAuthConfigurado() lê env (parse de runtime), não process.env
+      // literal — senão o Next inlineia o placeholder do build.
+      env.NEXT_PUBLIC_SUPABASE_URL = API_EXTERNAL_URL;
       try {
         const mcpBuscar = await handleDelegacaoHttp(
           new Request("http://app.test/api/mcp/delegacao", {
@@ -1064,6 +1069,7 @@ describe("cadeia Auth viva GoTrue v2.197.0 + PostgREST HTTP", () => {
         expect(baixarJson.result?.structuredContent?.visivel).toBe(true);
         expect(baixarJson.result?.structuredContent?.path).toBe(PATH_CORP);
       } finally {
+        env.NEXT_PUBLIC_SUPABASE_URL = envAntiga;
         if (urlAntiga === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
         else process.env.NEXT_PUBLIC_SUPABASE_URL = urlAntiga;
       }

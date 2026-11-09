@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { env } from "@/lib/env";
+
 import { handleDelegacaoHttp, metadadosRecursoProtegido, wwwAuthenticate } from "./delegacao-http";
 import type { ClienteLeitura, GrantDelegacaoCorporativa } from "./delegacao-superficie";
 import type { LeitorAuthOAuth } from "./delegacao-oauth-sujeito";
@@ -59,10 +61,20 @@ function clientVazio(): ClienteLeitura {
   };
 }
 
-const URL_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const URL_RUNTIME = "http://127.0.0.1:54321";
+const URL_ENV_ANTIGA = env.NEXT_PUBLIC_SUPABASE_URL;
+const URL_PROCESS_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVER_URL_ANTIGA = env.SUPABASE_SERVER_URL;
+
+function urlPublicaDoAuthNoTeste(url: string = URL_RUNTIME) {
+  env.NEXT_PUBLIC_SUPABASE_URL = url;
+}
+
 afterEach(() => {
-  if (URL_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_ANTIGA;
+  env.NEXT_PUBLIC_SUPABASE_URL = URL_ENV_ANTIGA;
+  env.SUPABASE_SERVER_URL = SERVER_URL_ANTIGA;
+  if (URL_PROCESS_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_PROCESS_ANTIGA;
 });
 
 function req(method: string, body?: unknown, auth?: string | null): Request {
@@ -83,6 +95,24 @@ describe("RFC 9728", () => {
       /oauth-protected-resource\/api\/mcp\/delegacao/,
     );
     expect(JSON.stringify(m)).not.toMatch(/\/api\/mcp"/);
+  });
+
+  it("authorization_servers e issuer usam a URL de runtime, não o placeholder do build", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    env.SUPABASE_SERVER_URL = "http://kong:8000";
+    urlPublicaDoAuthNoTeste("https://o-supabase-do-cliente.supabase.co");
+    const m = metadadosRecursoProtegido("https://app.test");
+    expect(m.authorization_servers).toEqual([
+      "https://o-supabase-do-cliente.supabase.co/auth/v1",
+    ]);
+  });
+
+  it("placeholder no env de runtime não vira authorization_servers (fail-closed)", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://placeholder.supabase.co";
+    urlPublicaDoAuthNoTeste("https://placeholder.supabase.co");
+    const m = metadadosRecursoProtegido("https://app.test");
+    expect(m.authorization_servers).toEqual([]);
+    expect(JSON.stringify(m)).not.toMatch(/placeholder\.supabase\.co/);
   });
 });
 
@@ -106,7 +136,7 @@ describe("handleDelegacaoHttp", () => {
   });
 
   it("tools/list com JWT dedicado lista buscar/ler/baixar", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await handleDelegacaoHttp(
       req("POST", { jsonrpc: "2.0", id: 1, method: "tools/list" }),
       { leitorAuth: leitor(), agora: AGORA, clientDoUsuario: () => clientVazio() },
@@ -121,7 +151,7 @@ describe("handleDelegacaoHttp", () => {
   });
 
   it("tools/call buscar usa o JWT da pessoa, nunca dsk_/admin", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     let tokenVisto = "";
     const r = await handleDelegacaoHttp(
       req("POST", {

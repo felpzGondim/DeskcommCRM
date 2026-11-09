@@ -6,6 +6,7 @@
  * cookie (`client_id` vazio) e NÃO aceita `role=authenticated` — a cookie
  * continua no caminho de sessão. Recusa `role` diferente de `oauth_delegado`.
  */
+import { env } from "@/lib/env";
 import { createAnonAuthLeitor } from "@/lib/supabase/jwt-usuario";
 
 export const PREFIXO_TOKEN_ORG = "dsk_";
@@ -67,9 +68,42 @@ export function issuerAuthDeUrl(supabaseUrl: string): string | null {
   }
 }
 
+/**
+ * ARG default do Dockerfile da imagem genérica. O Next INLINA acesso
+ * literal `process.env` + `NEXT_PUBLIC_*` no build; se o well-known lesse
+ * isso, o Bot receberia `https://placeholder.supabase.co/auth/v1` mesmo com
+ * a URL real no `.env` de runtime.
+ */
+function urlDoSupabaseEPlaceholderDeBuild(url: string): boolean {
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase();
+    // ARG default do Dockerfile (`placeholder.` + domínio do provedor). Sem
+    // literal de host: a catraca de terceiro em branding.test.ts recusa.
+    if (host === "placeholder" || host.startsWith("placeholder.")) return true;
+    if (host.includes("placeholder") && host.endsWith(".invalid")) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Issuer GoTrue anunciado (RFC 9728) e conferido no JWT: origem pública + `/auth/v1`.
+ *
+ * Lê `env.NEXT_PUBLIC_SUPABASE_URL` (parse do objeto `process.env` em runtime),
+ * o mesmo caminho que `lib/supabase/server.ts` e `jwt-usuario.ts` já usam.
+ * Nunca acesso literal `process.env` + `NEXT_PUBLIC_SUPABASE_URL` — o
+ * compilador do Next substitui esse acesso no build, e a imagem genérica
+ * assa `https://placeholder.supabase.co`.
+ *
+ * Vazio, inválido ou placeholder de build → `null` (fail-closed). Não cai para
+ * `SUPABASE_SERVER_URL`: essa é a origem interna (Kong) do transporte; o `iss`
+ * do JWT e `authorization_servers` são o que o cliente alcança.
+ */
 export function issuerAuthConfigurado(): string | null {
-  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const raw = env.NEXT_PUBLIC_SUPABASE_URL;
   if (typeof raw !== "string" || raw.trim().length === 0) return null;
+  if (urlDoSupabaseEPlaceholderDeBuild(raw)) return null;
   return issuerAuthDeUrl(raw);
 }
 
@@ -104,8 +138,8 @@ function issAceito(iss: unknown, esperado: string | null): boolean {
   } catch {
     return false;
   }
-  if (esperado) return normalizado === esperado;
-  return true;
+  if (!esperado) return false;
+  return normalizado === esperado;
 }
 
 export function leitorAuthOAuthPadrao(): LeitorAuthOAuth {

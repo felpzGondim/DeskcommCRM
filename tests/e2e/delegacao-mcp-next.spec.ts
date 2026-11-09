@@ -239,8 +239,10 @@ test("GET /api/mcp/delegacao sem Bearer é 401 com WWW-Authenticate", async ({ r
 test("RFC 9728 well-known do recurso MCP individual no Next", async ({ request }) => {
   const r = await request.get("/.well-known/oauth-protected-resource/api/mcp/delegacao");
   expect(r.status()).toBe(200);
-  const j = (await r.json()) as { resource?: string };
+  const j = (await r.json()) as { resource?: string; authorization_servers?: string[] };
   expect(j.resource).toMatch(/\/api\/mcp\/delegacao$/);
+  expect(JSON.stringify(j.authorization_servers ?? [])).not.toMatch(/placeholder\.supabase\.co/);
+  expect(j.authorization_servers?.some((u) => /\/auth\/v1$/.test(u))).toBe(true);
 });
 
 test("cookie authenticated não entra na superfície MCP", async ({ page }) => {

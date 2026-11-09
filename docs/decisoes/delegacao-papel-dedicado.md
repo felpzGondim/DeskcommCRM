@@ -75,6 +75,22 @@ superfície). O verifier recusa `dsk_` e `role=authenticated`. GET 401 / well-kn
 PostgREST (SET ROLE `oauth_delegado`) + Storage; o client de dado usa
 `accessToken` do SDK, senão o fetch cai na anon key e a RLS recusa.
 
+**Issuer / RFC 9728 (CONFIRMADO — felpz.19):** `authorization_servers` e a
+conferência do `iss` do JWT saem de `env.NEXT_PUBLIC_SUPABASE_URL` (`lib/env`,
+parse do objeto `process.env` em runtime), o mesmo caminho que o client de
+servidor e `jwt-usuario` já usam. Acesso literal `process.env` +
+`NEXT_PUBLIC_SUPABASE_URL` é inlined no build da imagem genérica
+(`ARG` `https://placeholder.supabase.co`) e **não** vale. Placeholder ou
+ausência → `authorization_servers` vazio e JWT recusado (fail-closed).
+`SUPABASE_SERVER_URL` é só transporte interno (Kong); não entra no issuer.
+
+**Tela de consentimento (CONFIRMADO — felpz.19):** path `/oauth/consent`
+(`CAMINHO_CONSENTIMENTO_OAUTH`). O Auth redireciona com `?authorization_id=`.
+Exige sessão cookie do CRM (não está em `PUBLIC_PATHS`; o proxy manda a
+`/login?next=`). Aprovar/negar = `auth.oauth.approveAuthorization` /
+`denyAuthorization` (`skipBrowserRedirect`). Configurar no Dashboard:
+`authorization_url_path` = `/oauth/consent`.
+
 **Consent / token revoke (CONFIRMADO no harness vivo, GoTrue v2.197.0):**
 `POST /oauth/revoke` (RFC 7009, `token_type_hint=refresh_token`) e `POST /logout`
 negam o **refresh** seguinte. O access JWT permanece válido até `exp` em PostgREST

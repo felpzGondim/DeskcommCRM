@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { env } from "@/lib/env";
+
 import {
   executarSuperficieDelegada,
   resumoOpacoDelegado,
@@ -79,10 +81,14 @@ function client(store: Store): ClienteLeitura {
   };
 }
 
-const URL_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const URL_ENV_ANTIGA = env.NEXT_PUBLIC_SUPABASE_URL;
+
+function urlPublicaDoAuthNoTeste(url = "http://127.0.0.1:54321") {
+  env.NEXT_PUBLIC_SUPABASE_URL = url;
+}
+
 afterEach(() => {
-  if (URL_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_ANTIGA;
+  env.NEXT_PUBLIC_SUPABASE_URL = URL_ENV_ANTIGA;
 });
 
 describe("executarSuperficieDelegada", () => {
@@ -106,7 +112,7 @@ describe("executarSuperficieDelegada", () => {
   });
 
   it("buscar devolve o que o JWT da pessoa lê (RLS)", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await executarSuperficieDelegada(
       { authorizationHeader: "Bearer token.jwt", efeito: "buscar" },
       {
@@ -125,7 +131,7 @@ describe("executarSuperficieDelegada", () => {
   });
 
   it("ler recusa sessão sem vínculo mesmo com contato corporativo", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await executarSuperficieDelegada(
       { authorizationHeader: "Bearer token.jwt", efeito: "ler", conversationId: CONV },
       {
@@ -152,7 +158,7 @@ describe("executarSuperficieDelegada", () => {
   });
 
   it("ler recusa contato pessoal mesmo com vínculo empresarial", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await executarSuperficieDelegada(
       { authorizationHeader: "Bearer token.jwt", efeito: "ler", conversationId: CONV },
       {
@@ -179,7 +185,7 @@ describe("executarSuperficieDelegada", () => {
   });
 
   it("grant revogado recusa sem expandir efeitos", async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    urlPublicaDoAuthNoTeste();
     const r = await executarSuperficieDelegada(
       { authorizationHeader: "Bearer token.jwt", efeito: "buscar" },
       {

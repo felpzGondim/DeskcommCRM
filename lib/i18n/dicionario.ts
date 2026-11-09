@@ -17984,6 +17984,20 @@ export const DICIONARIO: Traducoes = {
   "Processos de locação desta empresa, da conversa até o contrato.": { es: "Procesos de locación de esta empresa, de la conversación al contrato." },
   "Liga e desliga o processo de locação, o vínculo Superlógica e os arquivos.": { es: "Activa y desactiva el proceso de locación, el vínculo Superlógica y los archivos." },
   "Liga e desliga o processo de locação, as ferramentas do campo de pergunta do painel, o vínculo Superlógica e os arquivos.": { es: "Activa y desactiva el proceso de locación, las herramientas del campo de pregunta del panel, el vínculo Superlógica y los archivos." },
+  "Autorizar acesso": { es: "Autorizar acceso" },
+  "Este aplicativo pede permissão para ler conversas da sua conta empresarial.": {
+    es: "Esta aplicación pide permiso para leer conversaciones de tu cuenta empresarial.",
+  },
+  "Aplicativo": { es: "Aplicación" },
+  "Quem autoriza": { es: "Quién autoriza" },
+  "Permissões pedidas": { es: "Permisos pedidos" },
+  "Este pedido de autorização não é válido ou já expirou.": {
+    es: "Este pedido de autorización no es válido o ya expiró.",
+  },
+  "Listar conversas da conta empresarial": { es: "Listar conversaciones de la cuenta empresarial" },
+  "Ler conversas da conta empresarial": { es: "Leer conversaciones de la cuenta empresarial" },
+  "Baixar anexos da conta empresarial": { es: "Descargar archivos de la cuenta empresarial" },
+  "Voltar ao início": { es: "Volver al inicio" },
 };
 
 /**
