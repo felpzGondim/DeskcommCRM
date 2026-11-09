@@ -91,6 +91,10 @@ create policy delegacao_visibilidade_corporativa_select
   using (user_id = auth.uid());
 
 -- Grant vivo: INVOKER (RLS do grant vale). Só o papel dedicado executa.
+-- SET search_path = public impede inlining: auth.uid()/auth.jwt() viram
+-- 42501 "permission denied for schema auth" no SELECT de conversations
+-- (a policy do grant inlineia auth.uid() e passa). PostgREST já põe o JWT
+-- em request.jwt.claims — o mesmo conteúdo, sem tocar o schema auth.
 create or replace function public.fn_delegacao_grant_vivo(p_org uuid)
 returns boolean
 language sql
@@ -101,9 +105,18 @@ as $$
   select exists (
     select 1
       from public.delegacao_visibilidade_corporativa g
-     where g.user_id = auth.uid()
+     where g.user_id = nullif(
+             coalesce(
+               nullif(current_setting('request.jwt.claim.sub', true), ''),
+               nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'
+             ),
+             ''
+           )::uuid
        and g.organization_id = p_org
-       and g.oauth_client_id = nullif(btrim(coalesce(auth.jwt()->>'client_id', '')), '')
+       and g.oauth_client_id = nullif(btrim(coalesce(
+             nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'client_id',
+             ''
+           )), '')
        and g.revoked_at is null
        and g.expires_at > now()
        and g.efeitos && array['buscar','ler','baixar']::text[]
@@ -658,6 +671,7 @@ end
 $$;
 
 -- Devolve só o mínimo depois do REVOKE amplo.
+grant usage on schema public, auth, storage to oauth_delegado;
 grant select on public.delegacao_visibilidade_corporativa to oauth_delegado;
 grant select on public.delegacao_contas_empresariais to oauth_delegado;
 grant select on public.delegacao_sessoes_empresariais to oauth_delegado;

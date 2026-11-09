@@ -32,6 +32,7 @@ de `/api/mcp` (dsk_ + admin).
 | Verifier | `verificarSujeitoOAuth` exige `role=oauth_delegado` + `client_id`; recusa `dsk_` e cookie |
 | TRUNCATE | `REVOKE ALL` do papel; RLS **não** governa TRUNCATE |
 | Pre-request PostgREST | `GRANT EXECUTE` em `fn_pgrst_recusar_replay_do_gateway` — o hook `pgrst.db_pre_request` corre como o papel do JWT; sem isso a cadeia HTTP morre em 42501 antes da RLS. Não amplia dado corporativo |
+| Grant vivo | `fn_delegacao_grant_vivo` lê `request.jwt.claims` (GUC do PostgREST). `auth.uid()`/`auth.jwt()` dentro da função INVOKER com `search_path=public` é 42501 schema auth no SELECT de conversations |
 
 0773 experimental (oauth_cookie_only em toda tabela `public`) **não** entra aqui.
 

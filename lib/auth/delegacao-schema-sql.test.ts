@@ -59,6 +59,20 @@ describe("0774 não é a 0773 experimental", () => {
     expect(sql).toMatch(/Ligar o hook no Auth não desfaz recast/);
   });
 
+  it("fn_delegacao_grant_vivo lê o JWT pelos GUCs, não pelo schema auth", () => {
+    const inicio = sql.indexOf("create or replace function public.fn_delegacao_grant_vivo");
+    const fim = sql.indexOf("revoke all on function public.fn_delegacao_grant_vivo");
+    const fn = sql.slice(inicio, fim);
+    expect(fn).toMatch(/current_setting\('request\.jwt\.claims'/);
+    expect(fn).not.toMatch(/auth\.uid\(\)|auth\.jwt\(\)/);
+    const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
+    const aIni = apendice.indexOf("create or replace function public.fn_delegacao_grant_vivo");
+    const aFim = apendice.indexOf("revoke all on function public.fn_delegacao_grant_vivo");
+    const aFn = apendice.slice(aIni, aFim);
+    expect(aFn).toMatch(/current_setting\('request\.jwt\.claims'/);
+    expect(aFn).not.toMatch(/auth\.uid\(\)|auth\.jwt\(\)/);
+  });
+
   it("pre-request do PostgREST é executável pelo papel (sem isso a cadeia HTTP é 42501)", () => {
     expect(sql).toMatch(
       /grant execute on function public\.fn_pgrst_recusar_replay_do_gateway\(\) to oauth_delegado/,
