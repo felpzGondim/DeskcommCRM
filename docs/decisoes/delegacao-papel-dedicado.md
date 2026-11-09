@@ -84,6 +84,13 @@ servidor e `jwt-usuario` já usam. Acesso literal `process.env` +
 ausência → `authorization_servers` vazio e JWT recusado (fail-closed).
 `SUPABASE_SERVER_URL` é só transporte interno (Kong); não entra no issuer.
 
+**Tela de consentimento (CONFIRMADO — felpz.19):** path `/oauth/consent`
+(`CAMINHO_CONSENTIMENTO_OAUTH`). O Auth redireciona com `?authorization_id=`.
+Exige sessão cookie do CRM (não está em `PUBLIC_PATHS`; o proxy manda a
+`/login?next=`). Aprovar/negar = `auth.oauth.approveAuthorization` /
+`denyAuthorization` (`skipBrowserRedirect`). Configurar no Dashboard:
+`authorization_url_path` = `/oauth/consent`.
+
 **Consent / token revoke (CONFIRMADO no harness vivo, GoTrue v2.197.0):**
 `POST /oauth/revoke` (RFC 7009, `token_type_hint=refresh_token`) e `POST /logout`
 negam o **refresh** seguinte. O access JWT permanece válido até `exp` em PostgREST
