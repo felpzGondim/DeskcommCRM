@@ -4,6 +4,16 @@ import { describe, expect, it } from "vitest";
 const MIGRACAO = "supabase/migrations/20261108210000_0774_delegacao_papel_dedicado.sql";
 const sql = readFileSync(MIGRACAO, "utf8");
 const BASELINE = readFileSync("supabase/baseline.sql", "utf8");
+const BLOCO_0774 = "-- ---- delegação papel dedicado (migration 0774) ----";
+const BLOCO_0775 = "-- ---- delegação envio e sessão titular (migration 0775) ----";
+const POLICIES_SUBSTITUIDAS = [
+  "contacts_select_oauth_delegado",
+  "conversations_select_oauth_delegado",
+  "messages_select_oauth_delegado",
+  "locacao_processo_conversas_select_oauth_delegado",
+  "locacao_processo_documentos_select_oauth_delegado",
+  "storage_objects_select_oauth_delegado",
+];
 
 describe("0774 não é a 0773 experimental", () => {
   it("tem -- manifest:", () => {
@@ -130,17 +140,22 @@ describe("0774 não é a 0773 experimental", () => {
   });
 
   it("0774/apêndice/update não DROP/DELETE/TRUNCATE tabelas delegacao_*", () => {
-    const apendice = BASELINE.slice(
-      BASELINE.lastIndexOf("delegação papel dedicado"),
-      BASELINE.search(/^-- ---- VARREDURA anon:/m),
-    );
+    const apendice = BASELINE.slice(BASELINE.indexOf(BLOCO_0774), BASELINE.indexOf(BLOCO_0775));
     expect(sql).toMatch(/create table if not exists public\.delegacao_sessoes_empresariais/);
     expect(sql).toMatch(/create or replace function public\.fn_delegacao_access_token_hook/);
     expect(sql).not.toMatch(/drop\s+table\s+(if\s+exists\s+)?(public\.)?delegacao_/i);
     expect(sql).not.toMatch(/delete\s+from\s+(public\.)?delegacao_/i);
     expect(sql).not.toMatch(/truncate\s+(table\s+)?(public\.)?delegacao_/i);
     expect(sql).not.toMatch(/drop\s+function[\s\S]{0,120}fn_delegacao_access_token_hook/i);
-    expect(apendice).toContain(sql);
+    // O baseline executa em autocommit. Somente a 0775 instala estas policies.
+    const esperado = POLICIES_SUBSTITUIDAS.reduce((trecho, nome) => {
+      const definicao = new RegExp(
+        `^drop policy if exists ${nome} on [^\\n]+;\\ncreate policy ${nome}\\n[^;]+;\\n\\n`,
+        "m",
+      );
+      return trecho.replace(definicao, "");
+    }, sql);
+    expect(apendice.slice(apendice.indexOf("-- manifest:")).trimEnd()).toBe(esperado.trimEnd());
     expect(apendice).not.toMatch(/drop\s+table\s+(if\s+exists\s+)?(public\.)?delegacao_/i);
     expect(apendice).not.toMatch(/delete\s+from\s+(public\.)?delegacao_/i);
     expect(apendice).not.toMatch(/truncate\s+(table\s+)?(public\.)?delegacao_/i);
@@ -211,9 +226,7 @@ describe("0775 — efeito enviar e uma sessão da titular", () => {
     expect(nova).not.toMatch(
       /grant\s+(insert|update|delete)\b|grant\s+select\s+on\s+public\.channel_sessions/i,
     );
-    const inicio = BASELINE.indexOf(
-      "-- ---- delegação envio e sessão titular (migration 0775) ----",
-    );
+    const inicio = BASELINE.indexOf(BLOCO_0775);
     const fim = BASELINE.indexOf("-- ---- VARREDURA anon:", inicio);
     expect(BASELINE.slice(BASELINE.indexOf("\n", inicio) + 1, fim).trimEnd()).toBe(nova.trimEnd());
   });
@@ -234,14 +247,7 @@ describe("0775 — efeito enviar e uma sessão da titular", () => {
   });
 
   it("preserva cada policy da 0774, trocando só o predicado de origem, e restaura no rollback", () => {
-    for (const nome of [
-      "contacts_select_oauth_delegado",
-      "conversations_select_oauth_delegado",
-      "messages_select_oauth_delegado",
-      "locacao_processo_conversas_select_oauth_delegado",
-      "locacao_processo_documentos_select_oauth_delegado",
-      "storage_objects_select_oauth_delegado",
-    ]) {
+    for (const nome of POLICIES_SUBSTITUIDAS) {
       const inicio = sql.indexOf(`create policy ${nome}\n`);
       const original = sql.slice(inicio, sql.indexOf(";", inicio) + 1);
       expect(original).toContain("fn_delegacao_sessao_empresarial");
