@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/types";
 import { env } from "@/lib/env";
 import { DEFAULT_CHANNEL_PROVIDER } from "@/lib/channels/capabilities";
+import { OrgNaoOperanteError } from "@/lib/organizacao/operante";
 import type { SujeitoOAuth } from "./delegacao-oauth-sujeito";
 import type { GrantDelegacaoCorporativa, OrigemDelegada } from "./delegacao-superficie";
 import { executarEnvioDelegado, listarSessoesParaEnvioDelegado } from "./delegacao-envio";
@@ -28,6 +29,7 @@ const h = vi.hoisted(() => ({
   info: vi.fn(),
   download: vi.fn(),
   upload: vi.fn(),
+  remove: vi.fn(),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: h.admin }));
 vi.mock("@/lib/audit", () => ({ audit: h.auditoria }));
@@ -114,6 +116,7 @@ function fixture(
     canal?: Linha;
     role?: string;
     org?: string;
+    organizacao?: { status: string };
   } = {},
 ) {
   const org = op.org ?? ORG;
@@ -133,7 +136,7 @@ function fixture(
   const dbRows: Record<string, Linha> = {
     channel_sessions: { provider: DEFAULT_CHANNEL_PROVIDER, status: "WORKING", archived_at: null, ...op.canal },
     user_organizations: { role: op.role ?? "manager" },
-    organizations: { status: "active" },
+    organizations: op.organizacao ?? { status: "active" },
     contacts: ct,
     conversations: conv,
   };
@@ -191,7 +194,7 @@ function fixture(
   }
   h.admin.mockReturnValue({
     from: (t: string) => from(t, false),
-    storage: { from: () => ({ upload: h.upload, remove: vi.fn() }) },
+    storage: { from: () => ({ upload: h.upload, remove: h.remove }) },
   });
   const clientDoUsuario = vi.fn(() => ({
     from: (t: string) => from(t, true),
@@ -246,9 +249,54 @@ beforeEach(() => {
   h.existe.mockResolvedValue(TELEFONE.slice(1));
   h.configurado.mockReturnValue(true);
   h.upload.mockResolvedValue({ error: null });
+  h.remove.mockResolvedValue({ error: null });
 });
 
 describe("delegação de envio", () => {
+  it.each(["suspended", "redacted", "archived"])("recusa envio com organização %s", async (status) => {
+    const organizacao = { status };
+    const f = fixture({ organizacao });
+    const chave = randomUUID();
+
+    expect(await f.enviar(entrada, chave)).toMatchObject({
+      status: 404,
+      motivo: "organizacao_indisponivel",
+    });
+    expect(h.frear).not.toHaveBeenCalled();
+    expect(h.abrir).not.toHaveBeenCalled();
+    expect(h.upload).not.toHaveBeenCalled();
+    expect(h.enviar).not.toHaveBeenCalled();
+    expect(h.auditoria).toHaveBeenCalledWith(expect.objectContaining({
+      action: "delegacao.envio_recusado",
+      metadata: expect.objectContaining({ motivo: "organizacao_indisponivel" }),
+    }));
+
+    organizacao.status = "active";
+    expect(await f.enviar(entrada, chave)).toMatchObject({ ok: true });
+    expect(h.enviar).toHaveBeenCalledOnce();
+  });
+
+  it("limpa o upload e libera a mesma chave se a organização parar na entrada do handler", async () => {
+    const f = fixture();
+    const pedido = delegacaoEnviarSchema.parse({
+      ...entrada,
+      arquivo: { base64: "dGVzdGU=", nome: "arquivo.pdf", mime: "application/pdf" },
+      idempotency_key: randomUUID(),
+    });
+    h.enviar.mockRejectedValueOnce(new OrgNaoOperanteError(ORG, "suspended"));
+
+    expect(await executarEnvioDelegado(sujeito, pedido, f.deps, "request-test")).toMatchObject({
+      status: 404,
+      motivo: "organizacao_indisponivel",
+    });
+    expect(h.upload).toHaveBeenCalledOnce();
+    expect(h.remove).toHaveBeenCalledExactlyOnceWith([h.upload.mock.calls[0]?.[0]]);
+    expect(h.registrar).not.toHaveBeenCalled();
+
+    expect(await executarEnvioDelegado(sujeito, pedido, f.deps, "request-test")).toMatchObject({ ok: true });
+    expect(h.enviar).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ["grant ausente", { grants: [] }],
     ["grant de leitura", { grants: [{ ...grant, efeitos: ["ler"] }] }],
@@ -494,7 +542,9 @@ describe("delegação de envio", () => {
       await executarEnvioDelegado(sujeito, delegacaoEnviarSchema.parse(d), f.deps, "request-test"),
     ).toMatchObject({ ok: true });
     expect(h.upload).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^${ORG}/${CONV}/[^/]+/_x_\\.pdf$`)),
+      expect.stringMatching(
+        new RegExp(`^${ORG}/${CONV}/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}/_x_\\.pdf$`),
+      ),
       Buffer.from("teste"),
       { contentType: "application/pdf", upsert: false },
     );

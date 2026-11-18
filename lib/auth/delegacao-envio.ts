@@ -39,7 +39,7 @@ import {
   registrarEnvioPorToken,
   segurarEnvioPorToken,
 } from "@/lib/messaging/ritmo-do-envio-por-token";
-import { assertOrgOperante } from "@/lib/organizacao/operante";
+import { assertOrgOperante, OrgNaoOperanteError } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Message } from "@/lib/types/messaging";
 
@@ -416,6 +416,7 @@ export async function executarEnvioDelegado(
   // Só o vencedor da reserva pode verificar mídia, consumir quota ou tocar
   // o transporte. Se o recibo se perder, a reserva dura a janela de replay.
   let espera: Falha | undefined;
+  let conversaDaRecusa = existente;
   const resultado = await comIdempotencia<Resultado>({
     db,
     organizationId: org,
@@ -439,13 +440,7 @@ export async function executarEnvioDelegado(
         resposta: recusar(r, conversaId),
         status: r.status,
       });
-      try {
-        await assertOrgOperante(db, org);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 403)
-          return parar(falha("organizacao_indisponivel"));
-        throw err;
-      }
+      await assertOrgOperante(db, org);
       const { data: canal, error } = await db
         .from("channel_sessions")
         .select(`${CHANNEL_SESSION_REF_COLUMNS},status,metadata,archived_at`)
@@ -571,6 +566,10 @@ export async function executarEnvioDelegado(
               .from(BUCKET_OUTBOUND)
               .remove([path])
               .catch(() => undefined);
+          if (err instanceof OrgNaoOperanteError) {
+            conversaDaRecusa = conversa.id;
+            throw err;
+          }
           return parar(falha("veto_do_handler", err.status === 422 ? 422 : 404), conversa.id);
         }
         // O transporte pode ter aceitado antes da exceção. Grave desfecho
@@ -594,8 +593,10 @@ export async function executarEnvioDelegado(
       auditar(ctx, mensagem.status === "sent" ? "ok" : "falha_de_entrega", recibo);
       return { resposta: { ok: true, dados: recibo }, status: 200 };
     },
-  }).catch(() => null);
+  }).catch((err: unknown) => (err instanceof OrgNaoOperanteError ? "org_parada" : null));
 
+  // A suspensão libera a reserva. Depois da reativação a mesma chave pode enviar.
+  if (resultado === "org_parada") return recusar(falha("organizacao_indisponivel"), conversaDaRecusa);
   if (!resultado) return recusar(espera ?? falha("envio_indisponivel", 503));
   if (resultado.tipo === "replay") {
     const { resposta } = resultado;
