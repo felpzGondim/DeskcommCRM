@@ -1,3 +1,4 @@
+import type { RecipientInput } from "@/lib/channels/types";
 import type { ProspectingDelivery } from "@/lib/prospecting/guard";
 import type { AgentOperationContext } from "@/lib/ai/agents/operation";
 import type { ApprovedReplyContext } from "@/lib/ai/replies/delivery";
@@ -78,6 +79,15 @@ export interface HandlerCtx {
   approvedReply?: ApprovedReplyContext;
   meetingBooking?: MeetingBookingContext;
   internalMessageId?: string;
+  /** Alvo conferido antes do handler pelo JWT delegado e pelo adaptador do canal. */
+  envioDelegado?: {
+    sessaoId: string;
+    sessaoRef: string;
+    contatoId: string;
+    destino: string;
+    destinatario: RecipientInput;
+    conferirAutorizacao: () => Promise<boolean>;
+  };
   proactiveContext?: ProactiveContext;
   /** Trusted origin captured by the runtime, never request-body metadata. */
   serviceBoundary?: ServiceBoundary | null;

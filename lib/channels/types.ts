@@ -147,6 +147,8 @@ export interface OutboundEnvelope extends ChannelTenantScope {
   sessionRef: string;
   /** Endereço já resolvido por `resolveRecipient`. */
   to: string;
+  /** O chamador já conferiu o endereço no transporte para esta sessão. */
+  recipientVerified?: true;
   kind: OutboundKind;
   body?: string;
   media?: OutboundMedia;

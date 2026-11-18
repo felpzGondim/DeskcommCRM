@@ -181,6 +181,8 @@ export type EntradaDaIdempotencia<T> = {
   executar: () => Promise<{ resposta: T; status: number }>;
   /** Escritas externas críticas não podem executar se a reserva falhar. */
   exigirReserva?: boolean;
+  /** Efeitos irreversíveis podem manter a reserva até o TTL se o recibo se perder. */
+  janelaDaReservaMs?: number;
   /** Relógio injetado — o repo testa janela de tempo assim, não com sleep. */
   agora?: () => Date;
 };
@@ -230,7 +232,7 @@ export async function comIdempotencia<T>(
   const anterior = await lerLinha(true);
   if (anterior) return classificar(anterior);
 
-  const expiraEm = new Date(agora().getTime() + JANELA_DA_RESERVA_MS).toISOString();
+  const expiraEm = new Date(agora().getTime() + (entrada.janelaDaReservaMs ?? JANELA_DA_RESERVA_MS)).toISOString();
   const { error: erroDaReserva } = await db.from("idempotency_keys").insert({
     organization_id: organizationId,
     key: chave,

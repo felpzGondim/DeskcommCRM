@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { env } from "@/lib/env";
 
@@ -65,6 +65,9 @@ const URL_RUNTIME = "http://127.0.0.1:54321";
 const URL_ENV_ANTIGA = env.NEXT_PUBLIC_SUPABASE_URL;
 const URL_PROCESS_ANTIGA = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVER_URL_ANTIGA = env.SUPABASE_SERVER_URL;
+const FLAG_ANTIGA = env.DELEGACAO_ENVIO_HABILITADO;
+const envio = vi.hoisted(() => vi.fn());
+vi.mock("./delegacao-envio", () => ({ executarEnvioDelegado: envio }));
 
 function urlPublicaDoAuthNoTeste(url: string = URL_RUNTIME) {
   env.NEXT_PUBLIC_SUPABASE_URL = url;
@@ -73,6 +76,8 @@ function urlPublicaDoAuthNoTeste(url: string = URL_RUNTIME) {
 afterEach(() => {
   env.NEXT_PUBLIC_SUPABASE_URL = URL_ENV_ANTIGA;
   env.SUPABASE_SERVER_URL = SERVER_URL_ANTIGA;
+  env.DELEGACAO_ENVIO_HABILITADO = FLAG_ANTIGA;
+  envio.mockReset();
   if (URL_PROCESS_ANTIGA === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   else process.env.NEXT_PUBLIC_SUPABASE_URL = URL_PROCESS_ANTIGA;
 });
@@ -102,9 +107,7 @@ describe("RFC 9728", () => {
     env.SUPABASE_SERVER_URL = "http://kong:8000";
     urlPublicaDoAuthNoTeste("https://o-supabase-do-cliente.supabase.co");
     const m = metadadosRecursoProtegido("https://app.test");
-    expect(m.authorization_servers).toEqual([
-      "https://o-supabase-do-cliente.supabase.co/auth/v1",
-    ]);
+    expect(m.authorization_servers).toEqual(["https://o-supabase-do-cliente.supabase.co/auth/v1"]);
   });
 
   it("placeholder no env de runtime não vira authorization_servers (fail-closed)", () => {
@@ -167,11 +170,102 @@ describe("handleDelegacaoHttp", () => {
           tokenVisto = token;
           return clientVazio();
         },
-        buscarGrant: async () => GRANT,
+        buscarGrants: async () => [GRANT],
       },
     );
     expect(r.status).toBe(200);
     expect(tokenVisto).toBe("token.jwt");
     expect(tokenVisto).not.toMatch(/^dsk_/);
+  });
+});
+
+describe("tools de envio", () => {
+  const deps = { leitorAuth: leitor(), agora: AGORA, clientDoUsuario: clientVazio };
+  const args = {
+    conversation_id: "eeeeeeee-0000-4000-8000-000000000001",
+    idempotency_key: "aaaaaaaa-3333-4000-8000-000000000001",
+    texto: "Mensagem de teste",
+  };
+
+  function chamar(argumentos: unknown = args) {
+    return handleDelegacaoHttp(
+      req("POST", {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "delegacao_enviar", arguments: argumentos },
+      }),
+      deps,
+    );
+  }
+
+  it("anuncia schemas reais e conserva escopos OAuth", async () => {
+    urlPublicaDoAuthNoTeste();
+    env.DELEGACAO_ENVIO_HABILITADO = true;
+    const r = await handleDelegacaoHttp(
+      req("POST", { jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      deps,
+    );
+    const j = await r.json();
+    const tools = j.result.tools as Array<{ name: string; inputSchema: unknown }>;
+    expect(tools).toHaveLength(6);
+    expect(tools.find((t) => t.name === "delegacao_enviar")?.inputSchema).toMatchObject({
+      type: "object",
+      required: expect.arrayContaining(["conversation_id", "idempotency_key"]),
+      properties: { arquivo: { type: "object", required: ["base64", "nome", "mime"] } },
+    });
+    expect(tools.find((t) => t.name === "delegacao_iniciar_conversa")?.inputSchema).toMatchObject({
+      required: expect.arrayContaining(["channel_session_id", "telefone", "idempotency_key"]),
+    });
+    expect(metadadosRecursoProtegido("https://app.test").scopes_supported).toEqual([
+      "buscar",
+      "ler",
+      "baixar",
+    ]);
+  });
+
+  it("401 de identidade vem antes de validar ou executar o envio", async () => {
+    urlPublicaDoAuthNoTeste();
+    env.DELEGACAO_ENVIO_HABILITADO = true;
+    const r = await handleDelegacaoHttp(
+      req(
+        "POST",
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "delegacao_enviar", arguments: args },
+        },
+        null,
+      ),
+      deps,
+    );
+    expect(r.status).toBe(401);
+    expect(r.headers.get("www-authenticate")).toContain("Bearer");
+    expect(envio).not.toHaveBeenCalled();
+  });
+
+  it("desligado recusa 404 sem invocar envio, ligado valida args com 422", async () => {
+    urlPublicaDoAuthNoTeste();
+    env.DELEGACAO_ENVIO_HABILITADO = false;
+    expect((await chamar()).status).toBe(404);
+    env.DELEGACAO_ENVIO_HABILITADO = true;
+    expect((await chamar({ ...args, idempotency_key: undefined })).status).toBe(422);
+    expect((await chamar({ ...args, media_url: "https://example.invalid/file" })).status).toBe(422);
+    expect(envio).not.toHaveBeenCalled();
+  });
+
+  it("traduz recusas em 404 opaco e teto em 429 com retry_after", async () => {
+    urlPublicaDoAuthNoTeste();
+    env.DELEGACAO_ENVIO_HABILITADO = true;
+    envio.mockResolvedValueOnce({ ok: false, status: 404, motivo: "grant_ausente" });
+    const r = await chamar();
+    expect(r.status).toBe(404);
+    expect(await r.text()).not.toContain("grant_ausente");
+    envio.mockResolvedValueOnce({ ok: false, status: 429, motivo: "teto_envio", retry_after: 35 });
+    const teto = await chamar();
+    expect(teto.status).toBe(429);
+    expect(teto.headers.get("retry-after")).toBe("35");
+    expect(await teto.json()).toMatchObject({ error: { data: { retry_after: 35 } } });
   });
 });

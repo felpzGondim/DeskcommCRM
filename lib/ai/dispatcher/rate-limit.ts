@@ -215,3 +215,45 @@ export async function peekRateLimit(bucket: string, windowSec: number): Promise<
     return emMemoria();
   }
 }
+
+/**
+ * Reserva dois tetos de uma vez: uma janela negada não ocupa a outra.
+ * A reserva precisa ser compartilhada entre instâncias, mesmo durante
+ * indisponibilidade do Redis, então este caminho propaga a falha.
+ */
+export async function reservarTetosCompartilhados(
+  bucket: string,
+  curto: { limite: number; segundos: number },
+  longo: { limite: number; segundos: number },
+): Promise<number> {
+  const redis = getRedis();
+  if (!redis) throw new Error("rate_limit_storage_unavailable");
+  const agora = Math.floor(Date.now() / 1000);
+  const janelas = [curto, longo].map(({ limite, segundos }) => ({
+    chave: `{${bucket}}:${segundos}:${Math.floor(agora / segundos)}`,
+    ttl: segundos - (agora % segundos),
+    limite,
+  }));
+  const espera = await redis.eval<number[], number>(
+    `
+      local espera = 0
+      for i = 1, #KEYS do
+        local atual = tonumber(redis.call('GET', KEYS[i]) or '0')
+        if atual >= tonumber(ARGV[i * 2 - 1]) then
+          espera = math.max(espera, tonumber(ARGV[i * 2]))
+        end
+      end
+      if espera > 0 then return espera end
+      for i = 1, #KEYS do
+        if redis.call('INCR', KEYS[i]) == 1 then
+          redis.call('EXPIRE', KEYS[i], tonumber(ARGV[i * 2]))
+        end
+      end
+      return 0
+    `,
+    janelas.map((j) => j.chave),
+    janelas.flatMap((j) => [j.limite, j.ttl]),
+  );
+  if (!Number.isInteger(espera) || espera < 0) throw new Error("rate_limit_result_invalid");
+  return espera;
+}

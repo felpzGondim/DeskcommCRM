@@ -531,6 +531,27 @@ export async function sendMessageHandler(
   };
   const c = conv as unknown as Joined;
 
+  const envioDelegado = ctx.envioDelegado;
+  const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
+  if (envioDelegado) {
+    const contato = c.contacts;
+    const alvo = envioDelegado.destinatario;
+    const canal = c.channel_sessions;
+    // O pré-voo da ferramenta pode ter esperado pelo ritmo do número. A
+    // releitura do handler prende o endereço confirmado à sessão e ao contato
+    // atuais, e recusa indisponibilidade antes de inserir uma mensagem.
+    if (!canal || canal.status !== "WORKING" || canal.archived_at ||
+        canalDesativado(canal.metadata) || !adapter.isConfigured() ||
+        c.channel_session_id !== envioDelegado.sessaoId || resolveSessionRef(canal) !== envioDelegado.sessaoRef ||
+        !contato || contato.is_personal !== false || contato.is_blocked !== false ||
+        c.contact_id !== envioDelegado.contatoId || c.is_group !== alvo.isGroup ||
+        c.group_chat_id !== alvo.groupChatId || contato.phone_number !== alvo.phoneNumber ||
+        contato.wa_identity !== alvo.waIdentity || contato.wa_lid !== alvo.waLid ||
+        !await envioDelegado.conferirAutorizacao()) {
+      throw new ApiError(404, "not_found", undefined, ctx.requestId, "Conversa não encontrada.");
+    }
+  }
+
   if (c.contacts?.is_blocked) {
     throw new ApiError(
       403,
@@ -643,7 +664,7 @@ export async function sendMessageHandler(
   // nome do atendente com iniciais em maiúsculo; a IA, o nome configurável.
   const origemDoEmissor = origemDaMensagem(ctx.actor);
   let assinatura: string | null = null;
-  if (origemDoEmissor === "user" || origemDoEmissor === "ai") {
+  if (!envioDelegado && (origemDoEmissor === "user" || origemDoEmissor === "ai")) {
     const { data: orgAssinatura } = await supabase
       .from("organizations")
       .select("settings")
@@ -844,7 +865,7 @@ export async function sendMessageHandler(
     contact_id: c.contact_id,
     type: input.type,
     direction: "outbound" as const,
-    status: "queued",
+    status: envioDelegado ? "sending" : "queued",
     body: input.body ?? null,
     media_url: input.media_url ?? null,
     media_mime: input.media_mime ?? null,
@@ -915,8 +936,7 @@ export async function sendMessageHandler(
   // alcança o caso em que o embed não trouxe a sessão — impossível hoje
   // (`conversations.channel_session_id` é NOT NULL com FK ON DELETE RESTRICT),
   // e ainda assim mantido para não trocar o desfecho desse ramo defensivo.
-  const adapter = getAdapter(c.channel_sessions?.provider ?? DEFAULT_CHANNEL_PROVIDER);
-  const chatId = adapter.resolveRecipient({
+  const chatId = envioDelegado?.destino ?? adapter.resolveRecipient({
     isGroup: c.is_group,
     groupChatId: c.group_chat_id,
     phoneNumber: c.contacts?.phone_number,
@@ -959,6 +979,7 @@ export async function sendMessageHandler(
         error_code: "channel_archived",
         error_message: "Este número foi excluído da Central de Conexões.",
       })
+      .eq("organization_id", ctx.organization_id)
       .eq("id", message.id)
       .select(MSG_COLS)
       .maybeSingle();
@@ -975,6 +996,7 @@ export async function sendMessageHandler(
         error_code: "channel_disabled",
         error_message: "Este canal está desativado. Reative-o na Central de Conexões para voltar a enviar.",
       })
+      .eq("organization_id", ctx.organization_id)
       .eq("id", message.id)
       .select(MSG_COLS)
       .maybeSingle();
@@ -985,6 +1007,7 @@ export async function sendMessageHandler(
       .update({
         metadata: { ...(message.metadata ?? {}), queued_reason: adapter.codes.notConfigured },
       })
+      .eq("organization_id", ctx.organization_id)
       .eq("id", message.id)
       .select(MSG_COLS)
       .maybeSingle();
@@ -997,6 +1020,7 @@ export async function sendMessageHandler(
         error_code: "missing_phone_number",
         error_message: "Contato sem telefone para envio WhatsApp.",
       })
+      .eq("organization_id", ctx.organization_id)
       .eq("id", message.id)
       .select(MSG_COLS)
       .maybeSingle();
@@ -1010,6 +1034,7 @@ export async function sendMessageHandler(
           queued_reason: "channel_session_not_working",
         },
       })
+      .eq("organization_id", ctx.organization_id)
       .eq("id", message.id)
       .select(MSG_COLS)
       .maybeSingle();
@@ -1025,6 +1050,9 @@ export async function sendMessageHandler(
       const operacaoJaConferida = mesmaOperacao(currentExecutionAgentOperation(), ctx.agentOperation);
       const checkBoundary = async () => {
         await guardServiceEffect();
+        if (envioDelegado && !await envioDelegado.conferirAutorizacao()) {
+          throw new Error("delegacao_autorizacao_alterada");
+        }
         await guardAgendaEffect();
         if (ctx.prospectingDelivery) await assertProspectingDelivery(supabase, ctx.prospectingDelivery);
         if (ctx.meetingDelivery) await assertMeetingDeliverySupabase(supabase, ctx.meetingDelivery);
@@ -1106,7 +1134,7 @@ export async function sendMessageHandler(
             });
       } else if (input.media_storage_path) {
         // Storage-first: signed URL curta só pro canal baixar (nunca base64).
-        const admin = createAdminClient();
+        const admin = envioDelegado ? supabase : createAdminClient();
         const { data: signed, error: signErr } = await admin.storage
           .from("whatsapp-media")
           .createSignedUrl(input.media_storage_path, 600);
@@ -1122,6 +1150,7 @@ export async function sendMessageHandler(
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
+          ...(envioDelegado ? { recipientVerified: true } : {}),
           media: {
             url: signed.signedUrl,
             mime: input.media_mime ?? "application/octet-stream",
@@ -1194,6 +1223,7 @@ export async function sendMessageHandler(
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
+          ...(envioDelegado ? { recipientVerified: true } : {}),
           body: corpoDoCanal(input.body ?? "") ?? "",
           replyToExternalId: citada?.external_id ?? null,
         }));
@@ -1251,6 +1281,7 @@ export async function sendMessageHandler(
               ? { template_name: input.template_name, template_language: input.template_language }
               : {}),
           })
+          .eq("organization_id", ctx.organization_id)
           .eq("id", message.id)
           .select(MSG_COLS)
           .maybeSingle();
@@ -1288,12 +1319,13 @@ export async function sendMessageHandler(
       // responder "não configurado" travaria em `queued` um canal que funciona.
       // Quem sabe é `send()`, que pode consultar o banco — então ele lança, e a
       // tradução do desfecho acontece aqui.
-      if (msg.startsWith(adapter.codes.notConfigured)) {
+      if (!envioDelegado && msg.startsWith(adapter.codes.notConfigured)) {
         const { data: emFila } = await supabase
           .from("messages")
           .update({
             metadata: { ...(message.metadata ?? {}), queued_reason: adapter.codes.notConfigured },
           })
+          .eq("organization_id", ctx.organization_id)
           .eq("id", message.id)
           .select(MSG_COLS)
           .maybeSingle();
@@ -1306,8 +1338,9 @@ export async function sendMessageHandler(
         .update({
           status: "failed",
           error_code: code,
-          error_message: msg,
+          error_message: envioDelegado ? "Não foi possível confirmar a entrega." : msg,
         })
+        .eq("organization_id", ctx.organization_id)
         .eq("id", message.id)
         .select(MSG_COLS)
         .maybeSingle();
@@ -1368,7 +1401,8 @@ export async function sendMessageHandler(
     if (silenceUntil) conversationUpdate.bot_silenced_until = silenceUntil;
   }
 
-  await supabase.from("conversations").update(conversationUpdate).eq("id", c.id);
+  await supabase.from("conversations").update(conversationUpdate)
+    .eq("organization_id", c.organization_id).eq("id", c.id);
 
   // Envio pelo CRM não passa por `fn_mark_conversation_message` — carimba o
   // contato aqui para /app/contacts refletir a resposta (migration 0162).

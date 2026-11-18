@@ -7,7 +7,7 @@
  * `denyAuthorization`. Sem sessão, id inválido ou redirect que não é http(s)
  * → recusa (fail-closed). Não infere e-mail nem nome para log.
  */
-import { EFEITOS_DELEGADOS } from "@/lib/auth/delegacao-superficie";
+import { ESCOPOS_OAUTH_DELEGADOS } from "@/lib/auth/delegacao-superficie";
 
 export const CAMINHO_CONSENTIMENTO_OAUTH = "/oauth/consent";
 
@@ -162,4 +162,4 @@ export async function executarDecisaoConsentimento(
   return { ok: true, redirectUrl: url, authorizationId: id };
 }
 
-export const ESCOPOS_DELEGADOS_NA_TELA: readonly string[] = EFEITOS_DELEGADOS;
+export const ESCOPOS_DELEGADOS_NA_TELA: readonly string[] = ESCOPOS_OAUTH_DELEGADOS;

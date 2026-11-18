@@ -582,6 +582,17 @@ test.describe("tools/call JWT dedicado no processo Next", () => {
     const identBody = opacoHttp(await ident.text());
     expect(identBody).toMatch(/delegacao_buscar/);
 
+    // A instalação fresca mantém a leitura, com as ferramentas de envio
+    // desligadas mesmo para um JWT dedicado válido.
+    expect(identBody).not.toContain("delegacao_enviar");
+    const envioDesligado = await toolsCall(request, tokenA, "delegacao_enviar", {
+      conversation_id: convCorpA,
+      texto: "Mensagem sintética",
+      idempotency_key: randomUUID(),
+    });
+    expect(envioDesligado.status).toBe(404);
+
+
     const buscar = await toolsCall(request, tokenA, "delegacao_buscar");
     if (buscar.status !== 200) {
       const diag = await diagnosticoCadeia({
