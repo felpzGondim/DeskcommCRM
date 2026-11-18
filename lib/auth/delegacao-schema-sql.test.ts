@@ -120,7 +120,10 @@ describe("0774 não é a 0773 experimental", () => {
     expect(trecho).not.toMatch(/grant %I to %I/);
     const apendice = BASELINE.slice(BASELINE.lastIndexOf("delegação papel dedicado"));
     const aAncora = apendice.lastIndexOf("GRANT USAGE no schema storage");
-    const aTrecho = apendice.slice(aAncora, apendice.indexOf("notify pgrst, 'reload schema'", aAncora));
+    const aTrecho = apendice.slice(
+      aAncora,
+      apendice.indexOf("notify pgrst, 'reload schema'", aAncora),
+    );
     expect(aTrecho).toMatch(/USAGE em schema storage não ficou em oauth_delegado/);
     expect(aTrecho).toMatch(/delegacao-storage-ativar/);
     expect(aTrecho).not.toMatch(/then null/);
@@ -185,8 +188,71 @@ describe("0774 não é a 0773 experimental", () => {
     const post = readFileSync("app/api/v1/channel-sessions/route.ts", "utf8");
     expect(post).toMatch(/POST \/api\/v1\/channel-sessions/);
     expect(post).not.toMatch(/delegacao_sessoes_empresariais/);
-    expect(readFileSync("app/api/v1/channel-sessions/[id]/conta-empresarial/route.ts", "utf8")).toMatch(
-      /vincularSessaoContaEmpresarial/,
+    expect(
+      readFileSync("app/api/v1/channel-sessions/[id]/conta-empresarial/route.ts", "utf8"),
+    ).toMatch(/vincularSessaoContaEmpresarial/);
+  });
+});
+
+const nova = readFileSync(
+  "supabase/migrations/20261118140000_0775_delegacao_envio_sessao_titular.sql",
+  "utf8",
+);
+const rollback = readFileSync("supabase/rollback/0775_delegacao_envio_sessao_titular.sql", "utf8");
+
+describe("0775 — efeito enviar e uma sessão da titular", () => {
+  it("migra só schema e é espelhada antes da varredura de anon", () => {
+    expect(nova.startsWith("-- manifest:")).toBe(true);
+    expect(nova).toMatch(/efeitos <@ array\['buscar','ler','baixar','enviar'\]/);
+    expect(nova).not.toMatch(
+      /\b(?:insert\s+into|update\s+public|delete\s+from|drop\s+table|truncate)\b/i,
+    );
+    expect(nova).not.toMatch(/create or replace function public\.fn_delegacao_grant_vivo/);
+    expect(nova).not.toMatch(
+      /grant\s+(insert|update|delete)\b|grant\s+select\s+on\s+public\.channel_sessions/i,
+    );
+    const inicio = BASELINE.indexOf(
+      "-- ---- delegação envio e sessão titular (migration 0775) ----",
+    );
+    const fim = BASELINE.indexOf("-- ---- VARREDURA anon:", inicio);
+    expect(BASELINE.slice(BASELINE.indexOf("\n", inicio) + 1, fim).trimEnd()).toBe(nova.trimEnd());
+  });
+
+  it("trava origem exclusiva, vínculo do sujeito e membership ativa no banco", () => {
+    expect(nova).toMatch(/create table if not exists public\.delegacao_sessoes_titular/);
+    expect(nova).toMatch(/enable row level security/);
+    expect(nova).toMatch(
+      /on public\.delegacao_sessoes_titular \(user_id\) where revoked_at is null/,
+    );
+    expect(nova).toMatch(/before insert or update on public\.delegacao_sessoes_titular/);
+    expect(nova).toMatch(/before insert or update on public\.delegacao_sessoes_empresariais/);
+    expect(nova).toMatch(/u\.revoked_at is null and u\.role in \('owner', 'admin'\)/);
+    expect(nova).toMatch(/request\.jwt\.claims.*->> 'sub'/);
+    expect(nova).toMatch(
+      /select public\.fn_delegacao_sessao_empresarial\(p_session, p_org\)\s+or public\.fn_delegacao_sessao_titular\(p_session, p_org\)/,
+    );
+  });
+
+  it("preserva cada policy da 0774, trocando só o predicado de origem, e restaura no rollback", () => {
+    for (const nome of [
+      "contacts_select_oauth_delegado",
+      "conversations_select_oauth_delegado",
+      "messages_select_oauth_delegado",
+      "locacao_processo_conversas_select_oauth_delegado",
+      "locacao_processo_documentos_select_oauth_delegado",
+      "storage_objects_select_oauth_delegado",
+    ]) {
+      const inicio = sql.indexOf(`create policy ${nome}\n`);
+      const original = sql.slice(inicio, sql.indexOf(";", inicio) + 1);
+      expect(original).toContain("fn_delegacao_sessao_empresarial");
+      expect(nova).toContain(
+        original.replaceAll("fn_delegacao_sessao_empresarial", "fn_delegacao_sessao_autorizada"),
+      );
+      expect(rollback).toContain(original);
+    }
+    expect(nova).toMatch(/to_regclass\('storage\.objects'\).*c\.relrowsecurity/);
+    expect(rollback).toMatch(
+      /update public\.delegacao_sessoes_titular set revoked_at[\s\S]*drop table public\.delegacao_sessoes_titular/,
     );
   });
 });
