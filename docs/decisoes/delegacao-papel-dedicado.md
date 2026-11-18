@@ -157,3 +157,11 @@ Consultas sem dado pessoal, no banco da instalação, **depois** de backup de ca
 Auth desta instalação. Este corte **não** envia mensagem a ela nem a terceiros.
 Identificadores não se inferem do nome do client. Vínculo de sessões da instalação
 é levantamento administrativo, não semente deste PR.
+
+## Adendo 0775 — envio e sessão titular
+
+O grant admite `enviar` como efeito de aplicação. JWT, hook, consentimento e ACL somente leitura do papel `oauth_delegado` conservam o contrato da 0774. O MCP usa o JWT para ler a conversa e confirmar a origem e o grant da organização. O cliente privilegiado, criado após essas provas, passa pelo mesmo handler da Inbox e registra a autoria da titular.
+
+Um vínculo ativo em `delegacao_sessoes_titular` autoriza uma sessão da organização pessoal da titular, enquanto ela for `admin` ou `owner` com membership ativa. Triggers impedem o cadastro simultâneo das duas origens para uma sessão. A policy de Storage conserva as exigências de conversa ou documento visível e aceita a origem titular verificada. A RPC `fn_delegacao_listar_sessoes` expõe apenas IDs, origem e estado para o seletor da ferramenta.
+
+O baseline reaplica as definições sem substituir as linhas de vínculo. A implantação usa os scripts operacionais parametrizados e o interruptor de runtime. A troca de policy no Storage exige a mesma autoridade de DDL da 0774. A configuração e a reversão ficam no plano de operação. [Plano de envio delegado](../planos/mcp-envio-marina-20261118.md)
