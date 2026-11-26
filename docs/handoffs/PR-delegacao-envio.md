@@ -1,6 +1,6 @@
 # Envio de WhatsApp pelo MCP delegado
 
-Entrega local para `felpz.21`, pendente de release. As decisões, entradas das ferramentas, ativação e reversão estão no [plano de envio](../planos/mcp-envio-marina-20261118.md).
+Entrega da `v1.88.0-felpz.21` (PR #54). A migration 0775 foi aplicada em produção em 25/11; o envio segue desligado até a ativação. As decisões, entradas das ferramentas, ativação e reversão estão no [plano de envio](../planos/mcp-envio-marina-20261118.md).
 
 ## Integração ao Sistema Vivo
 

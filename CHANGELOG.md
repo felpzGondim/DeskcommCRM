@@ -30,6 +30,16 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.21] — 2026-11-25
+
+### Adicionado
+
+- **Envio de WhatsApp pelo MCP com delegação OAuth (desligado por padrão).** Uma pessoa pode delegar o envio de mensagens e anexos pelo MCP em sessões empresariais da organização e vincular a própria sessão titular. Cada envio entra na conversa da Inbox com a autoria da titular, fica no audit (`delegacao.mensagem_enviada` / `delegacao.envio_recusado`), respeita 20 envios por hora e 80 por dia, e repetir a mesma `idempotency_key` devolve o mesmo recibo sem reenviar. Revogar o grant ou o vínculo corta o próximo envio. Migration 0775 (`delegacao_envio_sessao_titular`), com rollback em `supabase/rollback/`. (#54)
+
+### ⚠️ Requer atenção
+
+- O `update.sh` aplica a migration 0775; ela não liga nada sozinha. O envio só funciona com `DELEGACAO_ENVIO_HABILITADO=true` no `.env` do app (padrão `false`) e com o grant de envio e o vínculo da sessão cadastrados por `supabase/delegacao-envio-ativar.sql`. `DELEGACAO_ENVIO_PREFIXO_NOME` define o nome que assina as mensagens nas sessões empresariais (vazio = sem prefixo). Para desligar: `DELEGACAO_ENVIO_HABILITADO=false`, reiniciar o app e, se quiser revogar, `supabase/delegacao-envio-desativar.sql`. Quem não usa o MCP delegado não precisa fazer nada.
+
 ## [1.88.0-felpz.20] — 2026-11-09
 
 ### Corrigido
