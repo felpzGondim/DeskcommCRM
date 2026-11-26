@@ -206,7 +206,7 @@ async function telefoneConfirmado(
   ctx: Contexto,
   telefone?: string | null,
   identidade?: string | null,
-) {
+): Promise<{ telefone: string; lidProvado: boolean } | null> {
   const { transporte, ref, org } = ctx;
   if (!transporte.resolveRegisteredPhone) return null;
   try {
@@ -217,24 +217,26 @@ async function telefoneConfirmado(
           identity: identidade,
         })
       : null;
-    // Um telefone confirmado não basta se o destino efetivo for um LID
-    // divergente. Confere a correspondência antes de conservar o LID.
-    if (
-      identidade &&
-      (!telefoneDoLid || (telefone && !phoneLookupVariants(telefone).includes(telefoneDoLid)))
-    ) {
+    if (telefoneDoLid && telefone && !phoneLookupVariants(telefone).includes(telefoneDoLid)) {
       return null;
     }
     const numero = telefoneDoLid ?? telefone;
     if (!numero || !E164.test(numero)) return null;
-    const existente = await transporte.resolveRegisteredPhone({
-      organizationId: org,
-      sessionRef: ref,
-      phone: numero,
-    });
-    if (!existente) return null;
-    const e164 = existente.startsWith("+") ? existente : `+${existente}`;
-    return phoneLookupVariants(numero).includes(e164) ? e164 : null;
+    const escopo = { organizationId: org, sessionRef: ref };
+    const existente = await transporte.resolveRegisteredPhone({ ...escopo, phone: numero });
+    const e164 = existente && (existente.startsWith("+") ? existente : `+${existente}`);
+    if (e164 && !phoneLookupVariants(numero).includes(e164)) return null;
+
+    let lidProvado = Boolean(telefoneDoLid);
+    if (identidade && telefone && E164.test(telefone) && (!telefoneDoLid || !e164)) {
+      const lidRegistrado = await transporte.resolveRegisteredLid?.({ ...escopo, phone: telefone });
+      if (lidRegistrado) {
+        if (`lid:${lidRegistrado}` !== identidade) return null;
+        lidProvado = true;
+        if (!e164) return { telefone, lidProvado };
+      }
+    }
+    return e164 ? { telefone: e164, lidProvado } : null;
   } catch {
     return null;
   }
@@ -286,14 +288,19 @@ async function prepararAlvo(ctx: Contexto, pedido: PedidoEnvioDelegado) {
       : contato.wa_identity?.startsWith("lid:")
         ? contato.wa_identity
         : null;
-    const telefone = await telefoneConfirmado(ctx, contato.phone_number, lid);
-    if (!telefone) return falha("numero_nao_confirmado");
-    const destino = transporte.resolveRecipient({ ...destinoOriginal, phoneNumber: telefone });
+    const confirmado = await telefoneConfirmado(ctx, contato.phone_number, lid);
+    if (!confirmado) return falha("numero_nao_confirmado");
+    const destino = transporte.resolveRecipient({
+      ...destinoOriginal,
+      phoneNumber: confirmado.telefone,
+      ...(lid && !confirmado.lidProvado ? { waLid: null, waIdentity: null } : {}),
+    });
     return destino ? { conversa, destino, destinoOriginal } : falha("numero_nao_confirmado");
   }
 
-  const telefone = await telefoneConfirmado(ctx, pedido.telefone);
-  if (!telefone) return falha("numero_nao_confirmado");
+  const confirmado = await telefoneConfirmado(ctx, pedido.telefone);
+  if (!confirmado) return falha("numero_nao_confirmado");
+  const { telefone } = confirmado;
   const { data: contatos, error } = await db
     .from("contacts")
     .select(COLUNAS_CONTATO)

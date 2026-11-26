@@ -146,6 +146,20 @@ export async function resolvePhoneJidDigitsForCall(
   return r ? phoneJidDigitsFromCheckResult(r) : null;
 }
 
+export async function resolveLidForPhone(
+  client: WahaClient,
+  session: string,
+  phone: string,
+): Promise<string | null> {
+  try {
+    const r = await firstExistingOnWhatsapp(client, session, phone);
+    const chatId = r?.chatId?.trim();
+    return chatId?.endsWith("@lid") ? chatId.slice(0, -"@lid".length) || null : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Consulta WAHA; null = não achou ou falhou (caller usa fallback). */
 export async function resolveWhatsappIdForContactCard(
   client: WahaClient,

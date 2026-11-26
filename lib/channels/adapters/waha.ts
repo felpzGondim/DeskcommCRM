@@ -11,6 +11,7 @@ import { getWahaClient } from "@/lib/waha/client";
 import { wahaSendPlanFor } from "@/lib/waha/media-send";
 import {
   resolveCanonicalCusChatId,
+  resolveLidForPhone,
   resolvePhoneJidDigitsForCall,
   resolveWhatsappIdForContactCard,
 } from "@/lib/waha/resolve-contact-whatsapp-id";
@@ -151,6 +152,12 @@ export const wahaAdapter: ChannelAdapter = {
     const client = getWahaClient();
     if (!client) return null;
     return resolvePhoneJidDigitsForCall(client, input.sessionRef, input.phone);
+  },
+
+  async resolveRegisteredLid(input: { sessionRef: string; phone: string }): Promise<string | null> {
+    const client = getWahaClient();
+    if (!client) return null;
+    return resolveLidForPhone(client, input.sessionRef, input.phone);
   },
 
   /**

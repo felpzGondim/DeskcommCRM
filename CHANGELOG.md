@@ -30,6 +30,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.23] — 2026-11-26
+
+### Corrigido
+
+- **Envio pelo MCP delegado não trava em contato com LID que o WhatsApp ainda não traduziu.** Antes, contato com `wa_lid` e telefone salvo era recusado com `numero_nao_confirmado` sempre que a tabela de LIDs do canal ainda não conhecia o id. Agora, se o LID não foi traduzido, o telefone salvo passa pelo check-exists e a mensagem vai para esse telefone. LID traduzido e diferente do telefone continua recusado. Se o check-exists devolver só um `@lid` igual ao do contato, o envio é aceito e vai para esse LID comprovado; LID diferente recusa. A recusa `-32001` do MCP passa a trazer `error.data.motivo` (só o código do motivo). Quem já instalou não precisa editar arquivo nem rodar SQL.
+
 ## [1.88.0-felpz.22] — 2026-11-26
 
 ### Corrigido

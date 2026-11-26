@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   existe: vi.fn(),
   configurado: vi.fn(),
   resolverLid: vi.fn(),
+  lidRegistrado: vi.fn(),
   ritmo: vi.fn(),
   frear: vi.fn(),
   registrar: vi.fn(),
@@ -49,16 +50,22 @@ vi.mock("@/lib/channels", () => ({
   getAdapter: () => ({
     isConfigured: h.configurado,
     resolveRegisteredPhone: h.existe,
+    resolveRegisteredLid: h.lidRegistrado,
     resolvePhoneForIdentity: h.resolverLid,
     resolveRecipient: ({
       isGroup,
       groupChatId,
       phoneNumber,
+      waLid,
     }: {
       isGroup: boolean;
       groupChatId: string;
       phoneNumber: string;
-    }) => (isGroup ? groupChatId : phoneNumber),
+      waLid?: string | null;
+    }) => {
+      if (isGroup) return groupChatId;
+      return waLid ? `${waLid}@lid` : phoneNumber;
+    },
   }),
 }));
 
@@ -76,6 +83,7 @@ const SESS = randomUUID();
 const CONTATO = randomUUID();
 const MSG = randomUUID();
 const TELEFONE = "+12025550123";
+const LID = "lid-sintetico-1";
 const HOJE = "2026-11-18T13:00:00Z";
 const entrada = { conversation_id: CONV, texto: "Teste fictício" };
 const contato = {
@@ -247,6 +255,8 @@ beforeEach(() => {
   h.frear.mockResolvedValue({ channelSessionId: SESS });
   h.registrar.mockResolvedValue(undefined);
   h.existe.mockResolvedValue(TELEFONE.slice(1));
+  h.resolverLid.mockResolvedValue(null);
+  h.lidRegistrado.mockResolvedValue(null);
   h.configurado.mockReturnValue(true);
   h.upload.mockResolvedValue({ error: null });
   h.remove.mockResolvedValue({ error: null });
@@ -471,16 +481,48 @@ describe("delegação de envio", () => {
     expect(h.teto).not.toHaveBeenCalled();
   });
 
-  it("confirma o telefone de um LID e recusa identidade divergente", async () => {
+  it("confirma um LID traduzido mesmo sem telefone cadastrado", async () => {
     h.resolverLid.mockResolvedValue(TELEFONE);
-    const f = fixture({ contato: { wa_lid: "identidade-sintetica", phone_number: null } });
+    const f = fixture({ contato: { wa_lid: LID, phone_number: null } });
     expect(await f.enviar()).toMatchObject({ ok: true });
     expect(h.existe).toHaveBeenCalledWith(expect.objectContaining({ phone: TELEFONE }));
-    h.resolverLid.mockResolvedValue("+12025550133");
-    const outra = fixture({ contato: { wa_lid: "identidade-sintetica" } });
-    expect(await outra.enviar()).toMatchObject({ status: 404 });
-    expect(h.existe).toHaveBeenCalledTimes(1);
-    expect(h.enviar).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { traduzido: null, registrado: TELEFONE.slice(1), lidRegistrado: null, destino: TELEFONE },
+    { traduzido: TELEFONE, registrado: TELEFONE.slice(1), lidRegistrado: null, destino: `${LID}@lid` },
+    { traduzido: null, registrado: null, lidRegistrado: LID, destino: `${LID}@lid` },
+    { traduzido: null, registrado: TELEFONE.slice(1), lidRegistrado: LID, destino: `${LID}@lid` },
+  ])("envia ao destino confirmado (%j)", async ({ traduzido, registrado, lidRegistrado, destino }) => {
+    h.resolverLid.mockResolvedValue(traduzido);
+    h.existe.mockResolvedValue(registrado);
+    h.lidRegistrado.mockResolvedValue(lidRegistrado);
+    const f = fixture({ contato: { wa_lid: LID, wa_identity: `lid:${LID}` } });
+
+    expect(await f.enviar()).toMatchObject({ ok: true });
+    expect(h.existe).toHaveBeenCalledWith(expect.objectContaining({ phone: TELEFONE }));
+    expect(h.enviar.mock.calls[0]?.[1]).toMatchObject({
+      envioDelegado: {
+        destino,
+        destinatario: { waLid: LID, waIdentity: `lid:${LID}`, phoneNumber: TELEFONE },
+      },
+    });
+  });
+
+  it.each([
+    { traduzido: "+12025550133", registrado: TELEFONE.slice(1), lidRegistrado: null },
+    { traduzido: null, registrado: null, lidRegistrado: "lid-sintetico-2" },
+    { traduzido: null, registrado: TELEFONE.slice(1), lidRegistrado: "lid-sintetico-2" },
+  ])("recusa identidade divergente antes do handler (%j)", async ({ traduzido, registrado, lidRegistrado }) => {
+    h.resolverLid.mockResolvedValue(traduzido);
+    h.existe.mockResolvedValue(registrado);
+    h.lidRegistrado.mockResolvedValue(lidRegistrado);
+
+    expect(await fixture({ contato: { wa_lid: LID } }).enviar()).toMatchObject({
+      status: 404,
+      motivo: "numero_nao_confirmado",
+    });
+    expect(h.enviar).not.toHaveBeenCalled();
   });
 
   it("grupo pula check-exists", async () => {

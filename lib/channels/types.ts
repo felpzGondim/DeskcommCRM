@@ -350,6 +350,11 @@ export interface ChannelAdapter {
     input: ChannelTenantScope & { sessionRef: string; phone: string },
   ): Promise<string | null>;
 
+  /** Parte de usuário do LID retornado pelo check-exists para o telefone, sem `@lid`. Null se ausente ou se a consulta falhar. */
+  resolveRegisteredLid?(
+    input: ChannelTenantScope & { sessionRef: string; phone: string },
+  ): Promise<string | null>;
+
   /**
    * Gestão das definições aprovadas — criar, editar, apagar.
    *
