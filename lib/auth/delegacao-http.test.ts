@@ -255,13 +255,20 @@ describe("tools de envio", () => {
     expect(envio).not.toHaveBeenCalled();
   });
 
-  it("traduz recusas em 404 opaco e teto em 429 com retry_after", async () => {
+  it("expõe somente o código do motivo na recusa de envio", async () => {
     urlPublicaDoAuthNoTeste();
     env.DELEGACAO_ENVIO_HABILITADO = true;
-    envio.mockResolvedValueOnce({ ok: false, status: 404, motivo: "grant_ausente" });
+    envio.mockResolvedValueOnce({ ok: false, status: 404, motivo: "numero_nao_confirmado" });
     const r = await chamar();
     expect(r.status).toBe(404);
-    expect(await r.text()).not.toContain("grant_ausente");
+    const { error } = await r.json();
+    expect(error.code).toBe(-32001);
+    expect(error.data).toEqual({ motivo: "numero_nao_confirmado" });
+  });
+
+  it("traduz teto em 429 com retry_after", async () => {
+    urlPublicaDoAuthNoTeste();
+    env.DELEGACAO_ENVIO_HABILITADO = true;
     envio.mockResolvedValueOnce({ ok: false, status: 429, motivo: "teto_envio", retry_after: 35 });
     const teto = await chamar();
     expect(teto.status).toBe(429);

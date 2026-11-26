@@ -277,7 +277,7 @@ export async function handleDelegacaoHttp(
     }
     if (r.status === 422) return rpcErro(id, -32602, "Parâmetros inválidos.", 422);
     if (r.status === 503) return rpcErro(id, -32003, "Envio indisponível.", 503);
-    return rpcErro(id, -32001, "Não encontrado.", 404);
+    return rpcErro(id, -32001, "Não encontrado.", 404, undefined, { motivo: r.motivo });
   }
 
   const entrada = tool.schema.safeParse(args);

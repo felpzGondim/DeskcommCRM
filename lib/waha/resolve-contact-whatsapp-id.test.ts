@@ -4,6 +4,8 @@ import { wahaContactPayload } from "@/lib/waha/contact-card";
 import {
   limparMemoCheckExists,
   resolveCanonicalCusChatId,
+  resolveLidForPhone,
+  resolvePhoneJidDigitsForCall,
   resolveWhatsappIdForContactCard,
   sendChatIdFromCheckResult,
   whatsappIdFromCheckResult,
@@ -42,6 +44,23 @@ describe("sendChatIdFromCheckResult", () => {
         pn: "5532984793302@c.us",
       }),
     ).toBe("23423462304912@lid");
+  });
+});
+
+describe("resolveLidForPhone", () => {
+  it("extrai a parte de usuário e reutiliza o check-exists do telefone", async () => {
+    const client = {
+      checkContactExists: vi.fn().mockResolvedValue({
+        numberExists: true,
+        chatId: "lid-sintetico-1@lid",
+      }),
+    };
+
+    await expect(resolvePhoneJidDigitsForCall(client as never, "sessao-1", "+12025550123"))
+      .resolves.toBeNull();
+    await expect(resolveLidForPhone(client as never, "sessao-1", "+12025550123"))
+      .resolves.toBe("lid-sintetico-1");
+    expect(client.checkContactExists).toHaveBeenCalledTimes(1);
   });
 });
 
