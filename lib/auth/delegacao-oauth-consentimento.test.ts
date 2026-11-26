@@ -12,7 +12,7 @@ import {
   type OauthConsentimento,
 } from "./delegacao-oauth-consentimento";
 
-const AUTH_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const AUTH_ID = "k7qm2xv4tn5bz3hd6wpy4cjr2fla7seu";
 const USER_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const REDIRECT = "http://127.0.0.1/callback?code=abc&state=s";
@@ -86,7 +86,7 @@ describe("carregarDetalhesConsentimento", () => {
 
   it("authorization_id inválido recusa e não fala com o Auth", async () => {
     const deps = oauth({ userId: USER_ID, details: detalhes() });
-    const r = await carregarDetalhesConsentimento("nao-e-uuid", deps);
+    const r = await carregarDetalhesConsentimento("nao/valido", deps);
     expect(r).toEqual({ ok: false, motivo: "pedido_invalido" });
     expect(deps.leituras).toBe(0);
   });
@@ -135,7 +135,7 @@ describe("executarDecisaoConsentimento", () => {
   it("authorization_id inválido recusa e não fala com o Auth", async () => {
     const deps = oauth({ userId: USER_ID, approveUrl: REDIRECT });
     const r = await executarDecisaoConsentimento(
-      { authorizationId: "https://evil.example/x", decisao: "aprovar" },
+      { authorizationId: "nao/valido", decisao: "aprovar" },
       deps,
     );
     expect(r).toEqual({ ok: false, motivo: "pedido_invalido" });
@@ -150,10 +150,25 @@ describe("executarDecisaoConsentimento", () => {
 });
 
 describe("helpers", () => {
-  it("authorization_id só aceita UUID", () => {
+  it("authorization_id aceita IDs opacos e preserva maiúsculas", () => {
+    const uuid = "AAAAAAAA-0000-4000-8000-000000000001";
     expect(authorizationIdValido(AUTH_ID)).toBe(AUTH_ID);
-    expect(authorizationIdValido("")).toBeNull();
-    expect(authorizationIdValido("abc")).toBeNull();
+    expect(authorizationIdValido(` ${uuid} `)).toBe(uuid);
+    expect(authorizationIdValido("a".repeat(16))).toBe("a".repeat(16));
+    expect(authorizationIdValido("a".repeat(128))).toBe("a".repeat(128));
+  });
+
+  it.each([
+    "abcdefghijklmnop/qrst",
+    "abcdefghijklmnop qrst",
+    "..",
+    "../etc",
+    "a".repeat(15),
+    "a".repeat(129),
+    "",
+    123,
+  ])("authorization_id rejeita valor inválido %j", (id) => {
+    expect(authorizationIdValido(id)).toBeNull();
   });
 
   it("rótulos dos três efeitos existem", () => {

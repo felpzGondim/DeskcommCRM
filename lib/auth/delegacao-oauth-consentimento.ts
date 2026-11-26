@@ -1,7 +1,8 @@
 /**
  * Consentimento OAuth 2.1 do Auth (tela `/oauth/consent`).
  *
- * GoTrue redireciona o navegador para este caminho com `authorization_id`.
+ * GoTrue redireciona o navegador para este caminho com `authorization_id`,
+ * um ID opaco (GoTrue usa base32 de 32 caracteres).
  * A identidade é a sessão normal do CRM (`getUser`). Aprovar/negar vai pelas
  * APIs oficiais `auth.oauth.getAuthorizationDetails` / `approveAuthorization` /
  * `denyAuthorization`. Sem sessão, id inválido ou redirect que não é http(s)
@@ -11,8 +12,7 @@ import { ESCOPOS_OAUTH_DELEGADOS } from "@/lib/auth/delegacao-superficie";
 
 export const CAMINHO_CONSENTIMENTO_OAUTH = "/oauth/consent";
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ID_AUTORIZACAO = /^[A-Za-z0-9_-]{16,128}$/;
 
 const ROTULO_DO_ESCOPO: Record<string, string> = {
   buscar: "Listar conversas da conta empresarial",
@@ -55,7 +55,7 @@ export type OauthConsentimento = {
 export function authorizationIdValido(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const t = raw.trim();
-  return UUID.test(t) ? t.toLowerCase() : null;
+  return ID_AUTORIZACAO.test(t) ? t : null;
 }
 
 export function urlDeRedirectDoAuth(raw: unknown): string | null {
