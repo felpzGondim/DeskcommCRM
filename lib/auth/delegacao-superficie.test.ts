@@ -52,25 +52,36 @@ function leitor(c: Record<string, unknown> = claims()): LeitorAuthOAuth {
 
 type Store = Record<string, { data: unknown; error?: unknown }>;
 
-function client(store: Store): ClienteLeitura {
+function client(store: Store, sessoes: unknown[] = []): ClienteLeitura {
   return {
+    rpc: async () => ({ data: sessoes, error: null }),
     from(tabela: string) {
       const row = store[tabela] ?? { data: null };
       const self: Record<string, unknown> = {};
       const chain = () => self;
       self.select = chain;
-      self.eq = chain;
+      const filtros: Record<string, string> = {};
+      self.eq = (chave: string, valor: string) => {
+        filtros[chave] = valor;
+        return self;
+      };
+      const filtrado = () =>
+        Array.isArray(row.data)
+          ? (row.data as Record<string, unknown>[]).filter((item) =>
+              Object.entries(filtros).every(([k, v]) => item[k] === undefined || item[k] === v),
+            )
+          : row.data;
       self.in = chain;
       self.is = chain;
       self.limit = chain;
       self.maybeSingle = async () => ({
-        data: Array.isArray(row.data) ? (row.data[0] ?? null) : row.data,
+        data: Array.isArray(row.data) ? ((filtrado() as unknown[])[0] ?? null) : row.data,
         error: row.error ?? null,
       });
       self.then = (
         resolve: (v: { data: unknown; error: unknown }) => unknown,
         reject: (e: unknown) => unknown,
-      ) => Promise.resolve({ data: row.data, error: row.error ?? null }).then(resolve, reject);
+      ) => Promise.resolve({ data: filtrado(), error: row.error ?? null }).then(resolve, reject);
       return self;
     },
     schema(nome: string) {
@@ -99,9 +110,9 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => {
+        buscarGrants: async () => {
           grant += 1;
-          return GRANT;
+          return [GRANT];
         },
         clientDoUsuario: () => client({}),
       },
@@ -118,7 +129,7 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => GRANT,
+        buscarGrants: async () => [GRANT],
         clientDoUsuario: () =>
           client({ conversations: { data: [{ id: CONV, organization_id: ORG }] } }),
       },
@@ -130,6 +141,64 @@ describe("executarSuperficieDelegada", () => {
     }
   });
 
+  it("busca em dois grants e escolhe o grant da sessão titular pela org da conversa", async () => {
+    urlPublicaDoAuthNoTeste();
+    const orgTitular = "dddddddd-0000-4000-8000-000000000002";
+    const convTitular = "eeeeeeee-0000-4000-8000-000000000002";
+    const titular = {
+      id: convTitular,
+      organization_id: orgTitular,
+      contact_id: "ct",
+      channel_session_id: SESS,
+    };
+    const deps = {
+      leitorAuth: leitor(),
+      agora: AGORA,
+      buscarGrants: async () => [GRANT, { ...GRANT, organization_id: orgTitular }],
+      clientDoUsuario: () =>
+        client(
+          {
+            conversations: { data: [{ id: CONV, organization_id: ORG }, titular] },
+            contacts: { data: { is_personal: false } },
+            messages: { data: [{ id: "mensagem" }] },
+          },
+          [{ channel_session_id: SESS, organization_id: orgTitular, origem: "titular" }],
+        ),
+    };
+    const authorizationHeader = "Bearer token.jwt";
+    const busca = await executarSuperficieDelegada({ authorizationHeader, efeito: "buscar" }, deps);
+    expect(busca).toMatchObject({
+      ok: true,
+      dados: { conversations: [{ id: CONV }, { id: convTitular }] },
+    });
+    const leitura = await executarSuperficieDelegada(
+      {
+        authorizationHeader,
+        efeito: "ler",
+        conversationId: convTitular,
+      },
+      deps,
+    );
+    expect(leitura).toMatchObject({
+      ok: true,
+      dados: { conversation: titular, messages: [{ id: "mensagem" }] },
+    });
+  });
+
+  it("sessão pessoal de outro titular fica invisível ao JWT mesmo com grant de leitura", async () => {
+    urlPublicaDoAuthNoTeste();
+    const r = await executarSuperficieDelegada(
+      { authorizationHeader: "Bearer token.jwt", efeito: "ler", conversationId: CONV },
+      {
+        leitorAuth: leitor(),
+        agora: AGORA,
+        buscarGrants: async () => [GRANT],
+        clientDoUsuario: () => client({ conversations: { data: null } }),
+      },
+    );
+    expect(r).toMatchObject({ ok: false, motivo: "conversa_nao_autorizada" });
+  });
+
   it("ler recusa sessão sem vínculo mesmo com contato corporativo", async () => {
     urlPublicaDoAuthNoTeste();
     const r = await executarSuperficieDelegada(
@@ -137,7 +206,7 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => GRANT,
+        buscarGrants: async () => [GRANT],
         clientDoUsuario: () =>
           client({
             conversations: {
@@ -148,13 +217,12 @@ describe("executarSuperficieDelegada", () => {
                 channel_session_id: SESS,
               },
             },
-            delegacao_sessoes_empresariais: { data: null },
             contacts: { data: { is_personal: false } },
           }),
       },
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.motivo).toBe("sessao_nao_empresarial");
+    if (!r.ok) expect(r.motivo).toBe("sessao_nao_autorizada");
   });
 
   it("ler recusa contato pessoal mesmo com vínculo empresarial", async () => {
@@ -164,20 +232,22 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => GRANT,
+        buscarGrants: async () => [GRANT],
         clientDoUsuario: () =>
-          client({
-            conversations: {
-              data: {
-                id: CONV,
-                organization_id: ORG,
-                contact_id: "c1",
-                channel_session_id: SESS,
+          client(
+            {
+              conversations: {
+                data: {
+                  id: CONV,
+                  organization_id: ORG,
+                  contact_id: "c1",
+                  channel_session_id: SESS,
+                },
               },
+              contacts: { data: { is_personal: true } },
             },
-            delegacao_sessoes_empresariais: { data: { channel_session_id: SESS } },
-            contacts: { data: { is_personal: true } },
-          }),
+            [{ channel_session_id: SESS, organization_id: ORG, origem: "empresarial" }],
+          ),
       },
     );
     expect(r.ok).toBe(false);
@@ -191,7 +261,7 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => ({ ...GRANT, revoked_at: "2026-11-08T00:00:00.000Z" }),
+        buscarGrants: async () => [{ ...GRANT, revoked_at: "2026-11-08T00:00:00.000Z" }],
         clientDoUsuario: () => client({}),
       },
     );
@@ -205,7 +275,7 @@ describe("executarSuperficieDelegada", () => {
       {
         leitorAuth: leitor(),
         agora: AGORA,
-        buscarGrant: async () => GRANT,
+        buscarGrants: async () => [GRANT],
         clientDoUsuario: () => client({}),
       },
     );

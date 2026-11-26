@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const MCP_ORG = readFileSync("app/api/mcp/route.ts", "utf8");
 const MCP_DEL = readFileSync("app/api/mcp/delegacao/route.ts", "utf8");
+const ENVIO = readFileSync("lib/auth/delegacao-envio.ts", "utf8");
+const ENTRADA_ENVIO = readFileSync("lib/auth/delegacao-envio-entrada.ts", "utf8");
 const HTTP = readFileSync("lib/auth/delegacao-http.ts", "utf8");
 const SUPER = readFileSync("lib/auth/delegacao-superficie.ts", "utf8");
 const WELL_KNOWN = readFileSync("app/.well-known/oauth-protected-resource/route.ts", "utf8");
@@ -24,7 +26,16 @@ describe("MCP individual isolado do dsk_/admin", () => {
     expect(MCP_DEL).toMatch(/createUserClientFromAccessToken/);
     expect(HTTP).not.toMatch(/dsk_/);
     expect(HTTP).not.toMatch(/createAdminClient|validateBearerToken/);
-    expect(SUPER).toMatch(/Nunca dsk_\/admin/);
+    expect(SUPER).not.toMatch(/createAdminClient|supabase\/admin|validateBearerToken/);
+  });
+
+  it("escrita privilegiada fica isolada depois da prova com JWT e do grant enviar", () => {
+    expect(ENTRADA_ENVIO).not.toMatch(/createAdminClient|supabase\/admin/);
+    expect(HTTP).toMatch(/verificarSujeitoOAuth[\s\S]+executarEnvioDelegado\(sujeito\.sujeito/);
+    expect(ENVIO).toMatch(
+      /carregarAcessoDelegado\(sujeito, deps, "enviar"\)[\s\S]+if \(!alvoRls\.ok\)[\s\S]+createAdminClient\(\)/,
+    );
+    expect(ENVIO.match(/createAdminClient\(\)/g)).toHaveLength(1);
   });
 
   it("well-known e HTTP da delegação não leem NEXT_PUBLIC_* direto (placeholder do build)", () => {

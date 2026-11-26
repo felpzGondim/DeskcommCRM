@@ -1,16 +1,4 @@
-/**
- * Superfície delegada (buscar / ler / baixar) para identidade OAuth individual.
- *
- * Canal Bot ≠ fonte WhatsApp. Origem empresarial = vínculo da sessão com a
- * conta empresarial da org (`fn_delegacao_sessao_empresarial`). Grant individual
- * read-only (uid+client+org). Sessão nova/substituída herda se o cadastro da
- * conexão gravar o mesmo conta_id. contacts.is_personal is false NÃO basta:
- * pessoal/desconhecida (sem vínculo) recusa.
- *
- * Não inicia OAuth, não emite token, não registra client, não grava grant.
- * Identidade = `verificarSujeitoOAuth` (role=oauth_delegado). Nunca dsk_/admin
- * como sujeito. Client PostgREST = JWT da pessoa (RLS).
- */
+/** Superfície OAuth individual. O JWT dedicado é o único sujeito das leituras por RLS. */
 import { createHash } from "node:crypto";
 
 import { avaliarContatoPessoalDaConversa } from "./exclusao-contato-pessoal";
@@ -21,8 +9,10 @@ import {
   type SujeitoOAuth,
 } from "./delegacao-oauth-sujeito";
 
-export const EFEITOS_DELEGADOS = ["buscar", "ler", "baixar"] as const;
-export type EfeitoDelegado = (typeof EFEITOS_DELEGADOS)[number];
+export const ESCOPOS_OAUTH_DELEGADOS = ["buscar", "ler", "baixar"] as const;
+type EfeitoLeitura = (typeof ESCOPOS_OAUTH_DELEGADOS)[number];
+export type EfeitoDelegado = EfeitoLeitura | "enviar";
+export type OrigemDelegada = "empresarial" | "titular";
 
 export type MotivoRecusaDelegada =
   | MotivoRecusaSujeitoOAuth
@@ -35,7 +25,7 @@ export type MotivoRecusaDelegada =
   | "org_nao_autorizada"
   | "conversa_nao_autorizada"
   | "contato_pessoal"
-  | "sessao_nao_empresarial"
+  | "sessao_nao_autorizada"
   | "anexo_fora_do_recurso";
 
 export type GrantDelegacaoCorporativa = {
@@ -47,37 +37,29 @@ export type GrantDelegacaoCorporativa = {
   revoked_at: string | null;
 };
 
-export type AnexoDaSuperficie = {
-  conversaIdDoPedido: string;
-  bucket: string;
-  path: string;
-};
+export type AnexoDaSuperficie = { conversaIdDoPedido: string; bucket: string; path: string };
 
-type Linha = Record<string, unknown>;
-
+type RespostaLeitura = { data: unknown; error: unknown };
 type Cadeia = {
   select: (cols: string) => Cadeia;
   eq: (coluna: string, valor: string) => Cadeia;
-  in: (coluna: string, valores: string[]) => Cadeia;
   is: (coluna: string, valor: null) => Cadeia;
   limit: (n: number) => Cadeia;
-  maybeSingle: () => PromiseLike<{ data: unknown; error: unknown }>;
-  then: PromiseLike<{ data: unknown; error: unknown }>["then"];
+  maybeSingle: () => PromiseLike<RespostaLeitura>;
+  then: PromiseLike<RespostaLeitura>["then"];
 };
 
 export type ClienteLeitura = {
   from: (tabela: string) => unknown;
   schema?: (nome: string) => { from: (tabela: string) => unknown };
+  // O cliente gerado ainda não contém a RPC desta migration.
+  rpc?: unknown;
 };
 
 export type DepsSuperficieDelegada = {
   leitorAuth?: LeitorAuthOAuth;
   agora?: Date;
-  buscarGrant: (q: {
-    client: ClienteLeitura;
-    userId: string;
-    clientId: string;
-  }) => Promise<GrantDelegacaoCorporativa | null | "erro">;
+  buscarGrants: typeof buscarGrantsViaClient;
   clientDoUsuario: (accessToken: string) => ClienteLeitura;
   assinarAposRls?: (q: {
     bucket: string;
@@ -100,11 +82,34 @@ export type ReciboAuditoriaDelegada = {
 };
 
 export type ResultadoSuperficieDelegada =
-  | { ok: true; efeito: EfeitoDelegado; dados: unknown; auditoria: ReciboAuditoriaDelegada }
+  | { ok: true; efeito: EfeitoLeitura; dados: unknown; auditoria: ReciboAuditoriaDelegada }
   | { ok: false; motivo: MotivoRecusaDelegada; auditoria: ReciboAuditoriaDelegada };
 
-const EFEITOS = new Set<string>(EFEITOS_DELEGADOS);
-const COLS_CONVERSA = "id,organization_id,contact_id,channel_session_id,status,updated_at,created_at";
+type Recusa = { ok: false; motivo: MotivoRecusaDelegada };
+
+type Acesso = {
+  client: ClienteLeitura;
+  grants: readonly GrantDelegacaoCorporativa[];
+  sujeito: SujeitoOAuth;
+  agora: Date;
+};
+
+type Sessao = {
+  channel_session_id: string;
+  organization_id: string;
+  origem: OrigemDelegada;
+  status: string;
+};
+
+type Conversa = {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  channel_session_id: string;
+};
+
+const COLS_CONVERSA =
+  "id,organization_id,contact_id,channel_session_id,status,updated_at,created_at";
 const COLS_MSG =
   "id,conversation_id,organization_id,channel_session_id,type,direction,created_at,media_storage_path,body";
 
@@ -112,31 +117,10 @@ function cadeia(origem: unknown): Cadeia {
   return origem as Cadeia;
 }
 
-function auditoria(
-  motivo: string,
-  pedido: PedidoSuperficieDelegada,
-  extra: { organization_id?: string } = {},
-): ReciboAuditoriaDelegada {
-  return {
-    motivo,
-    efeito: pedido.efeito,
-    organization_id: extra.organization_id,
-    conversation_id: pedido.conversationId ?? pedido.anexo?.conversaIdDoPedido,
-  };
-}
-
-function recusa(
-  motivo: MotivoRecusaDelegada,
-  pedido: PedidoSuperficieDelegada,
-  extra: { organization_id?: string } = {},
-): ResultadoSuperficieDelegada {
-  return { ok: false, motivo, auditoria: auditoria(motivo, pedido, extra) };
-}
-
 function grantVivo(
   grant: GrantDelegacaoCorporativa,
   sujeito: SujeitoOAuth,
-  efeito: string,
+  efeito: EfeitoDelegado,
   agora: Date,
 ): MotivoRecusaDelegada | null {
   if (grant.user_id !== sujeito.userId) return "identidade_nao_provada";
@@ -144,204 +128,256 @@ function grantVivo(
   if (grant.revoked_at) return "grant_revogado";
   const expira = Date.parse(grant.expires_at);
   if (!Number.isFinite(expira) || expira <= agora.getTime()) return "grant_expirado";
-  if (!grant.efeitos.includes(efeito)) return "grant_escopo_insuficiente";
+  if (!Array.isArray(grant.efeitos) || !grant.efeitos.includes(efeito))
+    return "grant_escopo_insuficiente";
   if (!grant.organization_id.trim()) return "org_nao_autorizada";
   return null;
 }
 
-function texto(valor: unknown): string | null {
-  return typeof valor === "string" && valor.trim().length > 0 ? valor : null;
-}
-
-function objetosStorage(client: ClienteLeitura): unknown {
-  if (typeof client.schema === "function") {
-    return client.schema("storage").from("objects");
-  }
-  return client.from("objects");
-}
-
-export async function buscarGrantViaClient(q: {
+export async function buscarGrantsViaClient(q: {
   client: ClienteLeitura;
   userId: string;
   clientId: string;
-}): Promise<GrantDelegacaoCorporativa | null | "erro"> {
+}): Promise<GrantDelegacaoCorporativa[] | "erro"> {
   const r = await cadeia(q.client.from("delegacao_visibilidade_corporativa"))
     .select("user_id,organization_id,oauth_client_id,efeitos,expires_at,revoked_at")
     .eq("user_id", q.userId)
     .eq("oauth_client_id", q.clientId)
-    .is("revoked_at", null)
-    .limit(1)
-    .maybeSingle();
-  if (r.error) return "erro";
-  if (!r.data || typeof r.data !== "object") return null;
-  const row = r.data as GrantDelegacaoCorporativa;
-  if (!texto(row.user_id) || !texto(row.organization_id) || !texto(row.oauth_client_id)) {
-    return null;
-  }
-  return row;
+    .is("revoked_at", null);
+  return r.error || !Array.isArray(r.data) ? "erro" : (r.data as GrantDelegacaoCorporativa[]);
 }
 
-async function sessaoEmpresarial(
+/** A lista é conferida por efeito. A org de um alvo vem da leitura por RLS. */
+export async function carregarAcessoDelegado(
+  sujeito: SujeitoOAuth,
+  deps: Pick<DepsSuperficieDelegada, "agora" | "clientDoUsuario" | "buscarGrants">,
+  efeito: EfeitoDelegado,
+): Promise<Recusa | { ok: true; acesso: Acesso }> {
+  try {
+    const client = deps.clientDoUsuario(sujeito.accessToken);
+    const grants = await deps.buscarGrants({
+      client,
+      userId: sujeito.userId,
+      clientId: sujeito.clientId,
+    });
+    if (grants === "erro" || !grants.length) return { ok: false, motivo: "grant_ausente" };
+    const agora = deps.agora ?? new Date();
+    const vivos = grants.filter((grant) => !grantVivo(grant, sujeito, efeito, agora));
+    if (!vivos.length) {
+      return {
+        ok: false,
+        motivo: grantVivo(grants[0]!, sujeito, efeito, agora) ?? "grant_ausente",
+      };
+    }
+    return { ok: true, acesso: { client, grants, sujeito, agora } };
+  } catch {
+    return { ok: false, motivo: "grant_ausente" };
+  }
+}
+
+export function grantsComEfeito(
+  acesso: Acesso,
+  efeito: EfeitoDelegado,
+): GrantDelegacaoCorporativa[] {
+  return acesso.grants.filter((g) => !grantVivo(g, acesso.sujeito, efeito, acesso.agora));
+}
+
+function motivoGrantNaOrg(
+  acesso: Acesso,
+  efeito: EfeitoDelegado,
+  org: string,
+): MotivoRecusaDelegada | null {
+  const grant = acesso.grants.find((g) => g.organization_id === org && !g.revoked_at);
+  return grant ? grantVivo(grant, acesso.sujeito, efeito, acesso.agora) : "org_nao_autorizada";
+}
+
+export async function listarSessoesDelegadas(
   client: ClienteLeitura,
+  sessionId?: string,
+): Promise<Sessao[] | null> {
+  if (typeof client.rpc !== "function") return null;
+  const r: RespostaLeitura = await client.rpc("fn_delegacao_listar_sessoes", {
+    p_session: sessionId ?? null,
+  });
+  if (r.error || !Array.isArray(r.data)) return null;
+  return (r.data as Sessao[]).map(({ channel_session_id, organization_id, origem, status }) => ({
+    channel_session_id,
+    organization_id,
+    origem,
+    status,
+  }));
+}
+
+export async function autorizarSessaoDelegada(
+  acesso: Acesso,
+  efeito: EfeitoDelegado,
   sessionId: string,
-  organizationId: string,
-): Promise<boolean | "erro"> {
-  const r = await cadeia(client.from("delegacao_sessoes_empresariais"))
-    .select("channel_session_id")
-    .eq("channel_session_id", sessionId)
-    .eq("organization_id", organizationId)
-    .is("revoked_at", null)
-    .maybeSingle();
-  if (r.error) return "erro";
-  return Boolean(r.data);
+  organizationId?: string,
+): Promise<Recusa | { ok: true; sessao: Sessao }> {
+  const sessoes = await listarSessoesDelegadas(acesso.client, sessionId);
+  const sessao = sessoes?.find(
+    (s) =>
+      s.channel_session_id === sessionId && (s.origem === "empresarial" || s.origem === "titular"),
+  );
+  if (!sessao || (organizationId && sessao.organization_id !== organizationId)) {
+    return { ok: false, motivo: "sessao_nao_autorizada" };
+  }
+  const motivo = motivoGrantNaOrg(acesso, efeito, sessao.organization_id);
+  return motivo ? { ok: false, motivo } : { ok: true, sessao };
 }
 
-async function origemCorporativa(
-  client: ClienteLeitura,
-  conv: { id: string; organization_id: string; channel_session_id: string },
-): Promise<MotivoRecusaDelegada | null | "erro"> {
-  const sess = await sessaoEmpresarial(client, conv.channel_session_id, conv.organization_id);
-  if (sess === "erro") return "erro";
-  if (!sess) return "sessao_nao_empresarial";
-  const pessoal = await avaliarContatoPessoalDaConversa(client, conv.organization_id, conv.id);
+export async function autorizarConversaDelegada(
+  acesso: Acesso,
+  efeito: EfeitoDelegado,
+  conversationId: string,
+): Promise<Recusa | { ok: true; conversa: Conversa; sessao: Sessao }> {
+  const r = await cadeia(acesso.client.from("conversations"))
+    .select(COLS_CONVERSA)
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (r.error || !r.data) return { ok: false, motivo: "conversa_nao_autorizada" };
+  const conversa = r.data as Conversa;
+  const motivo = motivoGrantNaOrg(acesso, efeito, conversa.organization_id);
+  if (motivo) return { ok: false, motivo };
+  const autorizacao = await autorizarSessaoDelegada(
+    acesso,
+    efeito,
+    conversa.channel_session_id,
+    conversa.organization_id,
+  );
+  if (!autorizacao.ok) return autorizacao;
+  const pessoal = await avaliarContatoPessoalDaConversa(
+    acesso.client,
+    conversa.organization_id,
+    conversa.id,
+  );
   if (pessoal.recusar) {
-    return pessoal.motivo === "contato_pessoal" ? "contato_pessoal" : "conversa_nao_autorizada";
+    return {
+      ok: false,
+      motivo: pessoal.motivo === "contato_pessoal" ? "contato_pessoal" : "conversa_nao_autorizada",
+    };
   }
-  return null;
+  return { ok: true, conversa, sessao: autorizacao.sessao };
+}
+
+export const BUCKETS_ANEXO_DELEGADO = ["whatsapp-media", "locacao-processos"] as const;
+
+export async function anexoVisivelViaRest(
+  client: ClienteLeitura,
+  anexo: { bucket: string; path: string },
+): Promise<boolean> {
+  if (!BUCKETS_ANEXO_DELEGADO.some((b) => b === anexo.bucket) || !anexo.path.trim()) return false;
+  const objetos = client.schema ? client.schema("storage").from("objects") : client.from("objects");
+  const obj = await cadeia(objetos)
+    .select("name,bucket_id")
+    .eq("name", anexo.path)
+    .eq("bucket_id", anexo.bucket)
+    .maybeSingle();
+  return Boolean(obj.data) && !obj.error;
 }
 
 export async function executarSuperficieDelegada(
   pedido: PedidoSuperficieDelegada,
   deps: DepsSuperficieDelegada,
+  sujeitoVerificado?: SujeitoOAuth,
 ): Promise<ResultadoSuperficieDelegada> {
-  if (!EFEITOS.has(pedido.efeito)) {
-    return recusa("efeito_nao_permitido", pedido);
-  }
-  if ((pedido.efeito === "ler" || pedido.efeito === "baixar") && !pedido.conversationId) {
-    return recusa("conversa_nao_autorizada", pedido);
-  }
-
-  const sujeito = await verificarSujeitoOAuth(pedido.authorizationHeader, {
-    leitor: deps.leitorAuth,
-    agora: deps.agora,
+  const efeito = pedido.efeito;
+  const auditoria: ReciboAuditoriaDelegada = {
+    motivo: "ok",
+    efeito,
+    conversation_id: pedido.conversationId ?? pedido.anexo?.conversaIdDoPedido,
+  };
+  const recusa = (motivo: MotivoRecusaDelegada): ResultadoSuperficieDelegada => ({
+    ok: false,
+    motivo,
+    auditoria: { ...auditoria, motivo },
   });
-  if (!sujeito.ok) {
-    return recusa(sujeito.motivo, pedido);
-  }
 
-  const client = deps.clientDoUsuario(sujeito.sujeito.accessToken);
-  let grant: GrantDelegacaoCorporativa | null | "erro";
-  try {
-    grant = await deps.buscarGrant({
-      client,
-      userId: sujeito.sujeito.userId,
-      clientId: sujeito.sujeito.clientId,
-    });
-  } catch {
-    return recusa("grant_ausente", pedido);
-  }
-  if (grant === "erro" || !grant) return recusa("grant_ausente", pedido);
-  const motivoGrant = grantVivo(grant, sujeito.sujeito, pedido.efeito, deps.agora ?? new Date());
-  if (motivoGrant) return recusa(motivoGrant, pedido, { organization_id: grant.organization_id });
+  if (efeito !== "buscar" && efeito !== "ler" && efeito !== "baixar")
+    return recusa("efeito_nao_permitido");
+  if (efeito !== "buscar" && !pedido.conversationId) return recusa("conversa_nao_autorizada");
 
-  if (pedido.efeito === "buscar") {
-    const r = await cadeia(client.from("conversations"))
-      .select(COLS_CONVERSA)
-      .eq("organization_id", grant.organization_id)
-      .limit(100);
-    if (r.error) return recusa("conversa_nao_autorizada", pedido, { organization_id: grant.organization_id });
-    const linhas = Array.isArray(r.data) ? (r.data as Linha[]) : [];
+  const sujeito = sujeitoVerificado
+    ? { ok: true as const, sujeito: sujeitoVerificado }
+    : await verificarSujeitoOAuth(pedido.authorizationHeader, {
+        leitor: deps.leitorAuth,
+        agora: deps.agora,
+      });
+  if (!sujeito.ok) return recusa(sujeito.motivo);
+  const auth = await carregarAcessoDelegado(sujeito.sujeito, deps, efeito);
+  if (!auth.ok) return recusa(auth.motivo);
+  const { acesso } = auth;
+  const { client } = acesso;
+
+  if (efeito === "buscar") {
+    const grants = grantsComEfeito(acesso, efeito);
+    const consultas = await Promise.all(
+      grants.map((g) =>
+        cadeia(client.from("conversations"))
+          .select(COLS_CONVERSA)
+          .eq("organization_id", g.organization_id)
+          .limit(100),
+      ),
+    );
+    if (consultas.some((r) => r.error)) return recusa("conversa_nao_autorizada");
+    if (grants.length === 1) auditoria.organization_id = grants[0]?.organization_id;
     return {
       ok: true,
-      efeito: "buscar",
-      dados: { conversations: linhas },
-      auditoria: auditoria("ok", pedido, { organization_id: grant.organization_id }),
+      efeito,
+      auditoria,
+      dados: { conversations: consultas.flatMap((r) => (Array.isArray(r.data) ? r.data : [])) },
     };
   }
 
-  const conversationId = pedido.conversationId as string;
-  const convRes = await cadeia(client.from("conversations"))
-    .select(COLS_CONVERSA)
-    .eq("id", conversationId)
-    .eq("organization_id", grant.organization_id)
-    .maybeSingle();
-  if (convRes.error || !convRes.data || typeof convRes.data !== "object") {
-    return recusa("conversa_nao_autorizada", pedido, { organization_id: grant.organization_id });
-  }
-  const conv = convRes.data as {
-    id: string;
-    organization_id: string;
-    contact_id: string;
-    channel_session_id: string;
-  };
-  const origem = await origemCorporativa(client, conv);
-  if (origem === "erro") {
-    return recusa("conversa_nao_autorizada", pedido, { organization_id: grant.organization_id });
-  }
-  if (origem) return recusa(origem, pedido, { organization_id: grant.organization_id });
+  const alvo = await autorizarConversaDelegada(acesso, efeito, pedido.conversationId!);
+  if (!alvo.ok) return recusa(alvo.motivo);
+  const { conversa } = alvo;
+  auditoria.organization_id = conversa.organization_id;
 
-  if (pedido.efeito === "ler") {
+  if (efeito === "ler") {
     const msgs = await cadeia(client.from("messages"))
       .select(COLS_MSG)
-      .eq("conversation_id", conversationId)
-      .eq("organization_id", grant.organization_id)
+      .eq("conversation_id", conversa.id)
+      .eq("organization_id", conversa.organization_id)
       .limit(200);
-    if (msgs.error) {
-      return recusa("conversa_nao_autorizada", pedido, { organization_id: grant.organization_id });
-    }
+    if (msgs.error) return recusa("conversa_nao_autorizada");
     return {
       ok: true,
-      efeito: "ler",
-      dados: { conversation: conv, messages: Array.isArray(msgs.data) ? msgs.data : [] },
-      auditoria: auditoria("ok", pedido, { organization_id: grant.organization_id }),
+      efeito,
+      auditoria,
+      dados: { conversation: conversa, messages: Array.isArray(msgs.data) ? msgs.data : [] },
     };
   }
 
   const anexo = pedido.anexo;
-  if (!anexo || anexo.conversaIdDoPedido !== conversationId || !texto(anexo.bucket) || !texto(anexo.path)) {
-    return recusa("anexo_fora_do_recurso", pedido, { organization_id: grant.organization_id });
+  if (
+    !anexo ||
+    anexo.conversaIdDoPedido !== conversa.id ||
+    !anexo.path.trim() ||
+    !BUCKETS_ANEXO_DELEGADO.some((b) => b === anexo.bucket)
+  ) {
+    return recusa("anexo_fora_do_recurso");
   }
-  if (anexo.bucket !== "whatsapp-media" && anexo.bucket !== "locacao-processos") {
-    return recusa("anexo_fora_do_recurso", pedido, { organization_id: grant.organization_id });
-  }
-
-  const obj = await cadeia(objetosStorage(client))
-    .select("name,bucket_id")
-    .eq("name", anexo.path)
-    .eq("bucket_id", anexo.bucket)
-    .maybeSingle();
-  const visivelNoRest = Boolean(obj.data) && typeof obj.data === "object" && !obj.error;
-  const assinado = deps.assinarAposRls
-    ? await deps.assinarAposRls({ bucket: anexo.bucket, path: anexo.path })
-    : null;
-  // PostgREST schema("storage") e Storage API são hops distintos. Bytes
-  // passam pela Storage API (RLS no JWT). Sem os dois, anexo fora.
-  if (!visivelNoRest && !assinado) {
-    return recusa("anexo_fora_do_recurso", pedido, { organization_id: grant.organization_id });
-  }
-
+  const visivelNoRest = await anexoVisivelViaRest(client, anexo);
+  const assinado = await deps.assinarAposRls?.({ bucket: anexo.bucket, path: anexo.path });
+  // A Storage API também avalia RLS com o JWT. Pode estar acessível mesmo
+  // quando o PostgREST da instalação não publica o schema storage.
+  if (!visivelNoRest && !assinado) return recusa("anexo_fora_do_recurso");
   return {
     ok: true,
-    efeito: "baixar",
-    dados: {
-      bucket: anexo.bucket,
-      path: anexo.path,
-      visivel: true,
-      ...(assinado ?? {}),
-    },
-    auditoria: auditoria("ok", pedido, { organization_id: grant.organization_id }),
+    efeito,
+    auditoria,
+    dados: { bucket: anexo.bucket, path: anexo.path, visivel: true, ...assinado },
   };
 }
 
-/** Recibo opaco para log: não leva body, path completo nem token. */
+/** Recibo opaco para log: não leva corpo, path nem token. */
 export function resumoOpacoDelegado(r: ResultadoSuperficieDelegada): Record<string, unknown> {
-  const org = r.auditoria.organization_id
-    ? createHash("sha256").update(r.auditoria.organization_id).digest("hex").slice(0, 12)
-    : null;
+  const org = r.auditoria.organization_id;
   return {
     ok: r.ok,
-    motivo: r.ok ? "ok" : r.motivo,
+    motivo: r.auditoria.motivo,
     efeito: r.auditoria.efeito,
-    org_hash: org,
+    org_hash: org ? createHash("sha256").update(org).digest("hex").slice(0, 12) : null,
   };
 }

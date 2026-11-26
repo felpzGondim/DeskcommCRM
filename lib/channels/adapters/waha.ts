@@ -305,9 +305,14 @@ export const wahaAdapter: ChannelAdapter = {
     // Sem env de WAHA o comportamento atual é NOOP, não erro: a UI mostra o
     // banner de "container não está no ar". Transformar em exceção mudaria o
     // comportamento visível — proibido nas Fases 0–2.
-    if (!client) return { externalId: null };
+    if (!client) {
+      if (envelope.recipientVerified) throw new Error(wahaAdapter.codes.notConfigured);
+      return { externalId: null };
+    }
 
-    const to = await resolveCanonicalCusChatId(client, envelope.sessionRef, envelope.to);
+    const to = envelope.recipientVerified
+      ? envelope.to
+      : await resolveCanonicalCusChatId(client, envelope.sessionRef, envelope.to);
 
     // A estrutura de três caminhos é do upstream (o cartão de contato entrou
     // depois da citação). O que se enxerta aqui é o `replyToExternalId` no

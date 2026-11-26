@@ -1,8 +1,8 @@
 /**
  * Reversão ensaiada da 0774: snapshot de CATÁLOGOS (policies/ACL/papel/RLS/hook),
  * não dump de conversa/storage. 0774 não escreve dado de atendimento.
- * Equivalência: estado pós-baseline == rollback + reaplicar 0774 e a ativação
- * storage (o mesmo par do rollout: migration + delegacao-storage-ativar.sql).
+ * Equivalência: estado após reverter a 0775 == rollback + reaplicar 0774 e a
+ * ativação storage (o mesmo par do rollout: migration + delegacao-storage-ativar.sql).
  */
 import { readFileSync } from "node:fs";
 
@@ -17,6 +17,11 @@ const MIGRACAO = readFileSync(
   "utf8",
 );
 const ATIVAR = readFileSync("supabase/delegacao-storage-ativar.sql", "utf8");
+const ROLLBACK_ENVIO = readFileSync("supabase/rollback/0775_delegacao_envio_sessao_titular.sql", "utf8");
+const MIGRACAO_ENVIO = readFileSync(
+  "supabase/migrations/20261118140000_0775_delegacao_envio_sessao_titular.sql",
+  "utf8",
+);
 
 function aplicar0774EAtivar(): void {
   sql(MIGRACAO);
@@ -43,8 +48,11 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
       hook_sql?: unknown;
       acl?: Array<{ rel: string; oauth_select?: boolean }>;
     };
-    const com0774 = catalogo() as Cat;
     try {
+      const com0775 = catalogo();
+      sql(ROLLBACK_ENVIO);
+      const com0774 = catalogo() as Cat;
+      expect(com0774).not.toEqual(com0775);
       sql(ROLLBACK);
       const pre0774 = catalogo() as Cat;
       expect(pre0774).not.toEqual(com0774);
@@ -80,6 +88,8 @@ describe("0774 rollback de catálogo (não restore indiscriminado)", () => {
       expect(catalogo()).toEqual(pre0774);
       aplicar0774EAtivar();
       expect(catalogo()).toEqual(com0774);
+      sql(MIGRACAO_ENVIO);
+      expect(catalogo()).toEqual(com0775);
     } finally {
       // Membership de role é no cluster: devolver mesmo se a asserção falhar,
       // senão o próximo arquivo do harness herda authenticator sem SET ROLE.

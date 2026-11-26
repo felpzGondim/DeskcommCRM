@@ -1372,6 +1372,8 @@ export const AUDIT_ACTIONS = [
   "delegacao.conta_empresarial_revogada",
   "oauth.consent_approved",
   "oauth.consent_denied",
+  "delegacao.mensagem_enviada",
+  "delegacao.envio_recusado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/start-conversation";
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
-import { phoneLookupVariants, canonicalPhoneBR } from "@/lib/channels/phone-variants";
+import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { parseDialablePhone } from "@/lib/messaging/contact-card";
 
 type Admin = SupabaseClient;
@@ -16,6 +16,7 @@ export interface OpenSharedContactInput {
   contact_id?: string;
   phone_number?: string;
   name?: string;
+  vetarBloqueado?: boolean;
 }
 
 export interface OpenSharedContactResult {
@@ -101,12 +102,16 @@ export async function openSharedContactConversation(
   // vazia já teria nascido.
   const { data: alvo, error: alvoErr } = await admin
     .from("contacts")
-    .select("is_personal")
+    .select(input.vetarBloqueado ? "is_personal,is_blocked" : "is_personal")
     .eq("organization_id", organizationId)
     .eq("id", contactId)
     .maybeSingle();
   if (alvoErr) throw new Error(alvoErr.message);
-  if ((alvo as { is_personal?: boolean } | null)?.is_personal === true) {
+  const contato = alvo as { is_personal?: boolean; is_blocked?: boolean } | null;
+  if (input.vetarBloqueado && (contato?.is_personal !== false || contato.is_blocked !== false)) {
+    throw new Error("contact_unavailable");
+  }
+  if (contato?.is_personal === true) {
     throw new Error("contact_personal");
   }
   const conversationId = await ensureConversation(

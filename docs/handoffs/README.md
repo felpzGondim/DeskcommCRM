@@ -42,6 +42,7 @@ que vieram da raiz estão igualmente indexados.
 
 | Documento | Assunto |
 |---|---|
+| [`PR-delegacao-envio.md`](PR-delegacao-envio.md) | Envio delegado, sessão titular e validação local da 0775 |
 | [`PR-delegacao-papel-dedicado.md`](PR-delegacao-papel-dedicado.md) | Papel Postgres dedicado (0774) — schema, HTTP MCP individual, conta empresarial; REVIEW sem merge |
 | [`HANDOFF-canais-oficial.md`](HANDOFF-canais-oficial.md) | HANDOFF — WhatsApp API Oficial (seam de canais) |
 | [`HANDOFF-casos-humanos.md`](HANDOFF-casos-humanos.md) | HANDOFF — Casos Humanos |
