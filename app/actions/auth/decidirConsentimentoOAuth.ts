@@ -49,12 +49,14 @@ export async function decidirConsentimentoOAuthForm(formData: FormData): Promise
     action: decisao === "aprovar" ? "oauth.consent_approved" : "oauth.consent_denied",
     actorUserId: user?.id ?? null,
     resourceType: "oauth_authorization",
-    resourceId: r.authorizationId,
+    // `resource_id` é uuid; o authorization_id do Auth é opaco (base32), vai no metadata.
+    resourceId: null,
     requestId,
     ip: ipDoCliente(hdrs),
     userAgent: hdrs.get("user-agent") ?? null,
     metadata: {
       decisao: decisao === "aprovar" ? "aprovar" : "negar",
+      authorization_id: r.authorizationId,
     },
   });
 

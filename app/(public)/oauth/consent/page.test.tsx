@@ -19,7 +19,7 @@ vi.mock("@/app/actions/auth/decidirConsentimentoOAuth", () => ({
   decidirConsentimentoOAuthForm: vi.fn(),
 }));
 
-const AUTH_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const AUTH_ID = "k7qm2xv4tn5bz3hd6wpy4cjr2fla7seu";
 const USER_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const getUser = vi.fn();
 const getAuthorizationDetails = vi.fn();
@@ -49,7 +49,7 @@ describe("tela /oauth/consent", () => {
     getUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
     const { default: Page } = await import("./page");
     const html = renderToStaticMarkup(
-      await Page({ searchParams: Promise.resolve({ authorization_id: "nao-e-uuid" }) }),
+      await Page({ searchParams: Promise.resolve({ authorization_id: "nao/valido" }) }),
     );
     expect(html).toContain("Este pedido de autorização não é válido ou já expirou.");
     expect(getAuthorizationDetails).not.toHaveBeenCalled();

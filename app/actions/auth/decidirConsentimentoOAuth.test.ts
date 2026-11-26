@@ -17,7 +17,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const AUTH_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const AUTH_ID = "k7qm2xv4tn5bz3hd6wpy4cjr2fla7seu";
 const USER_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const REDIRECT = "http://127.0.0.1/callback?code=abc";
 
@@ -56,7 +56,8 @@ describe("decidirConsentimentoOAuthForm", () => {
     expect(denyAuthorization).not.toHaveBeenCalled();
     expect(vi.mocked(audit).mock.calls[0]?.[0]).toMatchObject({
       action: "oauth.consent_approved",
-      resourceId: AUTH_ID,
+      resourceId: null,
+      metadata: { decisao: "aprovar", authorization_id: AUTH_ID },
     });
     expect(JSON.stringify(vi.mocked(audit).mock.calls[0]?.[0])).not.toMatch(/@/);
   });
@@ -78,14 +79,14 @@ describe("decidirConsentimentoOAuthForm", () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null });
     const { decidirConsentimentoOAuthForm } = await import("./decidirConsentimentoOAuth");
     await expect(decidirConsentimentoOAuthForm(form("aprovar"))).rejects.toThrow(
-      /REDIRECT:\/login\?next=/,
+      `REDIRECT:/login?next=${encodeURIComponent(`/oauth/consent?authorization_id=${AUTH_ID}`)}`,
     );
     expect(approveAuthorization).not.toHaveBeenCalled();
   });
 
   it("authorization_id inválido não chama o Auth", async () => {
     const { decidirConsentimentoOAuthForm } = await import("./decidirConsentimentoOAuth");
-    await expect(decidirConsentimentoOAuthForm(form("aprovar", "nao-e-uuid"))).rejects.toThrow(
+    await expect(decidirConsentimentoOAuthForm(form("aprovar", "nao/valido"))).rejects.toThrow(
       "REDIRECT:/oauth/consent?erro=1",
     );
     expect(approveAuthorization).not.toHaveBeenCalled();

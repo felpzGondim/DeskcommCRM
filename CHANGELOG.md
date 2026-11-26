@@ -30,6 +30,12 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Ficha cadastral impressa nos documentos do processo** A aba Documentos ganha o tipo `ficha_cadastral` (origem e categoria). O arquivo mora em `{organização}/processos/{processo}/ficha_cadastral/`. Laudo da FC, consulta da Migra e contrato gerado já tinham tipo; a ficha da Migra e a origem do contrato gerado entram agora. Quem já instalou não precisa fazer nada.
 
+## [1.88.0-felpz.22] — 2026-11-26
+
+### Corrigido
+
+- **Tela `/oauth/consent` aceita o pedido de autorização do Auth.** O Supabase Auth gera o `authorization_id` como texto opaco (base32 de 32 caracteres), não UUID; o CRM só aceitava UUID e mostrava "Este pedido de autorização não é válido ou já expirou." na hora, sem consultar o Auth. Agora vale qualquer id de 16 a 128 caracteres em `A-Z a-z 0-9 _ -`, sem mudar maiúsculas; barra, espaço e `..` continuam recusados. O audit do consentimento passa a guardar o id no metadata, porque `resource_id` é uuid. Quem já instalou não precisa editar arquivo nem rodar SQL.
+
 ## [1.88.0-felpz.21] — 2026-11-25
 
 ### Adicionado
